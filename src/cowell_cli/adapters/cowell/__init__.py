@@ -1,0 +1,1 @@
+"""Cowell web-system adapter."""

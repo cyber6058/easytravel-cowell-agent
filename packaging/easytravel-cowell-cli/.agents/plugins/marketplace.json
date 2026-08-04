@@ -1,0 +1,20 @@
+{
+  "name": "easytravel-local",
+  "interface": {
+    "displayName": "Easytravel Local"
+  },
+  "plugins": [
+    {
+      "name": "easytravel-cowell-cli",
+      "source": {
+        "source": "local",
+        "path": "./plugins/easytravel-cowell-cli"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

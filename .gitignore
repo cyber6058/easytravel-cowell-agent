@@ -1,0 +1,39 @@
+.venv/
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local configuration, sessions, credentials, and browser state
+.env
+.env.*
+config.toml
+*.lock
+browser-profile/
+
+# Passenger PII and generated business files
+travelers*.json
+passport*/
+passports*/
+private/
+output/
+outputs/
+*.jpg
+*.jpeg
+*.png
+*.tif
+*.tiff
+*.bmp
+*.webp
+*.pdf
+*.docx
+*.xlsx
+*.xls
+*.csv
+
+# Explicitly keep repository documentation and examples
+!config/config.example.toml

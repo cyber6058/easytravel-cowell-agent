@@ -1,0 +1,4 @@
+interface:
+  display_name: "EasyTravel 科威名單與分房"
+  short_description: "將護照名單與供應商分房表安全匯入既有科威訂單，並在寫入前預覽確認"
+  default_prompt: "Use $easytravel-cowell-cli to prepare this local roster and fill the existing Cowell order after a reviewed preview."

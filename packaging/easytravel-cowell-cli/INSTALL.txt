@@ -1,0 +1,29 @@
+EasyTravel Cowell CLI 0.3.2
+============================
+
+需求：
+- Windows
+- Python 3.12 以上
+- Google Chrome
+- Codex CLI
+- 安裝 Python 套件時可連線網路
+
+安裝：
+1. 解壓縮 ZIP 到一個新的資料夾。
+2. 在該資料夾開 PowerShell，執行：
+
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-EasyTravelCowellCLI.ps1
+
+3. 第一次安裝時輸入科威 HTTPS 登入網址。安裝程式不會要求科威帳號或密碼。
+4. 執行安裝完成後顯示的 Start-CowellBrowser.ps1。
+5. 由 OP 在該 Chrome 視窗自行登入科威。
+6. 開新的 Codex 對話：
+   - 分房：提供團號、訂單編號、DOCX/XLSX 分房表；艙等可不提供。
+   - 護照名單：提供 PDF 或照片，以及要存放輸出檔的本機資料夾。
+
+重要限制：
+- 此 skill 不新增團型、團號、訂單或旅客空位。
+- 實際科威寫入前一定先顯示預覽並取得當次明確確認。
+- 名單上的成人／兒童／嬰兒與科威既有分類不同，只顯示警告；不改科威分類，也不阻擋名單與分房。
+- 多艙等時才詢問每位旅客的艙等；單一艙等會自動採用。
+- 密碼、Cookie、護照照片、名單與分房表不會打包進安裝檔。

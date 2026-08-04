@@ -1,0 +1,6 @@
+[cowell]
+base_url = "https://example.invalid/"
+browser_profile = "%LOCALAPPDATA%\\CowellCLI\\browser-profile"
+
+[storage]
+database = "%LOCALAPPDATA%\\CowellCLI\\cowell.db"
