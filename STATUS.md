@@ -2,7 +2,7 @@
 
 ## 一句話現況
 
-立益專用獨立專案已完成、離線驗證通過，GitHub private repo 已建立，等待首次 commit 與 push。
+立益專用獨立專案已完成、離線驗證通過，並已推送至 GitHub private repo。
 
 ## 這次做了什麼
 
@@ -15,11 +15,12 @@
   dbbc92b772e15a9b0733be0c199e6579bac9043dfc32ca7851a0b1505e3c3e5f。
 - GitHub repo 已驗證為 PRIVATE：
   https://github.com/cyber6058/easytravel-cowell-agent
+- 初始功能 commit：a21e684（已推送至 origin/main）。
 
 ## 下一步
 
-首次 commit 與 push 後，到立益公司電腦 clone；先跑完整離線測試，再由
-OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+到立益公司電腦 clone；先跑完整離線測試，再由 OP 登入受控 Chrome，
+依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
