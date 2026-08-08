@@ -3,7 +3,7 @@
 ## 一句話現況
 
 立益 Cowell 專用功能已完成；大阪、東北、北海道產品的 LIST Word 與繁中語音
-產生器已完成核准設計，尚未開始實作。
+產生器設計已由使用者正式確認；分階段實作計畫已寫成草稿，尚未開始實作。
 
 ## 這次做了什麼
 
@@ -24,12 +24,21 @@
   docs/specs/2026-08-08-travel-briefing-document-audio-design.md。
 - 本次只有文件變更，未修改程式或執行付費服務、LINE 傳送及真實產出。
 - 本次重新執行完整離線測試：`97 passed in 15.32s`。
+- 使用者已確認
+  `docs/specs/2026-08-08-travel-briefing-document-audio-design.md`。
+- 新增語音優先的分階段實作計畫：
+  `docs/plans/2026-08-09-travel-briefing-document-audio-implementation-plan.md`。
+- 原流程指定的 `writing-plans` Skill 本機未安裝，因此以同等的檔案／測試／commit
+  粒度手動建立計畫；未開始功能實作。
+- 計畫自檢結果：11 tasks、11 commits、0 placeholders；完整離線測試為
+  `97 passed in 5.96s`。
 
 ## 下一步
 
-請使用者審閱新的 Word／語音設計文件；確認後先建立分階段實作計畫，再開始
-程式變更。Cowell 部分則維持到立益公司電腦 clone、先跑完整離線測試，再由
-OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+請使用者審閱並核准新的實作計畫；核准後從 Task 1 純離線資料契約與 CLI 開始，
+並在 Task 2 先交付 30 秒本機 Hanhan 試聽。Cowell 部分則維持到立益公司電腦
+clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與
+rooms preview。
 
 ## 阻塞點
 
@@ -39,3 +48,7 @@ apply 必須在公司環境針對最終 preview 另行取得當次明確核准�
 說明會產生器目前只有設計：新魅力頁面契約、JMA 資料、LIST Word COM／視覺
 驗證與 Azure／Hanhan 音訊尚未實作或端對端驗證。任何付費 Azure 資源與自動
 LINE 傳送仍是獨立核准關卡。
+
+本機 capability probe 顯示 `pdftoppm` 可用，但 `ffmpeg` 與 `winword.exe` 不在
+PATH；Word COM 仍須限時另測。安裝 ffmpeg、live 官網／JMA、Azure TTS、LINE、
+影片與部署都不包含在計畫文件核准內，必須各自另行確認。
