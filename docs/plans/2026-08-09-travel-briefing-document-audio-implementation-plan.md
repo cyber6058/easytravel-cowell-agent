@@ -2,7 +2,7 @@
 
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
-狀態：等待使用者核准後才開始實作
+狀態：使用者已核准；Task 1 已完成，下一步為 Task 2
 
 ## 目標
 

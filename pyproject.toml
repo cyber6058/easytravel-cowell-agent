@@ -25,6 +25,7 @@ dev = [
 
 [project.scripts]
 cowell = "cowell_cli.cli:main"
+briefing = "travel_briefing.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

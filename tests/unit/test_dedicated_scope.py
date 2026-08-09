@@ -1,6 +1,8 @@
 import argparse
+import ast
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -26,6 +28,27 @@ def test_cli_has_no_order_creation_payment_seat_or_report_commands():
     help_text = cli.build_parser().format_help()
     for forbidden in ("orders", "payments", "seats", "reports"):
         assert forbidden not in help_text
+
+
+def test_travel_briefing_package_does_not_import_cowell_modules():
+    package_root = Path(__file__).parents[2] / "src" / "travel_briefing"
+    forbidden_imports = []
+    for source_path in sorted(package_root.rglob("*.py")):
+        tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=source_path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                modules = [node.module or ""]
+            else:
+                continue
+            forbidden_imports.extend(
+                f"{source_path.name}:{module}"
+                for module in modules
+                if module == "cowell_cli" or module.startswith("cowell_cli.")
+            )
+
+    assert forbidden_imports == []
 
 
 def test_documented_module_entrypoint_executes_cli():
