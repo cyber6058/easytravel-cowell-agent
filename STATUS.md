@@ -3,7 +3,7 @@
 ## 一句話現況
 
 立益 Cowell 專用功能已完成；說明會產生器 Task 2B 的 Yating-only 本機語音管線、
-測試與 26 秒正式管線樣本已完成，現在停在使用者試聽與 SRT 同步驗收。
+測試與 26 秒正式管線樣本均已通過，下一個未核准工作是 Task 3 口語稿契約。
 
 ## 這次做了什麼
 
@@ -104,7 +104,7 @@
 - `briefing doctor` 實機只列舉 Windows Media `AllVoices`，已確認 Yating 可用；
   Hanhan 標為 `legacy_comparison_only`，已取消的 Azure 環境變數不再造成假 warning。
 - opt-in 真實整合測試結果為 `1 passed`；最後完整離線回歸為
-  `144 passed, 2 skipped in 5.76s`，兩個 skip 分別是需顯式 opt-in 的 Hanhan 與
+  `144 passed, 2 skipped in 6.85s`，兩個 skip 分別是需顯式 opt-in 的 Hanhan 與
   Yating 本機整合測試；`git diff --check` 通過。
 - Task 2B 功能、測試與計畫狀態已提交於 commit `2fe8e7c`。
 - 正式管線樣本位於 Git 忽略的
@@ -115,26 +115,28 @@
   `d538b0a4d8d4f98d9bfc7758fbfbe720c6b868d249d6a43bed64b3e91851b519`，與使用者
   選中的 `02-Yating-local.wav` 完全相同；SRT SHA-256 為
   `75a936538f95f0ecfb234cab56a6c2eef3a3ce1f9defbf2f1e1bcffc49b97d67`。
+- 使用者指出 14.925 秒起「不舒服」的「服」音調略怪，並確認不應針對單字改稿
+  或累積發音特例。正式政策改為：不看逐字稿仍能理解且不改變意思的偶發怪腔可
+  接受；聽不清、可能改變語意或誤認關鍵資料時才阻擋；跨樣本重現才升級為整體
+  韻律／引擎評估。使用者已依此原則通過 Task 2B 人工驗收。
 - 本次仍未安裝 ffmpeg、未產生 MP3／完整 6–8 分鐘音訊、未啟動 Word COM，亦未
   呼叫 live 官網／JMA、Azure、LINE 或任何外部發布。
 
 ## 下一步
 
-請使用者先試聽 Task 2B 的 `Yating-pipeline-sample.wav` 並查看同名 SRT，確認聲音
-流暢度與字幕切點。人工驗收通過後，再另行決定是否核准 Task 3 口語稿契約；不得
-自動產生完整 6–8 分鐘音訊。Cowell 部分則維持到立益公司電腦 clone、先跑完整
-離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+Task 2B 已完成；等待使用者另行決定是否核准 Task 3 口語稿契約，不得自動產生
+完整 6–8 分鐘音訊。Cowell 部分則維持到立益公司電腦 clone、先跑完整離線測試，
+再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器的 Task 2B 程式、測試與正式管線短樣本已完成，沒有技術阻塞；目前
-唯一關卡是使用者人工試聽 Yating 與檢查 SRT 同步。完整 6–8 分鐘版本尚未產生；
-新魅力頁面契約、JMA 資料及 LIST Word COM／視覺驗證也尚未實作或端對端驗證。
-Azure 已移出第一階段自動流程；任何未來雲端 TTS 與自動 LINE 傳送仍是獨立核准
-關卡。
+說明會產生器的 Task 2B 程式、測試、正式管線短樣本與人工驗收均已完成，沒有技術
+阻塞。Task 3 尚未核准，完整 6–8 分鐘版本尚未產生；新魅力頁面契約、JMA 資料及
+LIST Word COM／視覺驗證也尚未實作或端對端驗證。Azure 已移出第一階段自動流程；
+任何未來雲端 TTS 與自動 LINE 傳送仍是獨立核准關卡。
 
 本機 capability probe 與真實 integration 顯示 Yating 可用且正式管線可合成，
 `pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊，但 `ffmpeg` 尚未找到；

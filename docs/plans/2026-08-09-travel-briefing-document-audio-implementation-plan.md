@@ -3,8 +3,8 @@
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
 狀態：Yating 修訂設計與 Task 2B 已於 2026-08-09 由使用者核准；Task 1、Hanhan
-技術切片與 Task 2B 本機實作均已完成。20–30 秒 Yating 正式管線樣本已產生，正等待
-使用者試聽與字幕同步驗收；Azure Task 已取消。
+技術切片與 Task 2B 本機實作均已完成。26 秒 Yating 正式管線樣本已依自然度政策
+通過人工驗收；Azure Task 已取消，Task 3 尚未核准。
 
 ## 目標
 
@@ -136,10 +136,12 @@ Commit：`feat(briefing): add isolated draft contract and cli`
 
 Commit：`feat(briefing): add offline Hanhan audio pipeline`
 
-## Task 2B：以 Yating 取代正式本機語音管線（實作完成，待人工試聽）
+## Task 2B：以 Yating 取代正式本機語音管線（已完成並通過人工試聽）
 
 狀態：離線回歸 `144 passed, 2 skipped`，opt-in Yating integration `1 passed`；
-26.087250 秒正式管線樣本及 5 段 bookmark SRT 已通過機械 QA，尚待使用者試聽。
+26.087250 秒正式管線樣本及 5 段 bookmark SRT 已通過機械 QA。使用者指出
+14.925 秒起「不舒服」的「服」音調略怪，但確認不應為單字建立特例，並同意依
+「意思清楚的偶發腔調可接受、關鍵資訊可能誤解才阻擋」原則通過人工驗收。
 
 ### 檔案
 
@@ -428,7 +430,7 @@ git status --short
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。
-- 下一個入口是 Task 2B 短樣本人工驗收；通過前不進完整音訊或 Task 3。
+- 下一個可提案的實作入口是 Task 3；仍須另行明確核准，不自動進入完整音訊。
 
 ## 實作核准關卡
 
@@ -442,6 +444,6 @@ Task 2B 已獲核准並完成本機程式、測試與短樣本。下列動作仍
 5. 傳送 LINE、上傳檔案、部署服務或製作影片；
 6. 未來新增或呼叫任何雲端 TTS。
 
-Task 2B 的 20–30 秒 Yating 正式管線樣本已完成，現停在使用者試聽與 SRT 檢查；
-這是繼續完整 6–8 分鐘語音與後續 Word 之前的優先回饋點。這次核准只授權
-Task 2B 的本機程式、測試與短樣本，不授權其後的完整語音或外部關卡。
+Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查。這次核准
+只授權 Task 2B 的本機程式、測試與短樣本；Task 3、完整 6–8 分鐘語音及所有外部
+關卡仍未授權。
