@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能已完成；說明會產生器的 Hanhan 技術切片未通過人工聆聽，
-使用者已選定本機 Yating 且缺少時 fail closed，修訂設計正等待書面審閱。
+立益 Cowell 專用功能已完成；說明會產生器的 Yating 修訂設計已確認，Task 2B
+實作計畫已重寫並等待使用者核准後開始本機程式與短樣本。
 
 ## 這次做了什麼
 
@@ -78,8 +78,13 @@
 - 實機 probe 顯示 Yating 的自動 sentence／word boundary metadata 皆回傳 0 個
   marker，但 SSML `<mark>` 可正確回傳 `Speech:Bookmark`；三句測試取得兩個
   1,496 ms／3,026 ms markers，且有無 bookmarks 的 WAV byte count 同為 146,654。
-- 原實作計畫已標記暫停，需等使用者書面審閱修訂設計後，才重寫 Yating 語音 tasks。
-- 本次 Yating 設計修訂後完整離線回歸為 `118 passed, 1 skipped in 4.83s`；skip
+- 使用者已書面確認 Yating 修訂設計；原實作計畫已改成 Yating-only 第一階段，
+  新增 Task 2B 的連續 SSML bookmark 管線，並正式取消 Azure Task 7。
+- 修訂計畫把下一個核准範圍限制為 Task 2B 的本機程式、離線／opt-in 整合測試及
+  20–30 秒正式管線樣本；完整 6–8 分鐘音訊與外部關卡不隨計畫核准自動開啟。
+- 計畫自檢為 12 個 Task headings（2 完成、1 取消、9 待執行）、11 個 commit
+  邊界、0 個未定欄位，且 6 個舊 Azure／auto-Hanhan 可執行片語均不存在。
+- 本次 Yating 計畫修訂後完整離線回歸為 `118 passed, 1 skipped in 5.12s`；skip
   仍是需顯式 opt-in 的真實 Hanhan integration test，沒有拿 skip 當 Yating 驗收。
 - ffmpeg 未設定，因此 metadata 正確標示 `MP3_CONVERTER_UNAVAILABLE`；沒有安裝、
   沒有嘗試轉 MP3，已驗證的 WAV／SRT／TXT 均保留。
@@ -87,11 +92,11 @@
 
 ## 下一步
 
-請使用者審閱 Yating 修訂設計；確認後重寫實作計畫的語音 tasks，再以
-Windows Media Speech 實作整篇連續合成、SSML bookmark SRT 與無 fallback 的失敗契約。
-完成管線後先重做 20–30 秒 Yating WAV／SRT 樣本供人工驗收，通過後才產生完整
-6–8 分鐘版本。Cowell 部分則維持到立益公司電腦 clone、先跑完整離線測試，再由
-OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+請使用者審閱並核准修訂後實作計畫；核准後只開始 Task 2B，以 Windows Media
+Speech 實作整篇連續合成、SSML bookmark SRT 與無 fallback 的失敗契約。完成後
+先重做 20–30 秒 Yating WAV／SRT 樣本供人工驗收，通過後才另行進入完整 6–8 分鐘
+版本。Cowell 部分則維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入
+受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
@@ -99,10 +104,10 @@ OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
 說明會產生器目前完成 M1 與舊 Hanhan Task 2 的技術驗證，但 Hanhan 未通過人工
-聆聽；Yating 修訂仍待書面審閱、實作與正式管線短樣本驗收，完整 6–8 分鐘版本
-尚未產生。新魅力頁面契約、JMA 資料及 LIST Word COM／視覺驗證也尚未實作或
-端對端驗證。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與自動 LINE
-傳送仍是獨立核准關卡。
+聆聽；Yating 設計已確認，修訂實作計畫仍待核准，Task 2B 程式與正式管線短樣本
+尚未完成，完整 6–8 分鐘版本也尚未產生。新魅力頁面契約、JMA 資料及 LIST
+Word COM／視覺驗證也尚未實作或端對端驗證。Azure 已移出第一階段自動流程；
+任何未來雲端 TTS 與自動 LINE 傳送仍是獨立核准關卡。
 
 本機 capability probe 與真實 integration 顯示 `pdftoppm` 可用、Hanhan 可合成、
 Word COM 已註冊，但 `ffmpeg` 尚未找到；Word COM 仍須在 Task 8 以最長 20 秒的

@@ -2,9 +2,9 @@
 
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
-狀態：原 Task 2 的 Hanhan 試聽未通過；2026-08-09 使用者選定 Yating 且缺少時
-fail closed。本計畫的語音 Tasks 尚待依修訂設計重寫，重寫前不得繼續產生完整音訊
-或執行 Azure Task。
+狀態：Yating 修訂設計已於 2026-08-09 由使用者確認；Task 1 與 Hanhan 技術切片
+已完成，下一個實作單位是 Task 2B 的 Yating 連續語音管線。本計畫待使用者核准後
+才開始 Task 2B；Azure Task 已取消。
 
 ## 目標
 
@@ -13,16 +13,17 @@ fail closed。本計畫的語音 Tasks 尚待依修訂設計重寫，重寫前�
 OP 提供一個新魅力旅遊產品 URL、PDF 或兩者後，Skill 能產生可追溯、可審核的
 LIST Word 草稿、繁中 MP3／WAV、逐字稿、SRT、manifest 與 review 報告。
 
-實作採「語音優先的垂直切片」：先用合成資料與本機 Hanhan 產出可聽樣本，讓
-使用者先確認內容、發音與節奏，再接官網、PDF、JMA、Azure 和 LIST Word。
+實作採「語音優先的垂直切片」：先用合成資料與本機 Yating 完成整篇連續 WAV、
+SSML bookmark SRT 與可聽樣本，讓使用者確認正式管線的內容、發音與節奏，再接
+官網、PDF、JMA 和 LIST Word。
 
 ## 固定邊界
 
 - 新程式放在 `src/travel_briefing/`，不得匯入 Cowell adapter、登入或寫入模組。
 - 既有 `cowell` CLI 的四個頂層命令、0.3.2 安裝包與正式功能不得改變。
 - 不另購 LLM API；Codex／Claude 依結構化輸入撰寫口語稿，CLI 負責驗證與產出。
-- 不自動傳 LINE、不建立影片、不建立付費 Azure 資源、不批次或排程。
-- 官網、JMA、Azure 都是獨立網路測試關卡；離線測試不能呼叫它們。
+- 不自動傳 LINE、不建立影片、不建立或呼叫 Azure Speech、不批次或排程。
+- 官網與 JMA 是獨立網路測試關卡；離線測試不能呼叫它們。
 - 私有 LIST 範本、來源 PDF、網頁完整回應、音檔與產出檔全部維持 Git 忽略。
 - 每一階段先寫失敗測試，再做最小實作，跑完整離線測試後才提交。
 
@@ -33,6 +34,10 @@ LIST Word 草稿、繁中 MP3／WAV、逐字稿、SRT、manifest 與 review 報�
 - 系統預設 Python 3.14 沒有 pytest，不能拿它當測試環境。
 - 既有 runtime 已有 `httpx`、`playwright`、`PyMuPDF`、`Pillow` 與 `keyring`。
 - `pdftoppm` 已在 PATH，可用於 PDF 轉圖 QA。
+- Windows Media Speech 已找到 `Microsoft Yating`（`zh-TW`、女性）；同稿人工比較
+  已選定 Yating，缺少時不得自動退回 Hanhan。
+- Yating 原生短樣本實測為 16 kHz、PCM 16-bit／mono；自動 sentence／word
+  boundary metadata 皆為 0，但 SSML `<mark>` 可回傳 `Speech:Bookmark` markers。
 - `ffmpeg` 目前不在 PATH；MP3 里程碑前須由使用者核准安裝，或提供既有路徑。
 - `winword.exe` 目前不在 PATH；不能據此判定 Word COM 不存在，須以限時 COM
   capability probe 另行驗證。先前 COM 啟動曾逾時，因此 Word 階段必須 fail closed。
@@ -45,7 +50,7 @@ LIST Word 草稿、繁中 MP3／WAV、逐字稿、SRT、manifest 與 review 報�
 briefing doctor --format json
 briefing prepare --url <URL> --pdf <PDF> --output-dir <DIR>
 briefing check-script --manifest <MANIFEST> --script <TXT>
-briefing render --manifest <MANIFEST> --script <TXT> --template <DOC> --tts auto
+briefing render --manifest <MANIFEST> --script <TXT> --template <DOC> --tts yating
 briefing render --manifest <MANIFEST> --script <TXT> --template <DOC> `
   --confirm-draft-id <DRAFT_ID>
 ```
@@ -56,10 +61,12 @@ briefing render --manifest <MANIFEST> --script <TXT> --template <DOC> `
 - Skill 讀取 narration input，撰寫 TXT，再呼叫 `check-script`。
 - `render` 預設永遠產生 DRAFT；只有無阻擋項目且 `--confirm-draft-id` 精確相符時，
   才能產生正式檔。
+- 第一階段 `--tts` 只接受 `yating`，且預設值就是 `yating`；不提供 `auto`、
+  `hanhan` 或 `azure`，避免隱性 fallback。
 - 正式確認不包含 LINE、上傳或任何外部發布。
 
 CLI 沿用穩定 exit code：成功 `0`、需 OP 審核 `20`、來源錯誤 `30`、輸入錯誤
-`40`、內部錯誤 `50`。JSON 輸出不能包含 Azure 金鑰、完整網頁、私有文件內容或
+`40`、內部錯誤 `50`。JSON 輸出不能包含憑證、完整網頁、私有文件內容或
 OP 電話等敏感資料。
 
 ## 里程碑總覽
@@ -67,14 +74,16 @@ OP 電話等敏感資料。
 | 里程碑 | 可驗證成果 | 外部副作用 |
 | --- | --- | --- |
 | M1 | 獨立資料契約、CLI 骨架與 fail-closed 狀態 | 無 |
-| M2 | 本機 Hanhan 30 秒與完整 6–8 分鐘 WAV／SRT；有 ffmpeg 後含 MP3 | 無 |
+| M2 | 本機 Yating 30 秒與完整 6–8 分鐘連續 WAV／bookmark SRT；有 ffmpeg 後含 MP3 | 無 |
 | M3 | URL／PDF 擷取、來源合併、衝突與 review | 僅另行核准的公開網頁讀取 |
 | M4 | JMA 有效範圍天氣與範圍外提醒 | 僅另行核准的 JMA 讀取 |
-| M5 | Azure HsiaoChen F0 受額度保護的短樣本與完整備援 | 僅另行核准的 Azure 呼叫 |
-| M6 | 私有 LIST 範本 5／6／7 天 Word 與視覺 QA | 本機檔案產出 |
-| M7 | 端對端 Skill、三區域驗收與 0.1.0 私有安裝包 | Git push；不部署、不傳 LINE |
+| M5 | 私有 LIST 範本 5／6／7 天 Word 與視覺 QA | 本機檔案產出 |
+| M6 | 端對端 Skill、三區域驗收與 0.1.0 私有安裝包 | Git push；不部署、不傳 LINE |
 
-## Task 1：建立獨立套件、資料契約與 CLI 骨架
+## Task 1：建立獨立套件、資料契約與 CLI 骨架（已完成）
+
+狀態：commit `30fd146` 已推送；本節保留為完成紀錄。Yating capability 的增量
+變更放在 Task 2B，不重寫這個歷史 commit。
 
 ### 檔案
 
@@ -92,14 +101,17 @@ OP 電話等敏感資料。
 3. `draft_id` 由 canonical manifest、來源雜湊與產生時間計算；來源、天氣或講稿
    變動必須改變 ID。
 4. `briefing doctor` 回報 Python、Windows、Hanhan、ffmpeg、Word COM、pdftoppm
-   與必要環境變數，不做網路呼叫。
+   與必要環境變數，不做網路呼叫；Yating 增量檢查由 Task 2B 補上。
 5. 測試 `cowell` CLI 仍只暴露 `doctor/auth/passports/rooms`，並禁止
    `travel_briefing` 匯入 Cowell adapter。
 6. 執行新測試後再跑完整 `pytest`。
 
 Commit：`feat(briefing): add isolated draft contract and cli`
 
-## Task 2：完成本機 Hanhan 語音垂直切片
+## Task 2A：完成本機 Hanhan 語音技術切片（已完成、未獲採用）
+
+狀態：commit `547c5f6` 已推送，結構測試通過，但使用者實際聆聽判定聲音不自然且
+停頓明顯。保留本節與既有測試作歷史技術證據；正式流程不得自動呼叫 Hanhan。
 
 ### 檔案
 
@@ -119,9 +131,61 @@ Commit：`feat(briefing): add isolated draft contract and cli`
 6. MP3 只透過設定路徑中的 ffmpeg 轉成 44.1 kHz mono 128 kbps；找不到時不安裝，
    WAV／SRT 可測但 MP3 必須 blocked。
 7. 輸出不覆蓋既有檔，記錄 SHA-256、秒數、取樣率及聲道。
-8. 先產生約 30 秒 Hanhan 樣本供使用者試聽；通過後才產生完整 6–8 分鐘版本。
+8. 已產生約 30 秒 Hanhan 樣本供使用者試聽；使用者未通過，因此沒有產生完整
+   6–8 分鐘 Hanhan 版本。
 
 Commit：`feat(briefing): add offline Hanhan audio pipeline`
+
+## Task 2B：以 Yating 取代正式本機語音管線（下一步）
+
+### 檔案
+
+- 新增 `src/travel_briefing/adapters/windows_media_speech.py`
+- 新增 `scripts/briefing/synthesize_yating.ps1`
+- 修改 `src/travel_briefing/{capabilities,narration,subtitles,audio,cli}.py`
+- 新增 `tests/unit/travel_briefing/test_yating_audio.py`
+- 新增 `tests/unit/travel_briefing/test_windows_media_speech.py`
+- 新增 `tests/integration/travel_briefing/test_yating_integration.py`
+- 修改 `tests/unit/travel_briefing/test_cli.py`
+
+### 實作與驗證
+
+1. 先寫失敗測試固定 canonical narration 與 SSML：XML 特殊字元必須跳脫，
+   `segment-001` 前不插 marker，第二段起各插一次唯一
+   `<mark name="segment-NNN"/>`，合成後的可見文字必須與 narration 完全相同。
+2. `briefing doctor` 只列舉 Windows Media Speech 的 `AllVoices`，要求同時符合
+   `DisplayName=Microsoft Yating` 與 `Language=zh-TW`；probe 不合成、不播放，
+   也不把 Hanhan 可用誤報成正式 TTS 可用。
+3. Python adapter 只把 UTF-8 JSON job 路徑放到 PowerShell command line。job 位於
+   OS temp，包含 SSML、預期 voice、暫存 WAV 路徑及 bookmark JSON 路徑；講稿與
+   SSML 不得出現在 process arguments、stdout、stderr 或長期 log。
+4. PowerShell 以 Windows Media Speech 選定 Yating，保留使用者通過的預設
+   speaking rate、pitch、volume 與 silence 設定，整份 SSML 只呼叫一次
+   `SynthesizeSsmlToStreamAsync`。不得逐句合成，也不得呼叫 Hanhan 或網路服務。
+5. PowerShell 以 `Windows.Media.IMediaMarker` reflection 讀出
+   `Speech:Bookmark` 的名稱與 `Time`，把 WAV 與最小 marker JSON 寫到 job 指定的
+   全新暫存路徑；任一路徑已存在、voice 不符或輸出為空時 fail closed。
+6. Python 實際解碼 WAV header，要求 PCM、16-bit、mono、正取樣率與正 frame 數，
+   並以 header 的 frame／sample rate 計算秒數；不得把實測 16 kHz 硬編碼成假定值。
+7. bookmark 必須恰好是 `segment-002` 至最後一段，各一次、順序相同、時間嚴格
+   遞增且小於 WAV 結尾。第一段 SRT 從 0 開始，後續邊界使用 marker，最後一段
+   精確結束於 WAV frame 時間；任一不符都不得產生猜測 SRT。
+8. `--tts` 第一階段只接受 `yating`。Yating 缺少、合成失敗、bookmark 失敗或
+   結果不明時，回報穩定錯誤與已存在的暫存輸出狀態，不自動呼叫 Hanhan、Azure
+   或其他聲音，也不盲目重試。
+9. 最終 WAV／SRT／TXT／metadata 都使用 exclusive create，不覆蓋舊檔；metadata
+   記錄 `Microsoft Yating`、Windows Media Speech、WAV header、marker count、
+   narration hash、各 artifact SHA-256 及明確的 MP3 availability。
+10. unit tests 覆蓋 XML escaping、marker 注入、缺少／重複／未知／倒序／越界
+    markers、損壞 WAV、timeout、部分輸出、既有輸出及 no-fallback spy；一般測試
+    不啟動真實 TTS。
+11. integration test 只在 Windows 且
+    `RUN_BRIEFING_YATING_INTEGRATION=1` 時真實合成去識別短稿，實際解碼 WAV 並驗證
+    bookmarks／SRT；未 opt-in 時保留精確 skip reason。
+12. 完整離線測試與 opt-in integration 通過後，產生一份 20–30 秒正式管線樣本，
+    由使用者再次驗收流暢度與字幕同步。通過前不得產生完整 6–8 分鐘版本。
+
+Commit：`feat(briefing): add fail-closed Yating audio pipeline`
 
 ## Task 3：建立口語稿契約與內容驗證
 
@@ -224,35 +288,12 @@ Commit：`feat(briefing): enforce source precedence and review states`
 
 Commit：`feat(briefing): add JMA forecast adapter`
 
-## Task 7：加入受額度保護的 Azure F0 TTS
+## Task 7：Azure F0 TTS（已取消）
 
-### 檔案
-
-- 新增 `src/travel_briefing/adapters/azure_speech.py`
-- 新增 `src/travel_briefing/quota_ledger.py`
-- 新增 Azure Speech 與 quota ledger unit tests
-- 新增 `config/briefing.example.toml`
-
-### 實作與驗證
-
-1. 直接用既有 `httpx` 呼叫 Azure Speech REST，不新增 Azure SDK。
-2. 金鑰只讀 `AZURE_SPEECH_KEY`，區域只讀 `AZURE_SPEECH_REGION`；錯誤與 log
-   不得回顯 header、key 或完整 SSML。
-3. 設定必須宣告 `tier = "F0"`；缺少、非 F0 或未取得本次 cloud-TTS 核准時，
-   `auto` 直接選 Hanhan。
-4. Asia/Taipei 每月 ledger 在 450,000 字元停止；先 reserve，成功後 commit，
-   未知結果不可盲目重送，改查 ledger／產出後交由 OP 決定。
-5. 每次只允許一個並行要求，使用 `zh-TW-HsiaoChenNeural` 與 `rate=-8%`。
-6. Azure 失敗只 fallback 一次 Hanhan，不循環重試。
-7. unit tests 以 `respx` 模擬成功、401、429、timeout、未知結果與金鑰遮蔽。
-
-### 真實服務關卡
-
-使用者自行建立或提供已確認的 F0 資源後，先估算字數並顯示剩餘本機預算；取得
-當次核准才合成 20–30 秒樣本。使用者聆聽通過後才產生完整音訊。程式不得建立、
-升級或修改 Azure 資源。
-
-Commit：`feat(briefing): add guarded Azure F0 synthesis`
+2026-08-09 使用者確認沒有 Azure Speech 資源，並選定本機 Yating。第一階段不得
+新增 Azure adapter、quota ledger、key／region 設定、`auto` cloud fallback 或
+Azure integration test，也沒有本 Task 的 implementation commit。未來若重新考慮
+雲端 TTS，必須從新設計與當次核准開始，不能直接恢復本計畫的舊內容。
 
 ## Task 8：移植 LIST 範本修補與 Word 視覺 QA
 
@@ -288,10 +329,10 @@ Commit：`feat(briefing): patch and validate LIST templates`
 - 新增 `src/travel_briefing/workflow.py`
 - 新增 `src/travel_briefing/artifact_store.py`
 - 新增 `src/travel_briefing/config.py`
-- 修改 `config/briefing.example.toml`，加入 output、template 與 ffmpeg 路徑設定
+- 新增 `config/briefing.example.toml`，只包含 output、template 與 ffmpeg 路徑設定
 - 完成 `src/travel_briefing/cli.py`
 - 新增 workflow integration test 與 artifact store unit tests
-- 修改 `.gitignore`，明確加入 briefing local state／ledger 名稱
+- 修改 `.gitignore`，明確加入 briefing local state 與暫存工作檔名稱
 
 ### 實作與驗證
 
@@ -359,13 +400,14 @@ git status --short
 2. 東北 PDF-only，並測產品頁唯一解析；
 3. 北海道 URL+PDF，並建立一個受控衝突案例；
 4. 5、6、7 天 Word 各一份；
-5. Hanhan 與 Azure HsiaoChen 各一段短樣本，最終選定預設聲音；
+5. Yating 正式管線短樣本通過人工聲音與字幕同步驗收，且 capability 缺少時
+   確實 fail closed、不產生 Hanhan 或雲端語音；
 6. 至少一份完整 6–8 分鐘 MP3／WAV／TXT／SRT；
 7. JMA 範圍內與範圍外各一例；
 8. 一個 `BLOCKED` 草稿及一個由 OP 明確確認的本機 `CONFIRMED` 產出。
 
-每份 Word 必須逐頁人工查看，每份最終語音必須實際播放抽聽。未完成 Azure 或
-Word 實機驗證時，不能因離線測試通過就宣稱第一階段完成。
+每份 Word 必須逐頁人工查看，每份最終語音必須實際播放抽聽。未完成 Yating
+正式管線或 Word 實機驗證時，不能因離線測試通過就宣稱第一階段完成。
 
 ### 文件與提交
 
@@ -375,16 +417,28 @@ Word 實機驗證時，不能因離線測試通過就宣稱第一階段完成。
 
 最後 Commit：`docs(briefing): record 0.1.0 acceptance results`
 
+## 計畫自檢
+
+- 12 個 Task headings：2 個已完成、1 個已取消、9 個尚待執行。
+- 11 個 commit 邊界：2 個既有 commit、9 個後續小步 commit；取消的 Task 7
+  沒有 implementation commit。
+- 0 個未定欄位或佔位內容。
+- 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
+  `--tts yating`。
+- 唯一下一個實作入口是 Task 2B；短樣本人工驗收前不進完整音訊或 Task 3。
+
 ## 實作核准關卡
 
-本計畫核准後，可直接開始 Task 1 的純離線程式與測試。下列動作仍需在發生前
+本計畫核准後，可直接開始 Task 2B 的純離線程式與測試。下列動作仍需在發生前
 另行取得明確核准：
 
 1. 安裝或下載 ffmpeg；
 2. 對新魅力官網或 JMA 執行 live request；
-3. 使用 Azure key 合成任何真實音訊；
-4. 建立、升級或改成付費 Azure 資源；
-5. 傳送 LINE、上傳檔案、部署服務或製作影片。
+3. 在其他目標電腦安裝或啟用 Yating／Windows 語言元件；
+4. 啟動 Word COM、讀取私有 LIST 範本或執行 Word 視覺驗收；
+5. 傳送 LINE、上傳檔案、部署服務或製作影片；
+6. 未來新增或呼叫任何雲端 TTS。
 
-Task 2 的 30 秒本機 Hanhan 樣本完成後先停下來讓使用者試聽；這是本計畫第一個
-產品體驗關卡，也是繼續完整語音與後續 Word 之前的優先回饋點。
+Task 2B 的 20–30 秒 Yating 正式管線樣本完成後先停下來讓使用者試聽並查看 SRT；
+這是繼續完整 6–8 分鐘語音與後續 Word 之前的優先回饋點。這次計畫核准只授權
+Task 2B 的本機程式、測試與短樣本，不授權其後的完整語音或外部關卡。
