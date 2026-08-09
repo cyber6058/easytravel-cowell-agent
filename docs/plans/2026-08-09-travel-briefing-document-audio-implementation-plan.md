@@ -196,7 +196,7 @@ Commit：`feat(briefing): add fail-closed Yating audio pipeline`
 
 狀態：commit `02f91c5` 已完成；完整離線回歸為 `171 passed, 2 skipped`。兩個 skip
 仍是需顯式 opt-in 的真實 Hanhan／Yating integration tests，Task 3 本身的測試沒有
-skip。
+skip。使用者於完成回報後明確回覆「通過」，Task 3 驗收已關閉。
 
 ### 檔案
 

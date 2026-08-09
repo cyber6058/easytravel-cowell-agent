@@ -142,6 +142,8 @@
   `171 passed, 2 skipped in 5.66s`；兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
   Yating integration tests，Task 3 測試沒有 skip；compileall 與 staged
   `git diff --check` 均通過。
+- 使用者於完成回報後明確回覆「通過」；Task 3 人工驗收已關閉。這項通過不包含
+  Task 4、live 官網／JMA、完整 6–8 分鐘音訊或任何其他後續關卡。
 - 本次沒有 live 官網／JMA request、Word COM、ffmpeg 安裝、MP3、完整 6–8 分鐘
   音訊、Azure、LINE、Cowell access 或任何部署／外部發布。
 
