@@ -39,6 +39,33 @@ class BriefingSourceError(BriefingCliError):
         )
 
 
+class ParseContractChangedError(BriefingCliError):
+    def __init__(self, anchor: str) -> None:
+        from .exit_codes import SOURCE_ERROR
+
+        super().__init__(
+            code="PARSE_CONTRACT_CHANGED",
+            message="Source structure no longer matches the approved parser contract",
+            exit_code=SOURCE_ERROR,
+            details={"anchor": anchor},
+        )
+
+
+class PdfOcrRequiredError(BriefingCliError):
+    def __init__(self) -> None:
+        from .exit_codes import NEEDS_REVIEW
+
+        super().__init__(
+            code="PDF_OCR_REQUIRED",
+            message=(
+                "Itinerary PDF contains no extractable text; OCR requires "
+                "separate review"
+            ),
+            exit_code=NEEDS_REVIEW,
+            details={},
+        )
+
+
 class LocalTtsUnavailableError(BriefingCliError):
     def __init__(self, message: str = "Local Hanhan TTS is unavailable") -> None:
         from .exit_codes import NEEDS_REVIEW
