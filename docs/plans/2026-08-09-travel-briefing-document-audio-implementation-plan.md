@@ -2,7 +2,7 @@
 
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
-狀態：使用者已核准；Task 1 已完成，下一步為 Task 2
+狀態：Task 2 已到 30 秒 Hanhan 試聽關卡；等待使用者聆聽確認
 
 ## 目標
 

@@ -4,6 +4,7 @@ import subprocess
 import sys
 
 from travel_briefing import cli
+from travel_briefing import capabilities
 
 
 def test_doctor_reports_offline_capabilities_without_exposing_secrets(
@@ -67,8 +68,8 @@ def test_doctor_finds_pdftoppm_in_a_winget_package_when_path_is_restricted(
     executable.parent.mkdir(parents=True)
     executable.write_bytes(b"")
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.setattr(cli.shutil, "which", lambda _: None)
-    monkeypatch.setattr(cli.sys, "platform", "win32")
+    monkeypatch.setattr(capabilities.shutil, "which", lambda _: None)
+    monkeypatch.setattr(capabilities.sys, "platform", "win32")
 
     payload = cli.run_doctor(argparse.Namespace())
 

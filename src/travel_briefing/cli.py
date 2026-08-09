@@ -4,13 +4,17 @@ import argparse
 import json
 import os
 import platform
-import shutil
 import sys
 import traceback
-from pathlib import Path
 from typing import Any, Sequence
 
 from . import __version__
+from .capabilities import (
+    environment_check,
+    hanhan_registered,
+    tool_check,
+    word_com_registered,
+)
 from .errors import BriefingCliError
 from .exit_codes import INTERNAL_ERROR, SUCCESS
 
@@ -34,8 +38,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_doctor(_: argparse.Namespace) -> dict[str, Any]:
-    hanhan_available = _hanhan_registered()
-    word_com_registered = _word_com_registered()
+    hanhan_available = hanhan_registered()
+    word_registered = word_com_registered()
     checks = {
         "python": {
             "status": "ok" if sys.version_info >= (3, 12) else "error",
@@ -50,14 +54,18 @@ def run_doctor(_: argparse.Namespace) -> dict[str, Any]:
             "available": hanhan_available,
             "voice": _HANHAN_VOICE,
         },
-        "ffmpeg": _tool_check("ffmpeg", os.environ.get("BRIEFING_FFMPEG")),
+        "ffmpeg": tool_check(
+            "ffmpeg",
+            os.environ.get("BRIEFING_FFMPEG"),
+            require_configured=True,
+        ),
         "word_com": {
-            "status": "ok" if word_com_registered else "warning",
-            "registered": word_com_registered,
+            "status": "ok" if word_registered else "warning",
+            "registered": word_registered,
             "probe": "registry_only",
         },
-        "pdftoppm": _tool_check("pdftoppm"),
-        "environment": _environment_check(),
+        "pdftoppm": tool_check("pdftoppm"),
+        "environment": environment_check(),
     }
     statuses = {check["status"] for check in checks.values()}
     status = (
@@ -73,102 +81,6 @@ def run_doctor(_: argparse.Namespace) -> dict[str, Any]:
         "command": "doctor",
         "checks": checks,
     }
-
-
-def _tool_check(name: str, configured_path: str | None = None) -> dict[str, Any]:
-    candidate = None
-    discovery = "none"
-    if configured_path:
-        path = Path(configured_path).expanduser()
-        if path.is_file():
-            candidate = str(path)
-            discovery = "configured"
-    if candidate is None:
-        candidate = shutil.which(name)
-        if candidate:
-            discovery = "path"
-    if candidate is None:
-        candidate = _winget_tool_path(name)
-        if candidate:
-            discovery = "winget"
-    return {
-        "status": "ok" if candidate else "warning",
-        "available": candidate is not None,
-        "configured_path": bool(configured_path),
-        "discovery": discovery,
-    }
-
-
-def _winget_tool_path(name: str) -> str | None:
-    if sys.platform != "win32":
-        return None
-    package_hint = {"ffmpeg": "ffmpeg", "pdftoppm": "poppler"}.get(name)
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if package_hint is None or not local_app_data:
-        return None
-    packages = Path(local_app_data) / "Microsoft" / "WinGet" / "Packages"
-    try:
-        package_dirs = sorted(
-            path
-            for path in packages.iterdir()
-            if path.is_dir() and package_hint in path.name.casefold()
-        )
-    except OSError:
-        return None
-    for package_dir in package_dirs:
-        try:
-            match = next(package_dir.rglob(f"{name}.exe"), None)
-        except OSError:
-            continue
-        if match is not None and match.is_file():
-            return str(match)
-    return None
-
-
-def _environment_check() -> dict[str, Any]:
-    key_configured = bool(os.environ.get("AZURE_SPEECH_KEY"))
-    region_configured = bool(os.environ.get("AZURE_SPEECH_REGION"))
-    return {
-        "status": "ok" if key_configured and region_configured else "warning",
-        "azure_speech_key_configured": key_configured,
-        "azure_speech_region_configured": region_configured,
-    }
-
-
-def _hanhan_registered() -> bool:
-    token_paths = (
-        r"SOFTWARE\Microsoft\Speech\Voices\Tokens",
-        r"SOFTWARE\WOW6432Node\Microsoft\Speech\Voices\Tokens",
-    )
-    return any(_registry_children_contain(path, "hanhan") for path in token_paths)
-
-
-def _word_com_registered() -> bool:
-    try:
-        import winreg
-
-        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, r"Word.Application\CLSID"):
-            return True
-    except (ImportError, OSError):
-        return False
-
-
-def _registry_children_contain(path: str, needle: str) -> bool:
-    try:
-        import winreg
-
-        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as key:
-            index = 0
-            while True:
-                try:
-                    name = winreg.EnumKey(key, index)
-                except OSError:
-                    return False
-                if needle.casefold() in name.casefold():
-                    return True
-                index += 1
-    except (ImportError, OSError):
-        return False
 
 
 def render_text(payload: dict[str, Any]) -> str:
