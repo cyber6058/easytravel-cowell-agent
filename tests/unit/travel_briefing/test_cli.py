@@ -12,6 +12,8 @@ def test_doctor_reports_offline_capabilities_without_exposing_secrets(
 ):
     monkeypatch.setenv("AZURE_SPEECH_KEY", "super-secret-test-key")
     monkeypatch.setenv("AZURE_SPEECH_REGION", "eastasia")
+    monkeypatch.setattr(cli, "yating_registered", lambda: True)
+    monkeypatch.setattr(cli, "hanhan_registered", lambda: False)
 
     exit_code = cli.main(["doctor", "--format", "json"])
 
@@ -22,17 +24,25 @@ def test_doctor_reports_offline_capabilities_without_exposing_secrets(
     assert set(payload["checks"]) == {
         "python",
         "platform",
+        "yating",
         "hanhan",
         "ffmpeg",
         "word_com",
         "pdftoppm",
-        "environment",
     }
-    assert payload["checks"]["environment"] == {
+    assert payload["checks"]["yating"] == {
         "status": "ok",
-        "azure_speech_key_configured": True,
-        "azure_speech_region_configured": True,
+        "available": True,
+        "voice": "Microsoft Yating",
+        "language": "zh-TW",
+        "engine": "windows-media-speech",
+        "role": "official_tts",
+        "probe": "voice_enumeration_only",
     }
+    assert payload["checks"]["hanhan"]["status"] == "ok"
+    assert payload["checks"]["hanhan"]["available"] is False
+    assert payload["checks"]["hanhan"]["role"] == "legacy_comparison_only"
+    assert "azure" not in captured.out.casefold()
     assert "super-secret-test-key" not in captured.out
     assert "eastasia" not in captured.out
 

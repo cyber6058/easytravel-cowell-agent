@@ -10,10 +10,10 @@ from typing import Any, Sequence
 
 from . import __version__
 from .capabilities import (
-    environment_check,
     hanhan_registered,
     tool_check,
     word_com_registered,
+    yating_registered,
 )
 from .errors import BriefingCliError
 from .exit_codes import INTERNAL_ERROR, SUCCESS
@@ -21,6 +21,8 @@ from .exit_codes import INTERNAL_ERROR, SUCCESS
 
 SCHEMA_VERSION = 1
 _HANHAN_VOICE = "Microsoft Hanhan Desktop"
+_YATING_VOICE = "Microsoft Yating"
+_YATING_LANGUAGE = "zh-TW"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_doctor(_: argparse.Namespace) -> dict[str, Any]:
+    yating_available = yating_registered()
     hanhan_available = hanhan_registered()
     word_registered = word_com_registered()
     checks = {
@@ -49,10 +52,20 @@ def run_doctor(_: argparse.Namespace) -> dict[str, Any]:
             "status": "ok" if sys.platform == "win32" else "warning",
             "windows": sys.platform == "win32",
         },
+        "yating": {
+            "status": "ok" if yating_available else "warning",
+            "available": yating_available,
+            "voice": _YATING_VOICE,
+            "language": _YATING_LANGUAGE,
+            "engine": "windows-media-speech",
+            "role": "official_tts",
+            "probe": "voice_enumeration_only",
+        },
         "hanhan": {
-            "status": "ok" if hanhan_available else "warning",
+            "status": "ok",
             "available": hanhan_available,
             "voice": _HANHAN_VOICE,
+            "role": "legacy_comparison_only",
         },
         "ffmpeg": tool_check(
             "ffmpeg",
@@ -65,7 +78,6 @@ def run_doctor(_: argparse.Namespace) -> dict[str, Any]:
             "probe": "registry_only",
         },
         "pdftoppm": tool_check("pdftoppm"),
-        "environment": environment_check(),
     }
     statuses = {check["status"] for check in checks.values()}
     status = (

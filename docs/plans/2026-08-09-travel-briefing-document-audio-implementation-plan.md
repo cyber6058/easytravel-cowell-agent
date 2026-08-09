@@ -2,9 +2,9 @@
 
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
-狀態：Yating 修訂設計已於 2026-08-09 由使用者確認；Task 1 與 Hanhan 技術切片
-已完成，下一個實作單位是 Task 2B 的 Yating 連續語音管線。本計畫待使用者核准後
-才開始 Task 2B；Azure Task 已取消。
+狀態：Yating 修訂設計與 Task 2B 已於 2026-08-09 由使用者核准；Task 1、Hanhan
+技術切片與 Task 2B 本機實作均已完成。20–30 秒 Yating 正式管線樣本已產生，正等待
+使用者試聽與字幕同步驗收；Azure Task 已取消。
 
 ## 目標
 
@@ -136,7 +136,10 @@ Commit：`feat(briefing): add isolated draft contract and cli`
 
 Commit：`feat(briefing): add offline Hanhan audio pipeline`
 
-## Task 2B：以 Yating 取代正式本機語音管線（下一步）
+## Task 2B：以 Yating 取代正式本機語音管線（實作完成，待人工試聽）
+
+狀態：離線回歸 `144 passed, 2 skipped`，opt-in Yating integration `1 passed`；
+26.087250 秒正式管線樣本及 5 段 bookmark SRT 已通過機械 QA，尚待使用者試聽。
 
 ### 檔案
 
@@ -419,18 +422,18 @@ git status --short
 
 ## 計畫自檢
 
-- 12 個 Task headings：2 個已完成、1 個已取消、9 個尚待執行。
-- 11 個 commit 邊界：2 個既有 commit、9 個後續小步 commit；取消的 Task 7
+- 12 個 Task headings：3 個已完成、1 個已取消、8 個尚待執行。
+- 11 個 commit 邊界：3 個既有／本次 commit、8 個後續小步 commit；取消的 Task 7
   沒有 implementation commit。
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。
-- 唯一下一個實作入口是 Task 2B；短樣本人工驗收前不進完整音訊或 Task 3。
+- 下一個入口是 Task 2B 短樣本人工驗收；通過前不進完整音訊或 Task 3。
 
 ## 實作核准關卡
 
-本計畫核准後，可直接開始 Task 2B 的純離線程式與測試。下列動作仍需在發生前
-另行取得明確核准：
+Task 2B 已獲核准並完成本機程式、測試與短樣本。下列動作仍需在發生前另行取得
+明確核准：
 
 1. 安裝或下載 ffmpeg；
 2. 對新魅力官網或 JMA 執行 live request；
@@ -439,6 +442,6 @@ git status --short
 5. 傳送 LINE、上傳檔案、部署服務或製作影片；
 6. 未來新增或呼叫任何雲端 TTS。
 
-Task 2B 的 20–30 秒 Yating 正式管線樣本完成後先停下來讓使用者試聽並查看 SRT；
-這是繼續完整 6–8 分鐘語音與後續 Word 之前的優先回饋點。這次計畫核准只授權
+Task 2B 的 20–30 秒 Yating 正式管線樣本已完成，現停在使用者試聽與 SRT 檢查；
+這是繼續完整 6–8 分鐘語音與後續 Word 之前的優先回饋點。這次核准只授權
 Task 2B 的本機程式、測試與短樣本，不授權其後的完整語音或外部關卡。

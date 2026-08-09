@@ -17,6 +17,20 @@ class SubtitleSegment:
             raise ValueError("Subtitle sample_rate must be positive")
 
 
+@dataclass(frozen=True, slots=True)
+class TimedSubtitleSegment:
+    segment_id: str
+    text: str
+    start_ms: int
+    end_ms: int
+
+    def __post_init__(self) -> None:
+        if self.start_ms < 0:
+            raise ValueError("Subtitle start_ms must not be negative")
+        if self.end_ms <= self.start_ms:
+            raise ValueError("Subtitle end_ms must be after start_ms")
+
+
 def build_srt(
     segments: tuple[SubtitleSegment, ...], *, max_line_chars: int = 16
 ) -> str:
@@ -38,6 +52,28 @@ def build_srt(
             f"{_format_timestamp(start_ms)} --> {_format_timestamp(end_ms)}\n"
             f"{_wrap_text(segment.text, max_line_chars)}"
         )
+    return "\n\n".join(blocks) + "\n"
+
+
+def build_timed_srt(
+    segments: tuple[TimedSubtitleSegment, ...], *, max_line_chars: int = 16
+) -> str:
+    if not segments:
+        raise ValueError("At least one subtitle segment is required")
+    if max_line_chars < 4:
+        raise ValueError("Subtitle max_line_chars must be at least 4")
+    blocks: list[str] = []
+    previous_end_ms = 0
+    for index, segment in enumerate(segments, start=1):
+        if segment.start_ms != previous_end_ms:
+            raise ValueError("Timed subtitle segments must be contiguous")
+        blocks.append(
+            f"{index}\n"
+            f"{_format_timestamp(segment.start_ms)} --> "
+            f"{_format_timestamp(segment.end_ms)}\n"
+            f"{_wrap_text(segment.text, max_line_chars)}"
+        )
+        previous_end_ms = segment.end_ms
     return "\n\n".join(blocks) + "\n"
 
 

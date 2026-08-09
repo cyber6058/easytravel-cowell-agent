@@ -2,9 +2,31 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+
+ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
+
+_YATING_PROBE_SCRIPT = r'''
+$ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+[Windows.Media.SpeechSynthesis.SpeechSynthesizer, Windows.Media.SpeechSynthesis, ContentType=WindowsRuntime] | Out-Null
+$matchingVoices = @(
+    [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices |
+        Where-Object {
+            $_.DisplayName -ceq "Microsoft Yating" -and
+            $_.Language -ceq "zh-TW"
+        }
+)
+if ($matchingVoices.Count -eq 1) {
+    [Console]::Out.Write("YATING_AVAILABLE")
+    exit 0
+}
+exit 21
+'''.strip()
 
 
 def configured_executable(value: Path | str | None) -> Path | None:
@@ -42,22 +64,45 @@ def tool_check(
     }
 
 
-def environment_check() -> dict[str, Any]:
-    key_configured = bool(os.environ.get("AZURE_SPEECH_KEY"))
-    region_configured = bool(os.environ.get("AZURE_SPEECH_REGION"))
-    return {
-        "status": "ok" if key_configured and region_configured else "warning",
-        "azure_speech_key_configured": key_configured,
-        "azure_speech_region_configured": region_configured,
-    }
-
-
 def hanhan_registered() -> bool:
     token_paths = (
         r"SOFTWARE\Microsoft\Speech\Voices\Tokens",
         r"SOFTWARE\WOW6432Node\Microsoft\Speech\Voices\Tokens",
     )
     return any(_registry_children_contain(path, "hanhan") for path in token_paths)
+
+
+def yating_registered(
+    *,
+    runner: ProcessRunner = subprocess.run,
+    powershell_executable: str = "powershell.exe",
+    timeout_seconds: int = 10,
+) -> bool:
+    if sys.platform != "win32":
+        return False
+    command = [
+        powershell_executable,
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        _YATING_PROBE_SCRIPT,
+    ]
+    options: dict[str, Any] = {
+        "check": False,
+        "capture_output": True,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+        "timeout": timeout_seconds,
+    }
+    if hasattr(subprocess, "CREATE_NO_WINDOW"):
+        options["creationflags"] = subprocess.CREATE_NO_WINDOW
+    try:
+        result = runner(command, **options)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "YATING_AVAILABLE"
 
 
 def word_com_registered() -> bool:

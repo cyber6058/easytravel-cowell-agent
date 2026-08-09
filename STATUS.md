@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能已完成；說明會產生器的 Yating 修訂設計已確認，Task 2B
-實作計畫已重寫並等待使用者核准後開始本機程式與短樣本。
+立益 Cowell 專用功能已完成；說明會產生器 Task 2B 的 Yating-only 本機語音管線、
+測試與 26 秒正式管線樣本已完成，現在停在使用者試聽與 SRT 同步驗收。
 
 ## 這次做了什麼
 
@@ -89,29 +89,55 @@
 - ffmpeg 未設定，因此 metadata 正確標示 `MP3_CONVERTER_UNAVAILABLE`；沒有安裝、
   沒有嘗試轉 MP3，已驗證的 WAV／SRT／TXT 均保留。
 - 本次沒有 live 官網／JMA、Azure、LINE、Word COM 啟動或外部部署。
+- 2026-08-09 使用者明確核准 Task 2B；以 TDD 完成 Windows Media Speech
+  `Microsoft Yating` 整篇單次 SSML 合成，第二段起插入唯一 bookmark，並由真實
+  `Speech:Bookmark` 時間建立連續 SRT。
+- 新增 `windows_media_speech.py` 與 `synthesize_yating.ps1`；Python command line
+  只帶 OS temp 中的 UTF-8 JSON job 路徑，PowerShell 僅精確選用
+  `Microsoft Yating`／`zh-TW`，保留預設韻律，不呼叫 Hanhan、Azure 或網路。
+- WAV 會實際解碼並要求 PCM、16-bit、mono、正取樣率與正 frame；取樣率不硬編碼。
+  缺少、重複、未知、倒序、越界或經毫秒換算後無效的 bookmarks 一律阻擋 SRT，
+  timeout／失敗只檢查暫存輸出一次，不重試也不 fallback。
+- 最終 WAV／SRT／TXT／metadata 全部 exclusive create；metadata 記錄 voice、engine、
+  WAV header、marker count、narration／artifact hashes，並明確標示
+  `MP3_CONVERTER_UNAVAILABLE`。
+- `briefing doctor` 實機只列舉 Windows Media `AllVoices`，已確認 Yating 可用；
+  Hanhan 標為 `legacy_comparison_only`，已取消的 Azure 環境變數不再造成假 warning。
+- opt-in 真實整合測試結果為 `1 passed`；最後完整離線回歸為
+  `144 passed, 2 skipped in 5.76s`，兩個 skip 分別是需顯式 opt-in 的 Hanhan 與
+  Yating 本機整合測試；`git diff --check` 通過。
+- 正式管線樣本位於 Git 忽略的
+  `output/briefings/SYNTHETIC-YATING/20260809-task2b-sample-v1/`。獨立 QA 為
+  `RESULT: OK`：26.087250 秒、16 kHz、PCM 16-bit／mono、417,396 frames、5 段
+  SRT／4 bookmarks，SRT 與 WAV 結尾同為 26,087 ms。
+- 新樣本 WAV SHA-256 為
+  `d538b0a4d8d4f98d9bfc7758fbfbe720c6b868d249d6a43bed64b3e91851b519`，與使用者
+  選中的 `02-Yating-local.wav` 完全相同；SRT SHA-256 為
+  `75a936538f95f0ecfb234cab56a6c2eef3a3ce1f9defbf2f1e1bcffc49b97d67`。
+- 本次仍未安裝 ffmpeg、未產生 MP3／完整 6–8 分鐘音訊、未啟動 Word COM，亦未
+  呼叫 live 官網／JMA、Azure、LINE 或任何外部發布。
 
 ## 下一步
 
-請使用者審閱並核准修訂後實作計畫；核准後只開始 Task 2B，以 Windows Media
-Speech 實作整篇連續合成、SSML bookmark SRT 與無 fallback 的失敗契約。完成後
-先重做 20–30 秒 Yating WAV／SRT 樣本供人工驗收，通過後才另行進入完整 6–8 分鐘
-版本。Cowell 部分則維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入
-受控 Chrome，依序驗證 auth status 與 rooms preview。
+請使用者先試聽 Task 2B 的 `Yating-pipeline-sample.wav` 並查看同名 SRT，確認聲音
+流暢度與字幕切點。人工驗收通過後，再另行決定是否核准 Task 3 口語稿契約；不得
+自動產生完整 6–8 分鐘音訊。Cowell 部分則維持到立益公司電腦 clone、先跑完整
+離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器目前完成 M1 與舊 Hanhan Task 2 的技術驗證，但 Hanhan 未通過人工
-聆聽；Yating 設計已確認，修訂實作計畫仍待核准，Task 2B 程式與正式管線短樣本
-尚未完成，完整 6–8 分鐘版本也尚未產生。新魅力頁面契約、JMA 資料及 LIST
-Word COM／視覺驗證也尚未實作或端對端驗證。Azure 已移出第一階段自動流程；
-任何未來雲端 TTS 與自動 LINE 傳送仍是獨立核准關卡。
+說明會產生器的 Task 2B 程式、測試與正式管線短樣本已完成，沒有技術阻塞；目前
+唯一關卡是使用者人工試聽 Yating 與檢查 SRT 同步。完整 6–8 分鐘版本尚未產生；
+新魅力頁面契約、JMA 資料及 LIST Word COM／視覺驗證也尚未實作或端對端驗證。
+Azure 已移出第一階段自動流程；任何未來雲端 TTS 與自動 LINE 傳送仍是獨立核准
+關卡。
 
-本機 capability probe 與真實 integration 顯示 `pdftoppm` 可用、Hanhan 可合成、
-Word COM 已註冊，但 `ffmpeg` 尚未找到；Word COM 仍須在 Task 8 以最長 20 秒的
-隱藏 instance 另測。
+本機 capability probe 與真實 integration 顯示 Yating 可用且正式管線可合成，
+`pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊，但 `ffmpeg` 尚未找到；
+Word COM 仍須在 Task 8 以最長 20 秒的隱藏 instance 另測。
 Codex 沙箱直接啟動新 `briefing.exe` 時看不到外部 WinGet Poppler 路徑，但同一
 程式由專案 Python 啟動可正確偵測，需在一般 OP shell 再驗證 console launcher。
 安裝 ffmpeg、live 官網／JMA、任何雲端 TTS、LINE、影片與部署都不包含在本次
