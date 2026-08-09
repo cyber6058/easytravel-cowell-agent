@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能已完成；說明會產生器 Task 2B 的 Yating-only 本機語音管線、
-測試與 26 秒正式管線樣本均已通過，下一個未核准工作是 Task 3 口語稿契約。
+立益 Cowell 專用功能已完成；說明會產生器 Task 2B 的 Yating-only 本機語音管線
+與 Task 3 口語稿契約均已通過，下一個未核准工作是 Task 4 URL／PDF 解析。
 
 ## 這次做了什麼
 
@@ -122,22 +122,44 @@
   韻律／引擎評估。使用者已依此原則通過 Task 2B 人工驗收。
 - 本次仍未安裝 ffmpeg、未產生 MP3／完整 6–8 分鐘音訊、未啟動 Word COM，亦未
   呼叫 live 官網／JMA、Azure、LINE 或任何外部發布。
+- 2026-08-09 使用者以「繼續進行」核准既定 Task 3；新增
+  `script_policy.py`、`script_validation.py` 與 canonical narration policy reference，
+  沒有修改 Yating 合成器或生成完整語音。
+- `build_narration_input()` 由 `BriefingDraft` 產生固定八段與來源綁定的
+  `required_facts`；核心涵蓋小費、人數、不可脫隊、巴士時數、保險、護照效期、
+  房型、素食、電壓及天氣提醒。缺值、未知來源／分類、未確認 OP 欄位、未解衝突、
+  BLOCKED 草稿與未知專名一律進 review，不補猜。
+- `check_script()` 要求八個 exact markers 依序各出現一次，保護事實子句與所有關鍵
+  日期／班號／時間／金額／人數／時數／效期／百分比／電壓，並阻擋相反語意、
+  未核准數字及爭議值。驗證 JSON 不回吐講稿；序列化的禁用值只留 SHA-256 與字數。
+- 合成前字數估計採已通過 Yating 短樣本的 3.6 可發音字元／秒，只是 warning；
+  `validate_audio_duration()` 仍以實際 WAV 秒數判斷 360–480 秒。第一次過短／過長只
+  允許固定規則補充／壓縮一次，第二次仍超界即 blocked 並轉人工 review。
+- 發音表只涵蓋班號、機場代碼、日期、金額、電壓與大阪／東北／北海道常見地名；
+  未知詞保留原字進 review。依使用者決策，沒有為「不舒服」的「服」或其他一般字
+  建立逐字補丁。
+- Task 3 功能 commit 為 `02f91c5`。完整離線回歸實測為
+  `171 passed, 2 skipped in 5.66s`；兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
+  Yating integration tests，Task 3 測試沒有 skip；compileall 與 staged
+  `git diff --check` 均通過。
+- 本次沒有 live 官網／JMA request、Word COM、ffmpeg 安裝、MP3、完整 6–8 分鐘
+  音訊、Azure、LINE、Cowell access 或任何部署／外部發布。
 
 ## 下一步
 
-Task 2B 已完成；等待使用者另行決定是否核准 Task 3 口語稿契約，不得自動產生
-完整 6–8 分鐘音訊。Cowell 部分則維持到立益公司電腦 clone、先跑完整離線測試，
-再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+Task 3 已完成；等待使用者另行決定是否核准 Task 4 URL／PDF 解析，不得自動讀取
+live 官網或產生完整 6–8 分鐘音訊。Cowell 部分則維持到立益公司電腦 clone、先跑
+完整離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器的 Task 2B 程式、測試、正式管線短樣本與人工驗收均已完成，沒有技術
-阻塞。Task 3 尚未核准，完整 6–8 分鐘版本尚未產生；新魅力頁面契約、JMA 資料及
-LIST Word COM／視覺驗證也尚未實作或端對端驗證。Azure 已移出第一階段自動流程；
-任何未來雲端 TTS 與自動 LINE 傳送仍是獨立核准關卡。
+說明會產生器的 Task 2B 與 Task 3 均已完成，沒有技術阻塞。Task 4 尚未核准，
+完整 6–8 分鐘版本尚未產生；新魅力頁面契約、JMA 資料及 LIST Word COM／視覺驗證
+也尚未實作或端對端驗證。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
+自動 LINE 傳送仍是獨立核准關卡。
 
 本機 capability probe 與真實 integration 顯示 Yating 可用且正式管線可合成，
 `pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊，但 `ffmpeg` 尚未找到；

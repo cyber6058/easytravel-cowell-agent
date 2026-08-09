@@ -11,7 +11,8 @@
 
 - 固定八段的 `sections` 與 marker；
 - 可回溯來源的 `required_facts`；
-- 不得出現在稿內的 `prohibited_values`；
+- 不得出現在稿內的 `prohibited_values`；canonical JSON 只輸出其 SHA-256 與字數，
+  不把未確認值交給口語稿作者；
 - 只處理關鍵資料的 `pronunciation_entries`；
 - 所有缺值、未確認值、未知分類與未知專名的 `review_items`。
 

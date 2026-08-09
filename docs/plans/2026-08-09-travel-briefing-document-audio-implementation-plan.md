@@ -2,9 +2,9 @@
 
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
-狀態：Yating 修訂設計與 Task 2B 已於 2026-08-09 由使用者核准；Task 1、Hanhan
-技術切片與 Task 2B 本機實作均已完成。26 秒 Yating 正式管線樣本已依自然度政策
-通過人工驗收；Azure Task 已取消，Task 3 尚未核准。
+狀態：Yating 修訂設計、Task 2B 與 Task 3 已於 2026-08-09 由使用者核准；Task 1、
+Hanhan 技術切片、Task 2B 與 Task 3 本機實作均已完成。26 秒 Yating 正式管線樣本
+已依自然度政策通過人工驗收；Azure Task 已取消，Task 4 尚未核准。
 
 ## 目標
 
@@ -192,7 +192,11 @@ Commit：`feat(briefing): add offline Hanhan audio pipeline`
 
 Commit：`feat(briefing): add fail-closed Yating audio pipeline`
 
-## Task 3：建立口語稿契約與內容驗證
+## Task 3：建立口語稿契約與內容驗證（已完成）
+
+狀態：commit `02f91c5` 已完成；完整離線回歸為 `171 passed, 2 skipped`。兩個 skip
+仍是需顯式 opt-in 的真實 Hanhan／Yating integration tests，Task 3 本身的測試沒有
+skip。
 
 ### 檔案
 
@@ -359,8 +363,8 @@ Commit：`feat(briefing): orchestrate draft and confirmed artifacts`
 ### 檔案
 
 - 擴充 `packaging/easytravel-briefing-materials/`
-- 完善 Task 3 建立的 canonical
-  `packaging/easytravel-briefing-materials/shared/SKILL.md`
+- 建立 canonical `packaging/easytravel-briefing-materials/shared/SKILL.md`，引用 Task 3
+  已建立的 narration policy
 - 新增 briefing 專用 `app-pyproject.toml`
 - 新增共享 references：CLI、來源規則、OP review、語音與範本設定
 - 新增 Codex plugin manifest 與 tool-specific thin wrapper
@@ -424,18 +428,19 @@ git status --short
 
 ## 計畫自檢
 
-- 12 個 Task headings：3 個已完成、1 個已取消、8 個尚待執行。
-- 11 個 commit 邊界：3 個既有／本次 commit、8 個後續小步 commit；取消的 Task 7
+- 12 個 Task headings：4 個已完成、1 個已取消、7 個尚待執行。
+- 11 個 commit 邊界：4 個既有／本次 commit、7 個後續小步 commit；取消的 Task 7
   沒有 implementation commit。
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。
-- 下一個可提案的實作入口是 Task 3；仍須另行明確核准，不自動進入完整音訊。
+- 下一個可提案的實作入口是 Task 4；仍須另行明確核准，不自動讀取 live 官網或
+  進入完整音訊。
 
 ## 實作核准關卡
 
-Task 2B 已獲核准並完成本機程式、測試與短樣本。下列動作仍需在發生前另行取得
-明確核准：
+Task 2B 與 Task 3 已獲核准並完成本機程式與測試；Task 2B 的短樣本也已通過人工
+試聽。下列動作仍需在發生前另行取得明確核准：
 
 1. 安裝或下載 ffmpeg；
 2. 對新魅力官網或 JMA 執行 live request；
@@ -444,6 +449,6 @@ Task 2B 已獲核准並完成本機程式、測試與短樣本。下列動作仍
 5. 傳送 LINE、上傳檔案、部署服務或製作影片；
 6. 未來新增或呼叫任何雲端 TTS。
 
-Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查。這次核准
-只授權 Task 2B 的本機程式、測試與短樣本；Task 3、完整 6–8 分鐘語音及所有外部
-關卡仍未授權。
+Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查；Task 3 的
+口語稿契約與內容／時長驗證也已完成。Task 4、完整 6–8 分鐘語音及所有外部關卡
+仍未授權。
