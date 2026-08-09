@@ -66,6 +66,18 @@ class PdfOcrRequiredError(BriefingCliError):
         )
 
 
+class StaleDraftDecisionError(BriefingCliError):
+    def __init__(self, kind: str) -> None:
+        from .exit_codes import INPUT_ERROR
+
+        super().__init__(
+            code="STALE_DRAFT_DECISION",
+            message="Submitted OP data does not match the current draft ID",
+            exit_code=INPUT_ERROR,
+            details={"kind": kind},
+        )
+
+
 class LocalTtsUnavailableError(BriefingCliError):
     def __init__(self, message: str = "Local Hanhan TTS is unavailable") -> None:
         from .exit_codes import NEEDS_REVIEW

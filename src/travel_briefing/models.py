@@ -70,6 +70,7 @@ class OpField:
     value: str
     source: str
     confirmed: bool
+    highlight: str = ""
 
 
 @dataclass(frozen=True, slots=True)
