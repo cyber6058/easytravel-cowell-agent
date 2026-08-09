@@ -106,6 +106,7 @@
 - opt-in 真實整合測試結果為 `1 passed`；最後完整離線回歸為
   `144 passed, 2 skipped in 5.76s`，兩個 skip 分別是需顯式 opt-in 的 Hanhan 與
   Yating 本機整合測試；`git diff --check` 通過。
+- Task 2B 功能、測試與計畫狀態已提交於 commit `2fe8e7c`。
 - 正式管線樣本位於 Git 忽略的
   `output/briefings/SYNTHETIC-YATING/20260809-task2b-sample-v1/`。獨立 QA 為
   `RESULT: OK`：26.087250 秒、16 kHz、PCM 16-bit／mono、417,396 frames、5 段
