@@ -2,9 +2,10 @@
 
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
-狀態：Yating 修訂設計、Task 2B 與 Task 3 已於 2026-08-09 由使用者核准；Task 1、
-Hanhan 技術切片、Task 2B 與 Task 3 本機實作均已完成。26 秒 Yating 正式管線樣本
-已依自然度政策通過人工驗收；Azure Task 已取消，Task 4 尚未核准。
+狀態：Yating 修訂設計、Task 2B、Task 3 與 Task 4 已於 2026-08-09 由使用者核准；
+Task 1、Hanhan 技術切片、Task 2B、Task 3 與 Task 4 本機實作均已完成。26 秒
+Yating 正式管線樣本已依自然度政策通過人工驗收；Azure Task 已取消，Task 4
+只完成離線解析，尚未核准對新魅力官網執行唯讀契約測試。
 
 ## 目標
 
@@ -218,7 +219,7 @@ skip。使用者於完成回報後明確回覆「通過」，Task 3 驗收已關
 
 Commit：`feat(briefing): validate narration facts and timing`
 
-## Task 4：解析新魅力 URL 與行程 PDF
+## Task 4：解析新魅力 URL 與行程 PDF（已完成）
 
 ### 檔案
 
@@ -251,6 +252,12 @@ Commit：`feat(briefing): validate narration facts and timing`
 唯讀契約測試；不爬全站、不批次下載。
 
 Commit：`feat(briefing): parse NewAmazing pages and itinerary PDFs`
+
+完成紀錄（2026-08-09）：功能 commit `cc547f9`。34 個 Task 4 針對性測試全數通過；
+完整離線回歸為 `205 passed, 2 skipped in 6.10s`，compileall 與 staged
+`git diff --check` 也通過。測試資料只含合成 HTML、去識別頁面文字及測試期間產生
+的暫存 PDF；未對新魅力官網發出 request，因此真實 `GroupDetail.asp`／列印頁契約
+仍是未驗證項目。
 
 ## Task 5：實作來源優先、衝突與 OP review
 
@@ -428,19 +435,20 @@ git status --short
 
 ## 計畫自檢
 
-- 12 個 Task headings：4 個已完成、1 個已取消、7 個尚待執行。
-- 11 個 commit 邊界：4 個既有／本次 commit、7 個後續小步 commit；取消的 Task 7
+- 12 個 Task headings：5 個已完成、1 個已取消、6 個尚待執行。
+- 11 個 commit 邊界：5 個既有／本次 commit、6 個後續小步 commit；取消的 Task 7
   沒有 implementation commit。
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。
-- 下一個可提案的實作入口是 Task 4；仍須另行明確核准，不自動讀取 live 官網或
-  進入完整音訊。
+- 下一個可提案的實作入口是 Task 5；仍須另行明確核准。新魅力 live 唯讀契約測試
+  是另一個獨立關卡，不自動讀取官網或進入完整音訊。
 
 ## 實作核准關卡
 
-Task 2B 與 Task 3 已獲核准並完成本機程式與測試；Task 2B 的短樣本也已通過人工
-試聽。下列動作仍需在發生前另行取得明確核准：
+Task 2B、Task 3 與 Task 4 已獲核准並完成本機程式與測試；Task 2B 的短樣本也已
+通過人工試聽。Task 4 僅完成合成資料與暫存 PDF 的離線驗證。下列動作仍需在發生
+前另行取得明確核准：
 
 1. 安裝或下載 ffmpeg；
 2. 對新魅力官網或 JMA 執行 live request；
@@ -450,5 +458,5 @@ Task 2B 與 Task 3 已獲核准並完成本機程式與測試；Task 2B 的短�
 6. 未來新增或呼叫任何雲端 TTS。
 
 Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查；Task 3 的
-口語稿契約與內容／時長驗證也已完成。Task 4、完整 6–8 分鐘語音及所有外部關卡
-仍未授權。
+口語稿契約與內容／時長驗證及 Task 4 的離線解析均已完成。Task 5、真實新魅力
+唯讀契約測試、完整 6–8 分鐘語音及所有其他外部關卡仍未授權。

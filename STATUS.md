@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能已完成；說明會產生器 Task 2B 的 Yating-only 本機語音管線
-與 Task 3 口語稿契約均已通過，下一個未核准工作是 Task 4 URL／PDF 解析。
+立益 Cowell 專用功能已完成；說明會產生器 Task 2B、Task 3 與 Task 4 離線解析
+均已完成，下一個未核准工作是 Task 5 來源合併／衝突與 OP review。
 
 ## 這次做了什麼
 
@@ -146,22 +146,40 @@
   Task 4、live 官網／JMA、完整 6–8 分鐘音訊或任何其他後續關卡。
 - 本次沒有 live 官網／JMA request、Word COM、ffmpeg 安裝、MP3、完整 6–8 分鐘
   音訊、Azure、LINE、Cowell access 或任何部署／外部發布。
+- 2026-08-09 經使用者核准完成說明會產生器 Task 4：新增 HTTPS
+  `www.newamazing.com.tw` URL／redirect allowlist、語意式 NewAmazing HTML parser、
+  保留頁碼的 PyMuPDF 文字擷取與 PDF parser，以及產品代碼唯一候選決策。
+- NewAmazing parser 以產品資訊、航班資訊、每日行程及其他說明 anchor 定位；必要
+  anchor 缺少時回報 `PARSE_CONTRACT_CHANGED`。無文字 PDF 回報
+  `PDF_OCR_REQUIRED`，沒有暗中加入 OCR。
+- Task 4 fixtures 只有合成 HTML 與去識別頁面文字；PDF extractor 測試使用測試期間
+  產生的暫存 PDF。沒有提交來源 PDF、完整官網頁面或 live response。
+- Task 4 的 34 個針對性測試通過；完整離線回歸實測為
+  `205 passed, 2 skipped in 6.10s`。兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
+  Yating integration tests；compileall、行寬檢查與 staged `git diff --check` 均通過。
+- Task 4 依計畫只新增 `beautifulsoup4>=4.12,<5`；本機 venv 實裝 4.15.0。
+  額外執行 `pip check` 時發現既有 `keyring` 依賴未安裝；這不是 Task 4 引入，且
+  本次未擴充範圍補裝，完整測試仍全綠。
+- Task 4 功能 commit 為 `cc547f9`。本次未對新魅力官網發出 request，所以真實
+  `GroupDetail.asp`／官方列印頁結構仍未驗證；該唯讀測試維持獨立核准關卡。
 
 ## 下一步
 
-Task 3 已完成；等待使用者另行決定是否核准 Task 4 URL／PDF 解析，不得自動讀取
-live 官網或產生完整 6–8 分鐘音訊。Cowell 部分則維持到立益公司電腦 clone、先跑
-完整離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+Task 4 離線解析已完成；等待使用者另行決定是否核准 Task 5 來源合併、衝突與
+OP review。對使用者提供的新魅力 URL 做一次唯讀契約測試是另一個關卡，不得自動
+讀取 live 官網或產生完整 6–8 分鐘音訊。Cowell 部分則維持到立益公司電腦 clone、
+先跑完整離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器的 Task 2B 與 Task 3 均已完成，沒有技術阻塞。Task 4 尚未核准，
-完整 6–8 分鐘版本尚未產生；新魅力頁面契約、JMA 資料及 LIST Word COM／視覺驗證
-也尚未實作或端對端驗證。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
-自動 LINE 傳送仍是獨立核准關卡。
+說明會產生器的 Task 2B、Task 3 與 Task 4 離線工作均已完成，沒有離線技術阻塞。
+Task 5 尚未核准，完整 6–8 分鐘版本尚未產生；真實新魅力頁面契約、JMA 資料及
+LIST Word COM／視覺驗證也尚未實作或端對端驗證。掃描型無文字 PDF 會明確阻塞並
+要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與自動
+LINE 傳送仍是獨立核准關卡。
 
 本機 capability probe 與真實 integration 顯示 Yating 可用且正式管線可合成，
 `pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊，但 `ffmpeg` 尚未找到；
