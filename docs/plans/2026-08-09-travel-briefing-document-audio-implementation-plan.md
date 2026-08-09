@@ -2,7 +2,9 @@
 
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
-狀態：Task 2 已到 30 秒 Hanhan 試聽關卡；等待使用者聆聽確認
+狀態：原 Task 2 的 Hanhan 試聽未通過；2026-08-09 使用者選定 Yating 且缺少時
+fail closed。本計畫的語音 Tasks 尚待依修訂設計重寫，重寫前不得繼續產生完整音訊
+或執行 Azure Task。
 
 ## 目標
 
