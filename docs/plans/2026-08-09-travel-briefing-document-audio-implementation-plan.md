@@ -2,10 +2,11 @@
 
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
-狀態：Yating 修訂設計、Task 2B、Task 3 與 Task 4 已於 2026-08-09 由使用者核准；
-Task 1、Hanhan 技術切片、Task 2B、Task 3 與 Task 4 本機實作均已完成。26 秒
-Yating 正式管線樣本已依自然度政策通過人工驗收；Azure Task 已取消，Task 4
-只完成離線解析，尚未核准對新魅力官網執行唯讀契約測試。
+狀態：Yating 修訂設計、Task 2B、Task 3、Task 4 與 Task 5 已於 2026-08-09 由
+使用者核准；Task 1、Hanhan 技術切片、Task 2B、Task 3、Task 4 離線解析與 Task 5
+本機實作均已完成。26 秒 Yating 正式管線樣本已依自然度政策通過人工驗收；Azure
+Task 已取消。Task 4 的一次 live 唯讀契約測試已另行核准並執行，但真實頁面在
+「產品資訊」契約處安全阻擋，尚待修復。
 
 ## 目標
 
@@ -219,7 +220,7 @@ skip。使用者於完成回報後明確回覆「通過」，Task 3 驗收已關
 
 Commit：`feat(briefing): validate narration facts and timing`
 
-## Task 4：解析新魅力 URL 與行程 PDF（已完成）
+## Task 4：解析新魅力 URL 與行程 PDF（離線已完成；live 契約待修）
 
 ### 檔案
 
@@ -253,13 +254,18 @@ Commit：`feat(briefing): validate narration facts and timing`
 
 Commit：`feat(briefing): parse NewAmazing pages and itinerary PDFs`
 
-完成紀錄（2026-08-09）：功能 commit `cc547f9`。34 個 Task 4 針對性測試全數通過；
+離線完成紀錄（2026-08-09）：功能 commit `cc547f9`。34 個 Task 4 針對性測試全數通過；
 完整離線回歸為 `205 passed, 2 skipped in 6.10s`，compileall 與 staged
 `git diff --check` 也通過。測試資料只含合成 HTML、去識別頁面文字及測試期間產生
-的暫存 PDF；未對新魅力官網發出 request，因此真實 `GroupDetail.asp`／列印頁契約
-仍是未驗證項目。
+的暫存 PDF；這個 commit 未包含來源頁面或 live response。
 
-## Task 5：實作來源優先、衝突與 OP review
+Live 契約紀錄（2026-08-09）：使用者另行核准後，對已提供的大阪產品 URL 執行
+恰好一次受限 GET；未跟隨 redirect，HTTP `200`，response `98,076` bytes，SHA-256
+`06335de9cfee88e4a33248a6ead9950eaeebdab735ea2542806ca2ff8e3aaf61`。目前 parser 回報
+`PARSE_CONTRACT_CHANGED`，缺少契約 anchor「產品資訊」。未保存原始 HTML，也未重試。
+第二次 live request 前，須另行核准最小的契約診斷、修復與重測關卡。
+
+## Task 5：實作來源優先、衝突與 OP review（已完成）
 
 ### 檔案
 
@@ -276,6 +282,13 @@ Commit：`feat(briefing): parse NewAmazing pages and itinerary PDFs`
 6. `review.md` 顯示雙方來源、頁碼／URL、擷取時間與 OP 問題，但遮蔽電話等敏感值。
 
 Commit：`feat(briefing): enforce source precedence and review states`
+
+完成紀錄（2026-08-09）：功能 commit `2bba83f`。來源優先、blocking conflict、
+語意等價 warning、9 個黃色 OP 待確認欄位、draft-bound OP 值／衝突決策、狀態重算
+及遮蔽敏感資料的 Markdown review 均已完成。34 個 Task 5 針對性測試全數通過；
+完整離線回歸為 `239 passed, 2 skipped in 9.67s`，compileall、行寬檢查與 staged
+`git diff --check` 均通過。兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／Yating
+integration tests。
 
 ## Task 6：加入 JMA 短期與週間預報
 
@@ -435,28 +448,29 @@ git status --short
 
 ## 計畫自檢
 
-- 12 個 Task headings：5 個已完成、1 個已取消、6 個尚待執行。
-- 11 個 commit 邊界：5 個既有／本次 commit、6 個後續小步 commit；取消的 Task 7
-  沒有 implementation commit。
+- 12 個 Task headings：5 個已完成、1 個離線完成但 live 契約待修、1 個已取消、
+  5 個尚待執行。
+- 12 個 commit 邊界：6 個既有 implementation commits、1 個新增的 Task 4 live
+  契約修復邊界、5 個後續小步 commits；取消的 Task 7 沒有 implementation commit。
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。
-- 下一個可提案的實作入口是 Task 5；仍須另行明確核准。新魅力 live 唯讀契約測試
-  是另一個獨立關卡，不自動讀取官網或進入完整音訊。
+- 下一個可提案的實作入口是 Task 4 live 契約診斷與修復；任何第二次 live GET 仍須
+  另行明確核准。修復並重測通過後才進入 Task 6，且 Task 6 仍是獨立核准關卡。
 
 ## 實作核准關卡
 
-Task 2B、Task 3 與 Task 4 已獲核准並完成本機程式與測試；Task 2B 的短樣本也已
-通過人工試聽。Task 4 僅完成合成資料與暫存 PDF 的離線驗證。下列動作仍需在發生
-前另行取得明確核准：
+Task 2B、Task 3、Task 4 離線解析與 Task 5 已獲核准並完成本機程式與測試；
+Task 2B 的短樣本也已通過人工試聽。使用者另行核准的單次新魅力 live GET 已執行
+且在契約不符時安全阻擋；該次授權已用畢。下列動作仍需在發生前另行取得明確核准：
 
 1. 安裝或下載 ffmpeg；
-2. 對新魅力官網或 JMA 執行 live request；
+2. 再次對新魅力官網或首次對 JMA 執行 live request；
 3. 在其他目標電腦安裝或啟用 Yating／Windows 語言元件；
 4. 啟動 Word COM、讀取私有 LIST 範本或執行 Word 視覺驗收；
 5. 傳送 LINE、上傳檔案、部署服務或製作影片；
 6. 未來新增或呼叫任何雲端 TTS。
 
-Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查；Task 3 的
-口語稿契約與內容／時長驗證及 Task 4 的離線解析均已完成。Task 5、真實新魅力
-唯讀契約測試、完整 6–8 分鐘語音及所有其他外部關卡仍未授權。
+Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查；Task 3、
+Task 4 離線解析及 Task 5 均已完成。Task 4 live 契約修復／第二次 GET、Task 6、
+完整 6–8 分鐘語音及所有其他外部關卡仍未授權。

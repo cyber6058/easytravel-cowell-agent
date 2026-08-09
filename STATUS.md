@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能已完成；說明會產生器 Task 2B、Task 3 與 Task 4 離線解析
-均已完成，下一個未核准工作是 Task 5 來源合併／衝突與 OP review。
+立益 Cowell 專用功能已完成；說明會產生器 Task 5 離線實作已完成，而 Task 4 的
+單次 live 唯讀測試在真實頁面契約不符時安全阻擋，下一步是另行核准契約修復。
 
 ## 這次做了什麼
 
@@ -88,7 +88,7 @@
   仍是需顯式 opt-in 的真實 Hanhan integration test，沒有拿 skip 當 Yating 驗收。
 - ffmpeg 未設定，因此 metadata 正確標示 `MP3_CONVERTER_UNAVAILABLE`；沒有安裝、
   沒有嘗試轉 MP3，已驗證的 WAV／SRT／TXT 均保留。
-- 本次沒有 live 官網／JMA、Azure、LINE、Word COM 啟動或外部部署。
+- 該 Yating 計畫修訂階段沒有 live 官網／JMA、Azure、LINE、Word COM 啟動或外部部署。
 - 2026-08-09 使用者明確核准 Task 2B；以 TDD 完成 Windows Media Speech
   `Microsoft Yating` 整篇單次 SSML 合成，第二段起插入唯一 bookmark，並由真實
   `Speech:Bookmark` 時間建立連續 SRT。
@@ -120,7 +120,7 @@
   或累積發音特例。正式政策改為：不看逐字稿仍能理解且不改變意思的偶發怪腔可
   接受；聽不清、可能改變語意或誤認關鍵資料時才阻擋；跨樣本重現才升級為整體
   韻律／引擎評估。使用者已依此原則通過 Task 2B 人工驗收。
-- 本次仍未安裝 ffmpeg、未產生 MP3／完整 6–8 分鐘音訊、未啟動 Word COM，亦未
+- Task 2B 階段仍未安裝 ffmpeg、未產生 MP3／完整 6–8 分鐘音訊、未啟動 Word COM，亦未
   呼叫 live 官網／JMA、Azure、LINE 或任何外部發布。
 - 2026-08-09 使用者以「繼續進行」核准既定 Task 3；新增
   `script_policy.py`、`script_validation.py` 與 canonical narration policy reference，
@@ -142,9 +142,9 @@
   `171 passed, 2 skipped in 5.66s`；兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
   Yating integration tests，Task 3 測試沒有 skip；compileall 與 staged
   `git diff --check` 均通過。
-- 使用者於完成回報後明確回覆「通過」；Task 3 人工驗收已關閉。這項通過不包含
+- 使用者於完成回報後明確回覆「通過」；Task 3 人工驗收已關閉。這項通過當時不包含
   Task 4、live 官網／JMA、完整 6–8 分鐘音訊或任何其他後續關卡。
-- 本次沒有 live 官網／JMA request、Word COM、ffmpeg 安裝、MP3、完整 6–8 分鐘
+- Task 3 階段沒有 live 官網／JMA request、Word COM、ffmpeg 安裝、MP3、完整 6–8 分鐘
   音訊、Azure、LINE、Cowell access 或任何部署／外部發布。
 - 2026-08-09 經使用者核准完成說明會產生器 Task 4：新增 HTTPS
   `www.newamazing.com.tw` URL／redirect allowlist、語意式 NewAmazing HTML parser、
@@ -160,31 +160,49 @@
 - Task 4 依計畫只新增 `beautifulsoup4>=4.12,<5`；本機 venv 實裝 4.15.0。
   額外執行 `pip check` 時發現既有 `keyring` 依賴未安裝；這不是 Task 4 引入，且
   本次未擴充範圍補裝，完整測試仍全綠。
-- Task 4 功能 commit 為 `cc547f9`。本次未對新魅力官網發出 request，所以真實
-  `GroupDetail.asp`／官方列印頁結構仍未驗證；該唯讀測試維持獨立核准關卡。
+- Task 4 功能 commit 為 `cc547f9`。完成該離線 commit 時尚未對新魅力官網發出
+  request，且 commit 不含來源頁面或 live response。
+- 2026-08-09 使用者另行核准對已提供的大阪產品 URL 執行一次 live 唯讀契約測試。
+  實際只發出 1 個 GET、沒有 redirect 或 retry；HTTP `200`、response `98,076`
+  bytes、SHA-256 `06335de9cfee88e4a33248a6ead9950eaeebdab735ea2542806ca2ff8e3aaf61`。
+- 該 live response 在「產品資訊」anchor 回報 `PARSE_CONTRACT_CHANGED`，因此真實
+  URL 自動解析目前仍 blocked。沒有保存原始 HTML；單次 live 授權已用畢。
+- 2026-08-09 經使用者另行核准完成 Task 5：新增 `merge`、`validation`、`op_values`
+  與 `review` seams，落實 PDF／官網 notices／天氣來源優先、blocking conflicts、
+  語意等價 warnings，以及 9 個不得猜值的黃色 OP 待確認欄位。
+- OP values 與 conflict decisions 都綁定當前 `draft_id`；過期決策 fail closed。
+  決策會實際更新 scalar、航班或每日行程資料並重算狀態；review 保留 URL 或 PDF
+  basename／頁碼／取得時間，同時遮蔽電話且不洩漏 PDF 目錄。
+- Task 5 功能 commit 為 `2bba83f`。34 個針對性測試通過；完整離線回歸實測為
+  `239 passed, 2 skipped in 9.67s`。兩個 skip 仍是真實 Hanhan／Yating integration
+  tests；compileall、行寬檢查及 staged `git diff --check` 均通過。
+- 本次沒有 JMA request、Word COM、ffmpeg 安裝、完整 6–8 分鐘音訊、Azure、LINE、
+  Cowell access、部署或外部發布，也未保存任何 live 原始內容。
 
 ## 下一步
 
-Task 4 離線解析已完成；等待使用者另行決定是否核准 Task 5 來源合併、衝突與
-OP review。對使用者提供的新魅力 URL 做一次唯讀契約測試是另一個關卡，不得自動
-讀取 live 官網或產生完整 6–8 分鐘音訊。Cowell 部分則維持到立益公司電腦 clone、
-先跑完整離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+Task 5 已完成。下一個建議切片是針對 Task 4 的真實頁面差異，先取得另行核准後
+收集最小、去識別的結構證據並修復 parser；任何第二次 live GET 都需要新的明確
+授權。修復並重測通過後才提案 Task 6，Task 6 也不因本次授權而自動開始。Cowell
+部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序
+驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器的 Task 2B、Task 3 與 Task 4 離線工作均已完成，沒有離線技術阻塞。
-Task 5 尚未核准，完整 6–8 分鐘版本尚未產生；真實新魅力頁面契約、JMA 資料及
-LIST Word COM／視覺驗證也尚未實作或端對端驗證。掃描型無文字 PDF 會明確阻塞並
-要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與自動
-LINE 傳送仍是獨立核准關卡。
+說明會產生器 Task 5 沒有離線技術阻塞。Task 4 的真實新魅力頁面與離線 fixture
+契約不一致，現於「產品資訊」anchor fail closed；在取得新的診斷／live request
+授權並修復前，URL-only 自動解析不能宣稱可用。完整 6–8 分鐘版本尚未產生；JMA
+資料及 LIST Word COM／視覺驗證也尚未實作或端對端驗證。掃描型無文字 PDF 會明確
+阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
+自動 LINE 傳送仍是獨立核准關卡。
 
 本機 capability probe 與真實 integration 顯示 Yating 可用且正式管線可合成，
 `pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊，但 `ffmpeg` 尚未找到；
 Word COM 仍須在 Task 8 以最長 20 秒的隱藏 instance 另測。
 Codex 沙箱直接啟動新 `briefing.exe` 時看不到外部 WinGet Poppler 路徑，但同一
 程式由專案 Python 啟動可正確偵測，需在一般 OP shell 再驗證 console launcher。
-安裝 ffmpeg、live 官網／JMA、任何雲端 TTS、LINE、影片與部署都不包含在本次
-核准內，必須各自另行確認。
+安裝 ffmpeg、再次 live 官網 request、首次 JMA request、任何雲端 TTS、LINE、
+影片與部署都不包含在本次剩餘授權內，必須各自另行確認。
