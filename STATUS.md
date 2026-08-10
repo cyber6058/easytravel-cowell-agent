@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 的 OP 區域確認已通過
-離線回歸與正式頁唯讀驗證，正式草稿會安全要求 OP 確認產品區域。
+立益 Cowell 專用功能與說明會產生器 Task 6 離線實作已完成；Task 4 正式頁驗證
+與 Task 6 JMA synthetic XML 回歸都通過，第一次實際 JMA 預報讀取尚未執行。
 
 ## 這次做了什麼
 
@@ -228,12 +228,20 @@
   `docs/specs/2026-08-11-jma-weather-enrichment-design.md`：每日城市空白時不猜測，
   固定顯示「尚無短期預報，請於出發前更新」；城市只有唯一 alias 才可對應 JMA
   預報區，overlap 採 VPFD51，JMA 失敗降級但不破壞安全草稿。
+- Task 6 設計 commit `10e587e` 與功能 commit `025611b` 已完成：新增標準庫 JMA
+  XML parser、官方 HTTPS provenance、VPFD51／VPFW50 產品與時間軸驗證、日本日期
+  換算、唯一大阪 alias／測站映射、短期與較新發布優先、矛盾 fail closed，以及
+  城市缺漏或超出範圍的固定降級結果；沒有新增 JMA SDK 或網路 fetcher。
+- Task 6 針對性測試實測為 `12 passed`；完整離線回歸為
+  `270 passed, 2 skipped in 5.64s`。兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
+  Yating integration tests；compileall、行寬檢查與 `git diff --check` 均通過。
+- 本次實作只使用 synthetic XML，沒有實際 JMA 預報 request、live response、Word
+  COM、ffmpeg 安裝、完整音訊、LINE、Cowell access、部署或外部發布。
 
 ## 下一步
 
-Task 5 與 Task 4 正式頁契約已完成。下一步請使用者審閱 Task 6 書面設計；核准後
-才依測試先行方式實作離線 JMA parser、alias 與選擇邏輯。第一次正式 JMA 電文 GET
-仍是實作完成後的獨立核准關卡。Cowell
+Task 6 離線實作已完成。下一步先取得設計、功能與本 STATUS commits 的 push 核准；
+若要驗證正式 JMA 電文，再另行核准一次受限唯讀 GET，不與 push 合併授權。Cowell
 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序
 驗證 auth status 與 rooms preview。
 
@@ -242,11 +250,14 @@ Task 5 與 Task 4 正式頁契約已完成。下一步請使用者審閱 Task 6 
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器 Task 4／Task 5 沒有 parser 或 merge 技術阻塞；URL-only 正式頁已
+說明會產生器 Task 4／Task 5／Task 6 沒有 parser、merge 或離線天氣技術阻塞；
+URL-only 正式頁已
 驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
 `product_region`，不能跳過此人工欄位。完整
-6–8 分鐘版本尚未產生；Task 6 JMA 書面設計已完成，但 parser、資料取得及 LIST
-Word COM／視覺驗證仍未實作或端對端驗證。掃描型無文字 PDF 會明確
+6–8 分鐘版本尚未產生；Task 6 JMA parser 與離線選擇邏輯已完成，但正式資料取得及
+LIST Word COM／視覺驗證仍未實作或端對端驗證。第一批 alias 只有 synthetic 大阪
+案例；仙台、札幌等城市必須取得 JMA 預報區證據與測試後才能加入。掃描型無文字
+PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
 自動 LINE 傳送仍是獨立核准關卡。
 
