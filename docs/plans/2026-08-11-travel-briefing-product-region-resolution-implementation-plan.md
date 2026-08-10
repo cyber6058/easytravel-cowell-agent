@@ -72,4 +72,14 @@
 - 完整離線回歸：`258 passed, 2 skipped in 6.03s`；兩個 skip 為原有、需顯式
   opt-in 的 Hanhan／Yating 真實 integration tests。
 - compileall、Python 行寬檢查及 `git diff --check` 通過。
-- 未發出 live GET，未保存正式頁 HTML、live response 或 PII。
+- 離線實作階段未發出 live GET，未保存正式頁 HTML、live response 或 PII。
+
+## Live 驗收紀錄
+
+2026-08-11 經使用者另行明確核准，對同一正式產品 URL 執行恰好一次不 redirect、
+不 retry 的唯讀 GET。HTTP `200`、response `98,464` bytes、SHA-256
+`a4077429981bb47c6cbfccae113901a1b3d66b9a4cc069c35fa7e12a8470f216`；
+`newamazing-html/3` 解析 2 航班、5 天與 5 項其他說明，merge 產生單一
+`SOURCE_REGION_MISSING` warning、單一 `product_region` OP 欄位與
+`DRAFT_READY`，結果為 `PASS`。沒有保存正式頁 HTML、live response 或 PII；
+本次 GET 授權已用畢。

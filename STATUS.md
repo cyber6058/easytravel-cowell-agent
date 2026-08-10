@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 的 OP 區域確認已完成
-離線實作與完整回歸，尚待 push 與另行核准一次正式頁唯讀重驗。
+立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 的 OP 區域確認已通過
+離線回歸與正式頁唯讀驗證，正式草稿會安全要求 OP 確認產品區域。
 
 ## 這次做了什麼
 
@@ -201,6 +201,15 @@
 - 區域確認針對性測試為 `57 passed in 0.54s`；完整離線回歸實測為
   `258 passed, 2 skipped in 6.03s`。兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
   Yating integration tests；compileall、行寬檢查與 `git diff --check` 均通過。
+- 設計與實作 commits `3aa59fe`、`239a713` 已於 2026-08-11 push 至 private
+  `origin/main`，本機與遠端均為 `239a713` 後才執行正式頁驗證。
+- 2026-08-11 經使用者明確核准執行恰好一次修復後正式頁 GET；未跟隨 redirect、
+  未 retry，HTTP `200`、response `98,464` bytes、SHA-256
+  `a4077429981bb47c6cbfccae113901a1b3d66b9a4cc069c35fa7e12a8470f216`。
+  `newamazing-html/3` 實測解析 2 航班、5 天及 5 項其他說明，產品區域保留空值，
+  merge 只建立 1 個 `SOURCE_REGION_MISSING` warning 與 1 個 `product_region` OP
+  待確認欄位，狀態為 `DRAFT_READY`，結果 `PASS`。沒有保存原始 HTML 或 live
+  response；該次 GET 授權已用畢。
 - 2026-08-09 經使用者另行核准完成 Task 5：新增 `merge`、`validation`、`op_values`
   與 `review` seams，落實 PDF／官網 notices／天氣來源優先、blocking conflicts、
   語意等價 warnings，以及 9 個不得猜值的黃色 OP 待確認欄位。
@@ -215,9 +224,8 @@
 
 ## 下一步
 
-Task 5 與產品區域確認離線實作已完成。下一步先取得 push 本次 commits 的明確核准，
-再另行核准恰好一次不 redirect、不 retry 的正式頁唯讀驗證；驗證通過後才提案
-Task 6。Cowell
+Task 5 與 Task 4 正式頁契約已完成。下一步先取得本次驗收紀錄 commit 的 push
+核准，再另行提案 Task 6；Task 6 不因本次 GET 授權而自動開始。Cowell
 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序
 驗證 auth status 與 rooms preview。
 
@@ -226,8 +234,9 @@ Task 6。Cowell
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器 Task 5 與產品區域確認沒有離線技術阻塞。區域修復後尚未重新執行
-live GET，因此 URL-only 正式頁解析仍不能宣稱已驗收可用。完整
+說明會產生器 Task 4／Task 5 沒有 parser 或 merge 技術阻塞；URL-only 正式頁已
+驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
+`product_region`，不能跳過此人工欄位。完整
 6–8 分鐘版本尚未產生；JMA
 資料及 LIST Word COM／視覺驗證也尚未實作或端對端驗證。掃描型無文字 PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
