@@ -221,11 +221,19 @@
   tests；compileall、行寬檢查及 staged `git diff --check` 均通過。
 - 本次沒有 JMA request、Word COM、ffmpeg 安裝、完整 6–8 分鐘音訊、Azure、LINE、
   Cowell access、部署或外部發布，也未保存任何 live 原始內容。
+- 2026-08-11 經使用者明確核准，只讀查閱 JMA 官方產品目錄、XML 技術資料、
+  PULL 型取得方式與使用條款；沒有抓取任何實際天氣預報電文。確認 Task 6 短期來源
+  為 `VPFD51`、週間來源為 `VPFW50`，兩者從「定時」Atom feed 發現。
+- Task 6 最小設計已寫入
+  `docs/specs/2026-08-11-jma-weather-enrichment-design.md`：每日城市空白時不猜測，
+  固定顯示「尚無短期預報，請於出發前更新」；城市只有唯一 alias 才可對應 JMA
+  預報區，overlap 採 VPFD51，JMA 失敗降級但不破壞安全草稿。
 
 ## 下一步
 
-Task 5 與 Task 4 正式頁契約已完成。下一步先取得本次驗收紀錄 commit 的 push
-核准，再另行提案 Task 6；Task 6 不因本次 GET 授權而自動開始。Cowell
+Task 5 與 Task 4 正式頁契約已完成。下一步請使用者審閱 Task 6 書面設計；核准後
+才依測試先行方式實作離線 JMA parser、alias 與選擇邏輯。第一次正式 JMA 電文 GET
+仍是實作完成後的獨立核准關卡。Cowell
 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序
 驗證 auth status 與 rooms preview。
 
@@ -237,8 +245,8 @@ apply 必須在公司環境針對最終 preview 另行取得當次明確核准�
 說明會產生器 Task 4／Task 5 沒有 parser 或 merge 技術阻塞；URL-only 正式頁已
 驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
 `product_region`，不能跳過此人工欄位。完整
-6–8 分鐘版本尚未產生；JMA
-資料及 LIST Word COM／視覺驗證也尚未實作或端對端驗證。掃描型無文字 PDF 會明確
+6–8 分鐘版本尚未產生；Task 6 JMA 書面設計已完成，但 parser、資料取得及 LIST
+Word COM／視覺驗證仍未實作或端對端驗證。掃描型無文字 PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
 自動 LINE 傳送仍是獨立核准關卡。
 
@@ -247,5 +255,5 @@ apply 必須在公司環境針對最終 preview 另行取得當次明確核准�
 Word COM 仍須在 Task 8 以最長 20 秒的隱藏 instance 另測。
 Codex 沙箱直接啟動新 `briefing.exe` 時看不到外部 WinGet Poppler 路徑，但同一
 程式由專案 Python 啟動可正確偵測，需在一般 OP shell 再驗證 console launcher。
-安裝 ffmpeg、再次 live 官網 request、首次 JMA request、任何雲端 TTS、LINE、
+安裝 ffmpeg、再次 live 官網 request、首次實際 JMA 預報 request、任何雲端 TTS、LINE、
 影片與部署都不包含在本次剩餘授權內，必須各自另行確認。
