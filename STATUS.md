@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 正式頁卡片契約已離線
-修復並通過完整回歸，尚待另行核准一次修復後的唯讀正式頁驗證。
+立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 卡片結構修復已上傳，
+但修復後正式頁驗證在「產品區域」安全阻擋，尚未通過 live 契約驗收。
 
 ## 這次做了什麼
 
@@ -181,6 +181,12 @@
 - NewAmazing／merge 針對性測試為 `29 passed in 0.36s`；完整離線回歸實測為
   `244 passed, 2 skipped in 5.78s`。兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
   Yating integration tests；compileall、行寬檢查與 `git diff --check` 均通過。
+- 卡片結構修復 commit `5e8fed9` 已於 2026-08-10 push 至 private `origin/main`。
+- 2026-08-10 經使用者明確核准執行恰好一次修復後正式頁 GET；未跟隨 redirect、
+  未 retry，HTTP `200`、response `98,468` bytes、SHA-256
+  `2e7a3403a64706b0ab272c22ac2559b691b1048caf7e680149247b7ef9de5e68`。
+  parser 已進入新版卡片 profile，但在「產品區域」回報
+  `PARSE_CONTRACT_CHANGED`。沒有保存原始 HTML 或 live response；該次授權已用畢。
 - 2026-08-09 經使用者另行核准完成 Task 5：新增 `merge`、`validation`、`op_values`
   與 `review` seams，落實 PDF／官網 notices／天氣來源優先、blocking conflicts、
   語意等價 warnings，以及 9 個不得猜值的黃色 OP 待確認欄位。
@@ -195,8 +201,9 @@
 
 ## 下一步
 
-Task 5 已完成。下一個安全里程碑是另行核准恰好一次修復後的正式頁唯讀契約驗證；
-驗證通過後才提案 Task 6，Task 6 不因本次授權而自動開始。Cowell
+Task 5 已完成。下一步先決定產品區域的權威來源：產品代碼前綴、另行提供的 OP
+欄位，或其他正式頁欄位；不能直接從行程名稱猜值。完成最小離線修復與回歸後，
+才另行核准下一次正式頁唯讀驗證。驗證通過後才提案 Task 6。Cowell
 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序
 驗證 auth status 與 rooms preview。
 
@@ -205,8 +212,9 @@ Task 5 已完成。下一個安全里程碑是另行核准恰好一次修復後�
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器 Task 5 與 Task 4 卡片契約修復沒有離線技術阻塞。Task 4 修復後尚未
-取得新的單次 live GET 授權，因此 URL-only 正式頁解析仍不能宣稱已驗收可用。完整
+說明會產生器 Task 5 沒有離線技術阻塞。Task 4 修復後 live 驗證已確認卡片 profile
+會啟用，但產品名稱無法唯一映射現有區域契約，現於「產品區域」fail closed；在區域
+權威來源設計獲核准並修復前，URL-only 正式頁解析不能宣稱已驗收可用。完整
 6–8 分鐘版本尚未產生；JMA
 資料及 LIST Word COM／視覺驗證也尚未實作或端對端驗證。掃描型無文字 PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與

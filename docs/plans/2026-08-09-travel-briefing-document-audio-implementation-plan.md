@@ -5,8 +5,8 @@
 狀態：Yating 修訂設計、Task 2B、Task 3、Task 4 與 Task 5 已於 2026-08-09 由
 使用者核准；Task 1、Hanhan 技術切片、Task 2B、Task 3、Task 4 離線解析與 Task 5
 本機實作均已完成。26 秒 Yating 正式管線樣本已依自然度政策通過人工驗收；Azure
-Task 已取消。Task 4 的 live 唯讀契約診斷與離線修復已於 2026-08-10 完成；修復後
-尚未再對正式頁送出 GET，因此正式頁驗收仍待新的單次唯讀授權。
+Task 已取消。Task 4 的 live 唯讀契約診斷與離線修復已於 2026-08-10 完成並上傳；
+修復後正式頁重驗在「產品區域」安全阻擋，尚待區域權威來源的最小設計修訂。
 
 ## 目標
 
@@ -272,10 +272,18 @@ Live 契約修復紀錄（2026-08-10）：經逐次明確核准的唯讀結構�
 驗證隱藏產品名稱／代碼、URL 代碼、航班欄位、首末航班日期、每日天次、餐食、飯店
 與其他說明。正式頁沒有獨立的每日住宿城市欄位，因此 parser 不猜值；URL-only 產生
 `SOURCE_CITY_MISSING` warning，URL+PDF 則保留 PDF 城市供 OP 核對。測試 fixture 為
-純合成 DOM，未保存或提交正式頁 HTML、旅客資料或 live response。修復後的正式頁
-契約尚未重驗；任何下一次 GET 仍須新的明確核准。針對性 NewAmazing／merge 測試為
+純合成 DOM，未保存或提交正式頁 HTML、旅客資料或 live response。建立修復 commit
+當時尚未重驗正式頁；任何 GET 均須逐次明確核准。針對性 NewAmazing／merge 測試為
 `29 passed in 0.36s`；完整離線回歸為 `244 passed, 2 skipped in 5.78s`，compileall 與
 `git diff --check` 均通過。
+
+修復後 live 重驗紀錄（2026-08-10）：commit `5e8fed9` 已 push 至 private
+`origin/main`。經使用者明確核准，執行恰好一次不 redirect、不 retry 的唯讀 GET；
+HTTP `200`、response `98,468` bytes、SHA-256
+`2e7a3403a64706b0ab272c22ac2559b691b1048caf7e680149247b7ef9de5e68`。parser 已進入
+新版卡片 profile，但於「產品區域」回報 `PARSE_CONTRACT_CHANGED`；沒有保存原始
+HTML 或 live response。下一步須先核准產品區域的權威來源設計，不能直接從名稱猜值；
+本次 GET 授權已用畢。
 
 ## Task 5：實作來源優先、衝突與 OP review（已完成）
 
@@ -467,15 +475,15 @@ git status --short
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。
-- 下一個安全入口是 Task 4 修復後恰好一次 live 契約重驗，仍須另行明確核准。
-  重驗通過後才提案 Task 6，且 Task 6 仍是獨立核准關卡。
+- 下一個安全入口是 Task 4 產品區域權威來源的最小設計修訂與離線測試；之後的
+  live 契約重驗仍須另行明確核准。重驗通過後才提案 Task 6。
 
 ## 實作核准關卡
 
 Task 2B、Task 3、Task 4 離線解析與 Task 5 已獲核准並完成本機程式與測試；
-Task 2B 的短樣本也已通過人工試聽。Task 4 的 live 結構診斷與離線修復已完成，
-過程中的逐次 GET 授權均已用畢；修復後尚未重驗。下列動作仍需在發生前另行取得
-明確核准：
+Task 2B 的短樣本也已通過人工試聽。Task 4 的 live 結構診斷、離線修復與修復後
+重驗均已執行；重驗在產品區域安全阻擋，所有 GET 授權均已用畢。下列動作仍需在
+發生前另行取得明確核准：
 
 1. 安裝或下載 ffmpeg；
 2. 再次對新魅力官網或首次對 JMA 執行 live request；
@@ -485,5 +493,5 @@ Task 2B 的短樣本也已通過人工試聽。Task 4 的 live 結構診斷與�
 6. 未來新增或呼叫任何雲端 TTS。
 
 Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查；Task 3、
-Task 4 離線解析、live 契約離線修復及 Task 5 均已完成。修復後的單次 live GET、
-Task 6、完整 6–8 分鐘語音及所有其他外部關卡仍未授權。
+Task 4 離線解析、live 卡片結構修復及 Task 5 均已完成。產品區域設計修訂、下一次
+live GET、Task 6、完整 6–8 分鐘語音及所有其他外部關卡仍未授權。
