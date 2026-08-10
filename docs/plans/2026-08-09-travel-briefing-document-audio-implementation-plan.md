@@ -2,11 +2,11 @@
 
 日期：2026-08-09
 依據：`docs/specs/2026-08-08-travel-briefing-document-audio-design.md`
-狀態：Yating 修訂設計、Task 2B、Task 3、Task 4 與 Task 5 已於 2026-08-09 由
-使用者核准；Task 1、Hanhan 技術切片、Task 2B、Task 3、Task 4 離線解析與 Task 5
-本機實作均已完成。26 秒 Yating 正式管線樣本已依自然度政策通過人工驗收；Azure
-Task 已取消。Task 4 的 live 唯讀契約診斷與離線修復已於 2026-08-10 完成並上傳；
-修復後正式頁重驗在「產品區域」安全阻擋，尚待區域權威來源的最小設計修訂。
+狀態：Yating 修訂設計、Task 2B、Task 3、Task 4、Task 5 與 Task 6 均已由使用者
+核准；Task 1 至 Task 6 的本機實作均已完成（Task 2A Hanhan 僅保留歷史技術
+證據）。26 秒 Yating 正式管線樣本已依自然度政策通過人工驗收；Azure Task 已
+取消。Task 4 正式頁唯讀驗收已於 2026-08-11 通過；Task 6 已完成離線 JMA XML
+實作，第一次實際 JMA 預報讀取仍是獨立核准關卡。
 
 ## 目標
 
@@ -310,7 +310,7 @@ Commit：`feat(briefing): enforce source precedence and review states`
 `git diff --check` 均通過。兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／Yating
 integration tests。
 
-## Task 6：加入 JMA 短期與週間預報
+## Task 6：加入 JMA 短期與週間預報（離線實作已完成）
 
 ### 檔案
 
@@ -336,6 +336,16 @@ integration tests。
 資料，不建立背景排程或快取服務。
 
 Commit：`feat(briefing): add JMA forecast adapter`
+
+完成紀錄（2026-08-11）：依核准的
+`docs/specs/2026-08-11-jma-weather-enrichment-design.md` 完成標準庫 XML parser、
+官方 HTTPS provenance 限制、VPFD51／VPFW50 產品與時間軸驗證、日本日期換算、
+同日降水機率最大值、唯一大阪 alias 與測站映射、短期優先／同產品較新發布優先、
+同發布時間矛盾 fail closed，以及城市缺漏／未知／超出範圍的固定降級文字。
+synthetic XML 與公開 seam 針對性測試為 `12 passed`；完整離線回歸實測為
+`270 passed, 2 skipped in 5.64s`，兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
+Yating integration tests。compileall 與 `git diff --check` 通過；沒有執行實際
+JMA 預報 request，也沒有保存 live response。
 
 ## Task 7：Azure F0 TTS（已取消）
 
@@ -475,8 +485,9 @@ git status --short
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。
-- 下一個安全入口是 Task 4 產品區域權威來源的最小設計修訂與離線測試；之後的
-  live 契約重驗仍須另行明確核准。重驗通過後才提案 Task 6。
+- 下一個安全入口是取得 Task 6 commits 的 push 核准；之後若要做第一次實際 JMA
+  預報唯讀驗證，仍須另行明確核准。Task 8 Word COM 與私有 LIST 範本也維持獨立
+  關卡。
 
 ## 實作核准關卡
 
@@ -494,5 +505,6 @@ Task 2B 的短樣本也已通過人工試聽。Task 4 的 live 結構診斷、�
 
 Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查；Task 3、
 Task 4 離線解析、live 卡片結構修復、產品區域 OP 確認及 Task 5 均已完成；Task 4
-正式頁唯讀驗收於 2026-08-11 通過，會建立 `DRAFT_READY` 與待 OP 確認區域。Task 6、
-完整 6–8 分鐘語音及所有其他外部關卡仍未授權。
+正式頁唯讀驗收於 2026-08-11 通過，會建立 `DRAFT_READY` 與待 OP 確認區域。Task 6
+離線實作已完成；第一次實際 JMA 預報讀取、完整 6–8 分鐘語音及所有其他外部關卡
+仍未授權。

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Report xmlns="http://xml.kishou.go.jp/jmaxml1/"
+        xmlns:jmx_eb="http://xml.kishou.go.jp/jmaxml1/elementBasis1/">
+  <Control>
+    <Title>府県天気予報</Title>
+    <DateTime>2026-09-01T08:00:00Z</DateTime>
+    <Status>通常</Status>
+  </Control>
+  <Head>
+    <ReportDateTime>2026-09-01T17:00:00+09:00</ReportDateTime>
+  </Head>
+  <Body>
+    <MeteorologicalInfos type="区域予報">
+      <TimeSeriesInfo>
+        <TimeDefines>
+          <TimeDefine timeId="1">
+            <DateTime>2026-09-01T00:00:00+09:00</DateTime>
+          </TimeDefine>
+          <TimeDefine timeId="2">
+            <DateTime>2026-09-02T00:00:00+09:00</DateTime>
+          </TimeDefine>
+        </TimeDefines>
+        <Item>
+          <Area><Name>大阪府</Name><Code>270000</Code></Area>
+          <Kind>
+            <Property>
+              <Type>天気</Type>
+              <WeatherPart>
+                <jmx_eb:Weather refID="1" type="天気">晴れ</jmx_eb:Weather>
+                <jmx_eb:Weather refID="2" type="天気">くもり</jmx_eb:Weather>
+              </WeatherPart>
+            </Property>
+            <Property>
+              <Type>降水確率</Type>
+              <ProbabilityOfPrecipitationPart>
+                <jmx_eb:ProbabilityOfPrecipitation refID="1" unit="%">10</jmx_eb:ProbabilityOfPrecipitation>
+                <jmx_eb:ProbabilityOfPrecipitation refID="1" unit="%">30</jmx_eb:ProbabilityOfPrecipitation>
+                <jmx_eb:ProbabilityOfPrecipitation refID="2" unit="%">40</jmx_eb:ProbabilityOfPrecipitation>
+              </ProbabilityOfPrecipitationPart>
+            </Property>
+          </Kind>
+        </Item>
+      </TimeSeriesInfo>
+      <TimeSeriesInfo>
+        <TimeDefines>
+          <TimeDefine timeId="1"><DateTime>2026-09-01T00:00:00+09:00</DateTime></TimeDefine>
+          <TimeDefine timeId="2"><DateTime>2026-09-02T00:00:00+09:00</DateTime></TimeDefine>
+        </TimeDefines>
+        <Item>
+          <Station><Name>大阪</Name><Code>62078</Code></Station>
+          <Kind>
+            <Property>
+              <Type>最高気温</Type>
+              <TemperaturePart>
+                <jmx_eb:Temperature refID="1" unit="度C">33</jmx_eb:Temperature>
+                <jmx_eb:Temperature refID="2" unit="度C">32</jmx_eb:Temperature>
+              </TemperaturePart>
+            </Property>
+            <Property>
+              <Type>最低気温</Type>
+              <TemperaturePart>
+                <jmx_eb:Temperature refID="1" unit="度C">25</jmx_eb:Temperature>
+                <jmx_eb:Temperature refID="2" unit="度C">24</jmx_eb:Temperature>
+              </TemperaturePart>
+            </Property>
+          </Kind>
+        </Item>
+      </TimeSeriesInfo>
+    </MeteorologicalInfos>
+  </Body>
+</Report>
