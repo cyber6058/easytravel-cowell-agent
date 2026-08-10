@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 卡片結構修復已上傳，
-但修復後正式頁驗證在「產品區域」安全阻擋，尚未通過 live 契約驗收。
+立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 正式頁仍在「產品區域」
+安全阻擋，OP 明確確認區域的修訂設計已獲核准並寫成規格，等待書面審閱。
 
 ## 這次做了什麼
 
@@ -187,6 +187,10 @@
   `2e7a3403a64706b0ab272c22ac2559b691b1048caf7e680149247b7ef9de5e68`。
   parser 已進入新版卡片 profile，但在「產品區域」回報
   `PARSE_CONTRACT_CHANGED`。沒有保存原始 HTML 或 live response；該次授權已用畢。
+- 2026-08-10 使用者核准以 OP 明確確認取代產品代碼、航點或名稱猜測；設計已寫入
+  `docs/specs/2026-08-10-travel-briefing-product-region-resolution-design.md`。規格固定
+  URL-only 缺區域時使用動態 `product_region` OP 欄位、URL+PDF 保留 PDF 區域、
+  未知或矛盾值 fail closed；目前等待使用者書面審閱，尚未修改 parser。
 - 2026-08-09 經使用者另行核准完成 Task 5：新增 `merge`、`validation`、`op_values`
   與 `review` seams，落實 PDF／官網 notices／天氣來源優先、blocking conflicts、
   語意等價 warnings，以及 9 個不得猜值的黃色 OP 待確認欄位。
@@ -201,9 +205,9 @@
 
 ## 下一步
 
-Task 5 已完成。下一步先決定產品區域的權威來源：產品代碼前綴、另行提供的 OP
-欄位，或其他正式頁欄位；不能直接從行程名稱猜值。完成最小離線修復與回歸後，
-才另行核准下一次正式頁唯讀驗證。驗證通過後才提案 Task 6。Cowell
+Task 5 已完成。下一步是由使用者審閱產品區域確認規格；通過後才建立最小實作計畫
+並以公開 parser／merge／OP-value seams 做 TDD。離線修復與回歸完成後，才另行核准
+下一次正式頁唯讀驗證；驗證通過後才提案 Task 6。Cowell
 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序
 驗證 auth status 與 rooms preview。
 
@@ -213,8 +217,8 @@ Task 5 已完成。下一步先決定產品區域的權威來源：產品代碼�
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
 說明會產生器 Task 5 沒有離線技術阻塞。Task 4 修復後 live 驗證已確認卡片 profile
-會啟用，但產品名稱無法唯一映射現有區域契約，現於「產品區域」fail closed；在區域
-權威來源設計獲核准並修復前，URL-only 正式頁解析不能宣稱已驗收可用。完整
+會啟用，但產品名稱無法唯一映射現有區域契約，現於「產品區域」fail closed；OP
+確認設計已獲核准但尚待書面規格審閱與實作，URL-only 正式頁解析仍不能宣稱可用。完整
 6–8 分鐘版本尚未產生；JMA
 資料及 LIST Word COM／視覺驗證也尚未實作或端對端驗證。掃描型無文字 PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
