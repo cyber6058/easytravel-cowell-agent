@@ -55,6 +55,18 @@ def merge_briefing_sources(
     else:
         conflicts, warnings = (), ()
 
+    if any(not day.city.strip() for day in itinerary.days):
+        warnings = (
+            *warnings,
+            DraftWarning(
+                code="SOURCE_CITY_MISSING",
+                message=(
+                    "來源未明確提供每日主要住宿城市，需由 OP 確認後才能對應天氣"
+                ),
+                source_ids=itinerary.product.source_ids,
+            ),
+        )
+
     return BriefingDraft.create(
         status=status_for_conflicts(conflicts),
         generated_at=generated_at,
@@ -125,6 +137,7 @@ def _source_differences(
 
     pdf_days = {day.number: day for day in pdf.days}
     web_days = {day.number: day for day in web.days}
+    web_city_missing = False
     if set(pdf_days) != set(web_days):
         _add_conflict(
             conflicts,
@@ -163,6 +176,9 @@ def _source_differences(
                     web_day.source_ids,
                     web.source.source_id,
                 )
+                if attribute == "city" and not str(value_b).strip():
+                    web_city_missing = True
+                    continue
                 equivalent = (
                     text_sequence_is_equivalent(value_a, value_b)
                     if isinstance(value_a, tuple) and isinstance(value_b, tuple)
@@ -199,6 +215,16 @@ def _source_differences(
                         web.source.source_id,
                     ),
                 )
+    if web_city_missing:
+        warnings.append(
+            DraftWarning(
+                code="SOURCE_CITY_MISSING",
+                message=(
+                    "官網未明確提供每日主要住宿城市；已保留 PDF 城市供 OP 核對"
+                ),
+                source_ids=(web.source.source_id,),
+            )
+        )
     return tuple(conflicts), tuple(warnings)
 
 

@@ -5,8 +5,8 @@
 狀態：Yating 修訂設計、Task 2B、Task 3、Task 4 與 Task 5 已於 2026-08-09 由
 使用者核准；Task 1、Hanhan 技術切片、Task 2B、Task 3、Task 4 離線解析與 Task 5
 本機實作均已完成。26 秒 Yating 正式管線樣本已依自然度政策通過人工驗收；Azure
-Task 已取消。Task 4 的一次 live 唯讀契約測試已另行核准並執行，但真實頁面在
-「產品資訊」契約處安全阻擋，尚待修復。
+Task 已取消。Task 4 的 live 唯讀契約診斷與離線修復已於 2026-08-10 完成；修復後
+尚未再對正式頁送出 GET，因此正式頁驗收仍待新的單次唯讀授權。
 
 ## 目標
 
@@ -220,7 +220,7 @@ skip。使用者於完成回報後明確回覆「通過」，Task 3 驗收已關
 
 Commit：`feat(briefing): validate narration facts and timing`
 
-## Task 4：解析新魅力 URL 與行程 PDF（離線已完成；live 契約待修）
+## Task 4：解析新魅力 URL 與行程 PDF（live 契約已離線修復；待正式頁重驗）
 
 ### 檔案
 
@@ -264,6 +264,18 @@ Live 契約紀錄（2026-08-09）：使用者另行核准後，對已提供的�
 `06335de9cfee88e4a33248a6ead9950eaeebdab735ea2542806ca2ff8e3aaf61`。目前 parser 回報
 `PARSE_CONTRACT_CHANGED`，缺少契約 anchor「產品資訊」。未保存原始 HTML，也未重試。
 第二次 live request 前，須另行核准最小的契約診斷、修復與重測關卡。
+
+Live 契約修復紀錄（2026-08-10）：經逐次明確核准的唯讀結構診斷，確認正式頁不是
+舊 fixture 的語意式 section/table，而是 `.product_basic_info`、`#ReferenceFlights`
+與 `#DailyItinerary .every_day` 卡片契約；列印控制仍指向同一頁，沒有另一個穩定的
+列印頁可替代。parser 升為 `newamazing-html/2`，保留舊契約並新增嚴格卡片 profile，
+驗證隱藏產品名稱／代碼、URL 代碼、航班欄位、首末航班日期、每日天次、餐食、飯店
+與其他說明。正式頁沒有獨立的每日住宿城市欄位，因此 parser 不猜值；URL-only 產生
+`SOURCE_CITY_MISSING` warning，URL+PDF 則保留 PDF 城市供 OP 核對。測試 fixture 為
+純合成 DOM，未保存或提交正式頁 HTML、旅客資料或 live response。修復後的正式頁
+契約尚未重驗；任何下一次 GET 仍須新的明確核准。針對性 NewAmazing／merge 測試為
+`29 passed in 0.36s`；完整離線回歸為 `244 passed, 2 skipped in 5.78s`，compileall 與
+`git diff --check` 均通過。
 
 ## Task 5：實作來源優先、衝突與 OP review（已完成）
 
@@ -448,21 +460,22 @@ git status --short
 
 ## 計畫自檢
 
-- 12 個 Task headings：5 個已完成、1 個離線完成但 live 契約待修、1 個已取消、
-  5 個尚待執行。
+- 12 個 Task headings：5 個已完成、1 個已完成 live 契約離線修復但待正式頁重驗、
+  1 個已取消、5 個尚待執行。
 - 12 個 commit 邊界：6 個既有 implementation commits、1 個新增的 Task 4 live
   契約修復邊界、5 個後續小步 commits；取消的 Task 7 沒有 implementation commit。
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。
-- 下一個可提案的實作入口是 Task 4 live 契約診斷與修復；任何第二次 live GET 仍須
-  另行明確核准。修復並重測通過後才進入 Task 6，且 Task 6 仍是獨立核准關卡。
+- 下一個安全入口是 Task 4 修復後恰好一次 live 契約重驗，仍須另行明確核准。
+  重驗通過後才提案 Task 6，且 Task 6 仍是獨立核准關卡。
 
 ## 實作核准關卡
 
 Task 2B、Task 3、Task 4 離線解析與 Task 5 已獲核准並完成本機程式與測試；
-Task 2B 的短樣本也已通過人工試聽。使用者另行核准的單次新魅力 live GET 已執行
-且在契約不符時安全阻擋；該次授權已用畢。下列動作仍需在發生前另行取得明確核准：
+Task 2B 的短樣本也已通過人工試聽。Task 4 的 live 結構診斷與離線修復已完成，
+過程中的逐次 GET 授權均已用畢；修復後尚未重驗。下列動作仍需在發生前另行取得
+明確核准：
 
 1. 安裝或下載 ffmpeg；
 2. 再次對新魅力官網或首次對 JMA 執行 live request；
@@ -472,5 +485,5 @@ Task 2B 的短樣本也已通過人工試聽。使用者另行核准的單次新
 6. 未來新增或呼叫任何雲端 TTS。
 
 Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查；Task 3、
-Task 4 離線解析及 Task 5 均已完成。Task 4 live 契約修復／第二次 GET、Task 6、
-完整 6–8 分鐘語音及所有其他外部關卡仍未授權。
+Task 4 離線解析、live 契約離線修復及 Task 5 均已完成。修復後的單次 live GET、
+Task 6、完整 6–8 分鐘語音及所有其他外部關卡仍未授權。

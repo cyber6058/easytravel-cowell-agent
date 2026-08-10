@@ -4,7 +4,8 @@ import hashlib
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
+from urllib.parse import parse_qs, urlsplit
 
 from bs4 import BeautifulSoup, Tag
 
@@ -13,7 +14,7 @@ from ..input_validation import validate_newamazing_url
 from ..models import Flight, ItineraryDay, Notice, Product, SourceEvidence
 
 
-PARSER_VERSION = "newamazing-html/1"
+PARSER_VERSION = "newamazing-html/2"
 
 _NOTICE_CATEGORIES = {
     "小費": "tip",
@@ -44,6 +45,15 @@ _FLIGHT_HEADERS = {
     "destination": ("目的地", "抵達機場"),
     "departure_time": ("起飛時間", "出發時間"),
     "arrival_time": ("抵達時間", "到達時間"),
+}
+
+_LIVE_FLIGHT_HEADERS = {
+    "airline": ("航空公司", "航空"),
+    "number": ("航班", "班號"),
+    "origin": ("出發地", "起飛機場"),
+    "departure_datetime": ("出發時間", "起飛時間"),
+    "destination": ("目的地", "抵達機場"),
+    "arrival_datetime": ("抵達時間", "到達時間"),
 }
 
 
@@ -79,6 +89,20 @@ def parse_newamazing_html(
 
     soup = BeautifulSoup(html, "html.parser")
     root = soup.find("main") or soup.body or soup
+    if _has_live_card_signal(root):
+        product, flights, days, notices = _parse_live_card_page(
+            root,
+            source_url=validated_url.value,
+            source_ids=source_ids,
+        )
+        return ParsedNewAmazingPage(
+            source=source,
+            product=product,
+            flights=flights,
+            days=days,
+            notices=notices,
+        )
+
     product_section = _required_section(root, "產品資訊")
     flight_section = _required_section(root, "航班資訊")
     itinerary_section = _required_section(root, "每日行程")
@@ -129,6 +153,268 @@ def parse_newamazing_html(
         days=days,
         notices=notices,
     )
+
+
+def _has_live_card_signal(root: Tag) -> bool:
+    return root.select_one(
+        ".product_basic_info, #ReferenceFlights, #DailyItinerary"
+    ) is not None
+
+
+def _parse_live_card_page(
+    root: Tag,
+    *,
+    source_url: str,
+    source_ids: tuple[str, ...],
+) -> tuple[
+    Product,
+    tuple[Flight, ...],
+    tuple[ItineraryDay, ...],
+    tuple[Notice, ...],
+]:
+    product_name = _required_live_input(root, "contGName", "產品名稱")
+    title = root.find("h3")
+    if not isinstance(title, Tag) or _text(title) != product_name:
+        _contract_changed("產品名稱")
+
+    product_code = _required_live_input(root, "contGCode", "產品代碼").upper()
+    query_codes = parse_qs(urlsplit(source_url).query).get("prodCd", [])
+    if len(query_codes) != 1 or query_codes[0].upper() != product_code:
+        _contract_changed("產品代碼")
+
+    product_info = root.select_one(".product_basic_info")
+    if not isinstance(product_info, Tag):
+        _contract_changed("產品資訊")
+    departure_node = product_info.select_one(".departure_date")
+    duration_node = product_info.select_one(".return_date")
+    if not isinstance(departure_node, Tag) or not isinstance(duration_node, Tag):
+        _contract_changed("產品資訊")
+    departure_date = _parse_date(_text(departure_node))
+    day_count = _parse_day_count(_text(duration_node))
+    return_date = (
+        date.fromisoformat(departure_date) + timedelta(days=day_count - 1)
+    ).isoformat()
+
+    flights = _parse_live_flights(root, source_ids)
+    if flights[0].date != departure_date or flights[-1].date != return_date:
+        _contract_changed("航班日期")
+    days = _parse_live_days(
+        root,
+        departure_date=departure_date,
+        day_count=day_count,
+        source_ids=source_ids,
+    )
+    notices = _parse_live_notices(root, source_ids)
+    return (
+        Product(
+            code=product_code,
+            name=product_name,
+            region=_parse_region(product_name),
+            day_count=day_count,
+            departure_date=departure_date,
+            return_date=return_date,
+            source_ids=source_ids,
+        ),
+        flights,
+        days,
+        notices,
+    )
+
+
+def _required_live_input(root: Tag, name: str, anchor: str) -> str:
+    matches = root.select(f'input[name="{name}"]')
+    if len(matches) != 1:
+        _contract_changed(anchor)
+    value = _text_value(str(matches[0].get("value", "")))
+    if not value:
+        _contract_changed(anchor)
+    return value
+
+
+def _parse_live_flights(
+    root: Tag,
+    source_ids: tuple[str, ...],
+) -> tuple[Flight, ...]:
+    section = root.select_one("#ReferenceFlights")
+    if not isinstance(section, Tag):
+        _contract_changed("航班參考")
+    header = section.select_one(".flight_title")
+    if not isinstance(header, Tag):
+        _contract_changed("航班欄位")
+    header_cells = header.find_all("li", recursive=False)
+    indexes = _live_header_indexes(header_cells)
+
+    flights: list[Flight] = []
+    for row in section.select(".flight_content"):
+        cells = row.find_all("li", recursive=False)
+        if len(cells) != len(header_cells):
+            _contract_changed("航班資料列")
+        values = {name: _text(cells[index]) for name, index in indexes.items()}
+        if not all(values.values()):
+            _contract_changed("航班資料列")
+        departure_date, departure_time = _parse_datetime(
+            values["departure_datetime"]
+        )
+        _arrival_date, arrival_time = _parse_datetime(
+            values["arrival_datetime"]
+        )
+        flights.append(
+            Flight(
+                date=departure_date,
+                airline=values["airline"],
+                number=values["number"].replace(" ", "").upper(),
+                origin=values["origin"],
+                destination=values["destination"],
+                departure_time=departure_time,
+                arrival_time=arrival_time,
+                source_ids=source_ids,
+            )
+        )
+    if not flights:
+        _contract_changed("航班資料")
+    return tuple(flights)
+
+
+def _live_header_indexes(cells: list[Tag]) -> dict[str, int]:
+    indexes: dict[str, int] = {}
+    for index, cell in enumerate(cells):
+        heading = _label_text(_text(cell))
+        for canonical, aliases in _LIVE_FLIGHT_HEADERS.items():
+            if heading not in {_label_text(alias) for alias in aliases}:
+                continue
+            if canonical in indexes:
+                _contract_changed("航班欄位")
+            indexes[canonical] = index
+    if set(indexes) != set(_LIVE_FLIGHT_HEADERS):
+        _contract_changed("航班欄位")
+    return indexes
+
+
+def _parse_live_days(
+    root: Tag,
+    *,
+    departure_date: str,
+    day_count: int,
+    source_ids: tuple[str, ...],
+) -> tuple[ItineraryDay, ...]:
+    section = root.select_one("#DailyItinerary")
+    if not isinstance(section, Tag):
+        _contract_changed("每日行程")
+    start = date.fromisoformat(departure_date)
+    days: list[ItineraryDay] = []
+    for card in section.select(".every_day"):
+        number = _parse_live_day_number(card)
+        attractions = tuple(
+            _strip_brackets(_text(node))
+            for node in card.select(".day_content h3")
+            if _strip_brackets(_text(node))
+        )
+        if not attractions:
+            _contract_changed(f"第{number}天景點")
+        hotel_node = card.select_one(".day_hotel p")
+        hotel = _text(hotel_node) if isinstance(hotel_node, Tag) else ""
+        if not hotel:
+            _contract_changed(f"第{number}天住宿")
+        days.append(
+            ItineraryDay(
+                number=number,
+                date=(start + timedelta(days=number - 1)).isoformat(),
+                city="",
+                attractions=attractions,
+                meals=_parse_live_meals(card, number),
+                hotel=hotel,
+                source_ids=source_ids,
+            )
+        )
+    expected = tuple(range(1, day_count + 1))
+    if tuple(day.number for day in days) != expected:
+        _contract_changed("行程天數")
+    return tuple(days)
+
+
+def _parse_live_day_number(card: Tag) -> int:
+    en_day = card.select_one(".en_day")
+    tw_day = card.select_one(".tw_day")
+    en_match = re.fullmatch(r"D\s*(\d+)", _text(en_day), re.IGNORECASE)
+    tw_match = re.fullmatch(r"第\s*(\d+)\s*天", _text(tw_day))
+    if en_match is None or tw_match is None or en_match.group(1) != tw_match.group(1):
+        _contract_changed("每日行程天次")
+    return int(en_match.group(1))
+
+
+def _parse_live_meals(card: Tag, number: int) -> tuple[str, ...]:
+    meal_list = card.select_one(".day_meal dl")
+    if not isinstance(meal_list, Tag):
+        _contract_changed(f"第{number}天餐食")
+    expected_labels = ("早餐", "午餐", "晚餐")
+    values: dict[str, str] = {}
+    for term in meal_list.find_all("dt", recursive=False):
+        label = _label_text(_text(term))
+        if label not in expected_labels or label in values:
+            _contract_changed(f"第{number}天餐食")
+        detail = term.find_next_sibling("dd")
+        if not isinstance(detail, Tag):
+            _contract_changed(f"第{number}天餐食")
+        values[label] = _text(detail)
+    if tuple(values) != expected_labels:
+        _contract_changed(f"第{number}天餐食")
+    meals: list[str] = []
+    for label in expected_labels:
+        meals.extend(_split_items(values[label]))
+    return tuple(meals)
+
+
+def _parse_live_notices(
+    root: Tag,
+    source_ids: tuple[str, ...],
+) -> tuple[Notice, ...]:
+    heading = next(
+        (
+            node
+            for node in root.find_all(re.compile(r"^h[1-6]$"))
+            if _text(node) == "其他說明"
+        ),
+        None,
+    )
+    if not isinstance(heading, Tag) or not isinstance(heading.parent, Tag):
+        _contract_changed("其他說明")
+    list_root = heading.find_next_sibling("ul") or heading.parent.find("ul")
+    if not isinstance(list_root, Tag):
+        _contract_changed("其他說明內容")
+    notices: list[Notice] = []
+    for item in list_root.find_all("li", recursive=False):
+        item_heading = item.find(re.compile(r"^h[1-6]$"))
+        label = _text(item_heading)
+        content = " ".join(
+            _text(node) for node in item.find_all("p", recursive=False) if _text(node)
+        )
+        if not label or not content:
+            _contract_changed("其他說明內容")
+        notices.append(
+            Notice(
+                category=_NOTICE_CATEGORIES.get(label, "other"),
+                text=content,
+                source_ids=source_ids,
+            )
+        )
+    if not notices:
+        _contract_changed("其他說明內容")
+    return tuple(notices)
+
+
+def _parse_datetime(value: str) -> tuple[str, str]:
+    normalized = unicodedata.normalize("NFKC", value).strip()
+    match = re.fullmatch(
+        r"(\d{4}[./-]\d{1,2}[./-]\d{1,2})\s+(\d{1,2}:\d{2})",
+        normalized,
+    )
+    if match is None:
+        _contract_changed("日期時間格式")
+    return _parse_date(match.group(1)), _parse_time(match.group(2))
+
+
+def _strip_brackets(value: str) -> str:
+    return value.strip().removeprefix("【").removesuffix("】").strip()
 
 
 def _required_section(root: Tag, title: str) -> Tag:

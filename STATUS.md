@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能已完成；說明會產生器 Task 5 離線實作已完成，而 Task 4 的
-單次 live 唯讀測試在真實頁面契約不符時安全阻擋，下一步是另行核准契約修復。
+立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 正式頁卡片契約已離線
+修復並通過完整回歸，尚待另行核准一次修復後的唯讀正式頁驗證。
 
 ## 這次做了什麼
 
@@ -167,6 +167,20 @@
   bytes、SHA-256 `06335de9cfee88e4a33248a6ead9950eaeebdab735ea2542806ca2ff8e3aaf61`。
 - 該 live response 在「產品資訊」anchor 回報 `PARSE_CONTRACT_CHANGED`，因此真實
   URL 自動解析目前仍 blocked。沒有保存原始 HTML；單次 live 授權已用畢。
+- 2026-08-10 經逐次明確核准完成最小 live 結構診斷：正式頁採
+  `.product_basic_info`、`#ReferenceFlights`、`#DailyItinerary .every_day` 卡片契約，
+  列印控制仍指向同一頁，沒有另一個穩定列印頁。每次授權只執行一個 GET，未保存
+  原始 HTML、旅客資料或 live response。
+- NewAmazing parser 已升為 `newamazing-html/2`：保留舊契約，新增嚴格卡片 profile，
+  驗證產品名稱／代碼、URL 代碼、航班欄位與首末日期、每日天次、餐食、飯店及其他
+  說明；必要欄位漂移仍回報 `PARSE_CONTRACT_CHANGED`。
+- 正式頁沒有獨立的每日住宿城市欄位，parser 不從標題猜城市。URL-only 會留下
+  `SOURCE_CITY_MISSING` warning；URL+PDF 會保留 PDF 城市供 OP 核對，不製造假衝突。
+- 修復只加入純合成卡片 fixture，沒有把正式產品代碼、完整頁面、電話、email 或 PII
+  寫入原始碼。修復後尚未再發出 live GET，因此不能宣稱正式 URL 已驗收可用。
+- NewAmazing／merge 針對性測試為 `29 passed in 0.36s`；完整離線回歸實測為
+  `244 passed, 2 skipped in 5.78s`。兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
+  Yating integration tests；compileall、行寬檢查與 `git diff --check` 均通過。
 - 2026-08-09 經使用者另行核准完成 Task 5：新增 `merge`、`validation`、`op_values`
   與 `review` seams，落實 PDF／官網 notices／天氣來源優先、blocking conflicts、
   語意等價 warnings，以及 9 個不得猜值的黃色 OP 待確認欄位。
@@ -181,9 +195,8 @@
 
 ## 下一步
 
-Task 5 已完成。下一個建議切片是針對 Task 4 的真實頁面差異，先取得另行核准後
-收集最小、去識別的結構證據並修復 parser；任何第二次 live GET 都需要新的明確
-授權。修復並重測通過後才提案 Task 6，Task 6 也不因本次授權而自動開始。Cowell
+Task 5 已完成。下一個安全里程碑是另行核准恰好一次修復後的正式頁唯讀契約驗證；
+驗證通過後才提案 Task 6，Task 6 不因本次授權而自動開始。Cowell
 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序
 驗證 auth status 與 rooms preview。
 
@@ -192,9 +205,9 @@ Task 5 已完成。下一個建議切片是針對 Task 4 的真實頁面差異�
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器 Task 5 沒有離線技術阻塞。Task 4 的真實新魅力頁面與離線 fixture
-契約不一致，現於「產品資訊」anchor fail closed；在取得新的診斷／live request
-授權並修復前，URL-only 自動解析不能宣稱可用。完整 6–8 分鐘版本尚未產生；JMA
+說明會產生器 Task 5 與 Task 4 卡片契約修復沒有離線技術阻塞。Task 4 修復後尚未
+取得新的單次 live GET 授權，因此 URL-only 正式頁解析仍不能宣稱已驗收可用。完整
+6–8 分鐘版本尚未產生；JMA
 資料及 LIST Word COM／視覺驗證也尚未實作或端對端驗證。掃描型無文字 PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
 自動 LINE 傳送仍是獨立核准關卡。

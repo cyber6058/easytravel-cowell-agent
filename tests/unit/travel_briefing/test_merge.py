@@ -153,6 +153,45 @@ def test_merge_marks_every_missing_op_field_as_a_yellow_placeholder():
     assert all(field.highlight == "yellow" for field in draft.op_fields)
 
 
+def test_merge_warns_when_url_only_source_has_no_explicit_lodging_city():
+    web = web_source()
+    web = replace(
+        web,
+        days=tuple(replace(day, city="") for day in web.days),
+    )
+
+    draft = merge_briefing_sources(
+        generated_at="2026-08-09T11:10:00+08:00",
+        web=web,
+    )
+
+    assert draft.status is DraftStatus.DRAFT_READY
+    assert [warning.code for warning in draft.warnings] == [
+        "SOURCE_CITY_MISSING"
+    ]
+    assert draft.warnings[0].source_ids == (WEB_SOURCE.source_id,)
+
+
+def test_merge_uses_pdf_city_when_live_web_contract_does_not_publish_one():
+    web = web_source()
+    web = replace(
+        web,
+        days=tuple(replace(day, city="") for day in web.days),
+    )
+
+    draft = merge_briefing_sources(
+        generated_at="2026-08-09T11:10:00+08:00",
+        pdf=pdf_source(),
+        web=web,
+    )
+
+    assert draft.status is DraftStatus.DRAFT_READY
+    assert not any(conflict.field.endswith(".city") for conflict in draft.conflicts)
+    assert "SOURCE_CITY_MISSING" in {
+        warning.code for warning in draft.warnings
+    }
+
+
 def test_merge_attaches_weather_without_overriding_higher_priority_sources():
     forecast = WeatherForecast(
         date="2026-09-01",
