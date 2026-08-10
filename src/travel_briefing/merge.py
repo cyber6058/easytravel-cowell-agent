@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, is_dataclass, replace
 
 from .adapters.newamazing import ParsedNewAmazingPage
 from .adapters.pdf_itinerary import ParsedPdfItinerary
@@ -55,6 +55,33 @@ def merge_briefing_sources(
     else:
         conflicts, warnings = (), ()
 
+    if (
+        pdf is not None
+        and web is not None
+        and not pdf.product.region.strip()
+        and web.product.region.strip()
+    ):
+        itinerary = replace(
+            pdf,
+            product=replace(
+                pdf.product,
+                region=web.product.region,
+                source_ids=tuple(
+                    dict.fromkeys(
+                        (*pdf.product.source_ids, *web.product.source_ids)
+                    )
+                ),
+            ),
+        )
+        warnings = (
+            *warnings,
+            DraftWarning(
+                code="SOURCE_REGION_MISSING",
+                message="PDF 未明確提供產品區域；已沿用官網區域供 OP 核對",
+                source_ids=(pdf.sources[0].source_id, web.source.source_id),
+            ),
+        )
+
     if any(not day.city.strip() for day in itinerary.days):
         warnings = (
             *warnings,
@@ -67,6 +94,17 @@ def merge_briefing_sources(
             ),
         )
 
+    product_region_missing = not itinerary.product.region.strip()
+    if product_region_missing:
+        warnings = (
+            *warnings,
+            DraftWarning(
+                code="SOURCE_REGION_MISSING",
+                message="來源未明確提供產品區域，需由 OP 確認",
+                source_ids=itinerary.product.source_ids,
+            ),
+        )
+
     return BriefingDraft.create(
         status=status_for_conflicts(conflicts),
         generated_at=generated_at,
@@ -75,7 +113,9 @@ def merge_briefing_sources(
         flights=itinerary.flights,
         days=itinerary.days,
         notices=web.notices if web is not None else (),
-        op_fields=build_missing_op_fields(),
+        op_fields=build_missing_op_fields(
+            include_product_region=product_region_missing,
+        ),
         weather=weather,
         conflicts=conflicts,
         warnings=warnings,
@@ -88,6 +128,29 @@ def _source_differences(
 ) -> tuple[tuple[Conflict, ...], tuple[DraftWarning, ...]]:
     conflicts: list[Conflict] = []
     warnings: list[DraftWarning] = []
+    if pdf.product.region.strip() and not web.product.region.strip():
+        warnings.append(
+            DraftWarning(
+                code="SOURCE_REGION_MISSING",
+                message="官網未明確提供產品區域；已保留 PDF 區域供 OP 核對",
+                source_ids=(web.source.source_id,),
+            )
+        )
+    elif pdf.product.region.strip():
+        _add_conflict(
+            conflicts,
+            field="product.region",
+            value_a=pdf.product.region,
+            value_b=web.product.region,
+            source_a=_source_id(
+                pdf.product.source_ids,
+                pdf.sources[0].source_id,
+            ),
+            source_b=_source_id(
+                web.product.source_ids,
+                web.source.source_id,
+            ),
+        )
     for attribute in ("code", "departure_date", "return_date", "day_count"):
         _add_conflict(
             conflicts,

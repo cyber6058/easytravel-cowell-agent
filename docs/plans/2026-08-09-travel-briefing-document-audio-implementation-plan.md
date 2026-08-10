@@ -493,5 +493,6 @@ Task 2B 的短樣本也已通過人工試聽。Task 4 的 live 結構診斷、�
 6. 未來新增或呼叫任何雲端 TTS。
 
 Task 2B 的 20–30 秒 Yating 正式管線樣本已通過使用者試聽與 SRT 檢查；Task 3、
-Task 4 離線解析、live 卡片結構修復及 Task 5 均已完成。產品區域設計修訂、下一次
-live GET、Task 6、完整 6–8 分鐘語音及所有其他外部關卡仍未授權。
+Task 4 離線解析、live 卡片結構修復、產品區域 OP 確認及 Task 5 均已完成離線實作。
+本次 commits 的 push、下一次 live GET、Task 6、完整 6–8 分鐘語音及所有其他外部
+關卡仍未授權。

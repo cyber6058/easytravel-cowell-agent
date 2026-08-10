@@ -70,6 +70,38 @@ def test_newamazing_parser_supports_the_live_card_contract_without_guessing_city
     }
 
 
+def test_live_card_parser_keeps_region_blank_when_the_source_does_not_publish_it():
+    changed = live_cards_html().replace("合成大阪五日", "合成關西五日")
+
+    parsed = parse_newamazing_html(
+        changed,
+        source_url=(
+            "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+            "prodCd=OSA-SYN-260901"
+        ),
+        retrieved_at="2026-08-10T12:00:00+08:00",
+    )
+
+    assert parsed.product.name == "合成關西五日"
+    assert parsed.product.region == ""
+
+
+def test_live_card_parser_rejects_multiple_published_regions():
+    changed = live_cards_html().replace("合成大阪五日", "合成大阪北海道五日")
+
+    with pytest.raises(ParseContractChangedError) as captured:
+        parse_newamazing_html(
+            changed,
+            source_url=(
+                "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+                "prodCd=OSA-SYN-260901"
+            ),
+            retrieved_at="2026-08-10T12:00:00+08:00",
+        )
+
+    assert captured.value.details == {"anchor": "產品區域"}
+
+
 def test_live_card_parser_fails_closed_when_product_code_field_disappears():
     changed = live_cards_html().replace(
         'name="contGCode"',
@@ -121,7 +153,7 @@ def test_newamazing_parser_returns_source_bound_structured_fields():
 
     assert parsed.source.kind == "newamazing_html"
     assert parsed.source.location == SOURCE_URL
-    assert parsed.source.parser_version == "newamazing-html/2"
+    assert parsed.source.parser_version == "newamazing-html/3"
     assert len(parsed.source.sha256) == 64
     assert parsed.product.code == "OSA-SYN-260901"
     assert parsed.product.name == "合成大阪五日"

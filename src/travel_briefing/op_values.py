@@ -21,10 +21,17 @@ REQUIRED_OP_FIELD_NAMES = (
     "emergency_contact_phone",
     "alternate_hotel",
 )
+ALLOWED_PRODUCT_REGIONS = frozenset({"大阪", "東北", "北海道"})
 
 
-def build_missing_op_fields() -> tuple[OpField, ...]:
-    return tuple(_missing_op_field(name) for name in REQUIRED_OP_FIELD_NAMES)
+def build_missing_op_fields(
+    *,
+    include_product_region: bool = False,
+) -> tuple[OpField, ...]:
+    names = REQUIRED_OP_FIELD_NAMES
+    if include_product_region:
+        names = (*names, "product_region")
+    return tuple(_missing_op_field(name) for name in names)
 
 
 def apply_op_values(
@@ -37,16 +44,21 @@ def apply_op_values(
     if not isinstance(values, Mapping) or not values:
         raise BriefingInputError("OP values must contain a non-empty values object")
 
-    unknown = sorted(set(values) - set(REQUIRED_OP_FIELD_NAMES))
+    existing = {field.name: field for field in draft.op_fields}
+    field_names = REQUIRED_OP_FIELD_NAMES
+    if "product_region" in existing:
+        field_names = (*field_names, "product_region")
+
+    unknown = sorted(set(values) - set(field_names))
     if unknown:
         raise BriefingInputError(
             "OP values contain unknown fields",
             details={"fields": unknown},
         )
 
-    existing = {field.name: field for field in draft.op_fields}
     updated_fields: list[OpField] = []
-    for name in REQUIRED_OP_FIELD_NAMES:
+    product = draft.product
+    for name in field_names:
         current = existing.get(name) or _missing_op_field(name)
         if name not in values:
             updated_fields.append(current)
@@ -62,10 +74,18 @@ def apply_op_values(
                 "OP values must be non-empty text",
                 details={"field": name},
             )
+        normalized = value.strip()
+        if name == "product_region":
+            if normalized not in ALLOWED_PRODUCT_REGIONS:
+                raise BriefingInputError(
+                    "OP product region is unsupported",
+                    details={"field": name},
+                )
+            product = replace(product, region=normalized)
         updated_fields.append(
             OpField(
                 name=name,
-                value=value.strip(),
+                value=normalized,
                 source="OP",
                 confirmed=True,
                 highlight="",
@@ -75,6 +95,7 @@ def apply_op_values(
     return replace(
         draft,
         status=status_for_conflicts(draft.conflicts),
+        product=product,
         op_fields=tuple(updated_fields),
     ).with_recomputed_id()
 

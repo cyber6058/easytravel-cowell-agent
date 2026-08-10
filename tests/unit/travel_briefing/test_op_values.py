@@ -35,6 +35,69 @@ def draft_with_missing_op_values() -> BriefingDraft:
     )
 
 
+def draft_with_missing_product_region() -> BriefingDraft:
+    draft = draft_with_missing_op_values()
+    return replace(
+        draft,
+        product=replace(draft.product, region=""),
+        op_fields=build_missing_op_fields(include_product_region=True),
+    ).with_recomputed_id()
+
+
+def test_op_can_confirm_a_requested_product_region():
+    draft = draft_with_missing_product_region()
+
+    updated = apply_op_values(
+        draft,
+        {
+            "draft_id": draft.draft_id,
+            "values": {"product_region": "北海道"},
+        },
+    )
+
+    assert updated.product.region == "北海道"
+    region_field = next(
+        field for field in updated.op_fields if field.name == "product_region"
+    )
+    assert region_field.value == "北海道"
+    assert region_field.source == "OP"
+    assert region_field.confirmed is True
+    assert region_field.highlight == ""
+    assert updated.draft_id != draft.draft_id
+    assert updated.draft_id == updated.with_recomputed_id().draft_id
+
+
+@pytest.mark.parametrize("value", ["關西", "日本", "unknown"])
+def test_op_rejects_an_unsupported_product_region(value):
+    draft = draft_with_missing_product_region()
+
+    with pytest.raises(BriefingInputError) as captured:
+        apply_op_values(
+            draft,
+            {
+                "draft_id": draft.draft_id,
+                "values": {"product_region": value},
+            },
+        )
+
+    assert captured.value.details == {"field": "product_region"}
+
+
+def test_op_cannot_override_a_product_region_that_was_not_requested():
+    draft = draft_with_missing_op_values()
+
+    with pytest.raises(BriefingInputError) as captured:
+        apply_op_values(
+            draft,
+            {
+                "draft_id": draft.draft_id,
+                "values": {"product_region": "北海道"},
+            },
+        )
+
+    assert captured.value.details == {"fields": ["product_region"]}
+
+
 def test_current_op_values_confirm_only_submitted_fields():
     draft = draft_with_missing_op_values()
 

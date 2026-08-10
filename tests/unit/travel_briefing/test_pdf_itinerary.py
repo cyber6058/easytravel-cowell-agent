@@ -40,7 +40,7 @@ def test_pdf_text_parser_preserves_page_level_source_evidence():
     assert len(parsed.sources) == 3
     assert parsed.sources[0].kind == "pdf_page"
     assert parsed.sources[0].location == "synthetic-itinerary.pdf#page=1"
-    assert parsed.sources[0].parser_version == "pdf-itinerary/1"
+    assert parsed.sources[0].parser_version == "pdf-itinerary/2"
     assert parsed.product.code == "TOH-SYN-260901"
     assert parsed.product.name == "合成東北五日"
     assert parsed.product.region == "東北"
@@ -57,6 +57,46 @@ def test_pdf_text_parser_preserves_page_level_source_evidence():
     assert parsed.days[2].source_ids == (parsed.sources[2].source_id,)
     assert parsed.days[2].attractions == ("奧入瀨", "十和田湖")
     assert parsed.days[3].meals == ("早餐", "晚餐")
+
+
+def test_pdf_text_parser_keeps_region_blank_when_the_source_does_not_publish_it():
+    pages = tuple(
+        PdfPageText(
+            page_number=page.page_number,
+            text=page.text.replace("合成東北五日", "合成日本五日"),
+        )
+        for page in fixture_pages()
+    )
+
+    parsed = parse_pdf_itinerary_pages(
+        pages,
+        source_path="synthetic-itinerary.pdf",
+        pdf_sha256="a" * 64,
+        retrieved_at="2026-08-09T10:45:00+08:00",
+    )
+
+    assert parsed.product.name == "合成日本五日"
+    assert parsed.product.region == ""
+
+
+def test_pdf_text_parser_rejects_multiple_published_regions():
+    pages = tuple(
+        PdfPageText(
+            page_number=page.page_number,
+            text=page.text.replace("合成東北五日", "合成大阪北海道五日"),
+        )
+        for page in fixture_pages()
+    )
+
+    with pytest.raises(ParseContractChangedError) as captured:
+        parse_pdf_itinerary_pages(
+            pages,
+            source_path="synthetic-itinerary.pdf",
+            pdf_sha256="a" * 64,
+            retrieved_at="2026-08-09T10:45:00+08:00",
+        )
+
+    assert captured.value.details == {"anchor": "產品區域"}
 
 
 def test_pdf_text_parser_rejects_multiple_product_codes():

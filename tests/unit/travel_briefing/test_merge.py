@@ -153,6 +153,111 @@ def test_merge_marks_every_missing_op_field_as_a_yellow_placeholder():
     assert all(field.highlight == "yellow" for field in draft.op_fields)
 
 
+def test_merge_requests_op_region_when_url_only_source_does_not_publish_it():
+    web = web_source()
+    web = replace(web, product=replace(web.product, region=""))
+
+    draft = merge_briefing_sources(
+        generated_at="2026-08-09T11:10:00+08:00",
+        web=web,
+    )
+
+    assert draft.status is DraftStatus.DRAFT_READY
+    assert draft.product.region == ""
+    assert [warning.code for warning in draft.warnings] == [
+        "SOURCE_REGION_MISSING"
+    ]
+    assert tuple(field.name for field in draft.op_fields) == (
+        *REQUIRED_OP_FIELD_NAMES,
+        "product_region",
+    )
+    region_field = draft.op_fields[-1]
+    assert region_field.value == "待 OP 確認"
+    assert region_field.confirmed is False
+    assert region_field.highlight == "yellow"
+
+
+def test_merge_keeps_pdf_region_when_the_web_source_does_not_publish_it():
+    web = web_source()
+    web = replace(web, product=replace(web.product, region=""))
+
+    draft = merge_briefing_sources(
+        generated_at="2026-08-09T11:10:00+08:00",
+        pdf=pdf_source(),
+        web=web,
+    )
+
+    assert draft.status is DraftStatus.DRAFT_READY
+    assert draft.product.region == "大阪"
+    assert not any(
+        conflict.field == "product.region" for conflict in draft.conflicts
+    )
+    assert [warning.code for warning in draft.warnings] == [
+        "SOURCE_REGION_MISSING"
+    ]
+    assert "product_region" not in {
+        field.name for field in draft.op_fields
+    }
+
+
+def test_merge_uses_web_region_when_the_pdf_source_does_not_publish_it():
+    pdf = pdf_source()
+    pdf = replace(pdf, product=replace(pdf.product, region=""))
+
+    draft = merge_briefing_sources(
+        generated_at="2026-08-09T11:10:00+08:00",
+        pdf=pdf,
+        web=web_source(),
+    )
+
+    assert draft.status is DraftStatus.DRAFT_READY
+    assert draft.product.region == "大阪"
+    assert draft.conflicts == ()
+    assert [warning.code for warning in draft.warnings] == [
+        "SOURCE_REGION_MISSING"
+    ]
+    assert "product_region" not in {
+        field.name for field in draft.op_fields
+    }
+
+
+def test_merge_requests_product_region_once_when_both_sources_omit_it():
+    pdf = pdf_source()
+    pdf = replace(pdf, product=replace(pdf.product, region=""))
+    web = web_source()
+    web = replace(web, product=replace(web.product, region=""))
+
+    draft = merge_briefing_sources(
+        generated_at="2026-08-09T11:10:00+08:00",
+        pdf=pdf,
+        web=web,
+    )
+
+    assert draft.product.region == ""
+    assert [warning.code for warning in draft.warnings] == [
+        "SOURCE_REGION_MISSING"
+    ]
+    assert [
+        field.name for field in draft.op_fields if field.name == "product_region"
+    ] == ["product_region"]
+
+
+def test_merge_blocks_conflicting_non_empty_product_regions():
+    web = web_source()
+    web = replace(web, product=replace(web.product, region="北海道"))
+
+    draft = merge_briefing_sources(
+        generated_at="2026-08-09T11:10:00+08:00",
+        pdf=pdf_source(),
+        web=web,
+    )
+
+    assert draft.status is DraftStatus.BLOCKED
+    assert [conflict.field for conflict in draft.conflicts] == [
+        "product.region"
+    ]
+
+
 def test_merge_warns_when_url_only_source_has_no_explicit_lodging_city():
     web = web_source()
     web = replace(

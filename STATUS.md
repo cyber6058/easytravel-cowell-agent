@@ -2,8 +2,8 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 正式頁仍在「產品區域」
-安全阻擋，OP 明確確認區域的修訂設計已獲核准並寫成規格，等待書面審閱。
+立益 Cowell 專用功能與說明會產生器 Task 5 已完成；Task 4 的 OP 區域確認已完成
+離線實作與完整回歸，尚待 push 與另行核准一次正式頁唯讀重驗。
 
 ## 這次做了什麼
 
@@ -190,7 +190,17 @@
 - 2026-08-10 使用者核准以 OP 明確確認取代產品代碼、航點或名稱猜測；設計已寫入
   `docs/specs/2026-08-10-travel-briefing-product-region-resolution-design.md`。規格固定
   URL-only 缺區域時使用動態 `product_region` OP 欄位、URL+PDF 保留 PDF 區域、
-  未知或矛盾值 fail closed；目前等待使用者書面審閱，尚未修改 parser。
+  未知或矛盾值 fail closed；使用者於 2026-08-11 明確回覆「通過」。
+- 2026-08-11 依通過規格完成區域確認：NewAmazing／PDF parser 在來源未明示區域時
+  保留空值、多區域仍 fail closed；merge 只建立一個 `SOURCE_REGION_MISSING` warning，
+  由唯一有值的來源補足，或在兩者都缺時附加黃色 `product_region` OP 欄位；兩個
+  非空區域不一致仍建立 blocking conflict。parser evidence 版本分別升為
+  `newamazing-html/3` 與 `pdf-itinerary/2`。
+- `apply_op_values()` 只在草稿已要求 `product_region` 時接受大阪／東北／北海道，
+  更新產品與 OP provenance 並重算 `draft_id`；未知值及未要求的 override 均拒絕。
+- 區域確認針對性測試為 `57 passed in 0.54s`；完整離線回歸實測為
+  `258 passed, 2 skipped in 6.03s`。兩個 skip 仍是需顯式 opt-in 的真實 Hanhan／
+  Yating integration tests；compileall、行寬檢查與 `git diff --check` 均通過。
 - 2026-08-09 經使用者另行核准完成 Task 5：新增 `merge`、`validation`、`op_values`
   與 `review` seams，落實 PDF／官網 notices／天氣來源優先、blocking conflicts、
   語意等價 warnings，以及 9 個不得猜值的黃色 OP 待確認欄位。
@@ -205,9 +215,9 @@
 
 ## 下一步
 
-Task 5 已完成。下一步是由使用者審閱產品區域確認規格；通過後才建立最小實作計畫
-並以公開 parser／merge／OP-value seams 做 TDD。離線修復與回歸完成後，才另行核准
-下一次正式頁唯讀驗證；驗證通過後才提案 Task 6。Cowell
+Task 5 與產品區域確認離線實作已完成。下一步先取得 push 本次 commits 的明確核准，
+再另行核准恰好一次不 redirect、不 retry 的正式頁唯讀驗證；驗證通過後才提案
+Task 6。Cowell
 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序
 驗證 auth status 與 rooms preview。
 
@@ -216,9 +226,8 @@ Task 5 已完成。下一步是由使用者審閱產品區域確認規格；通�
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-說明會產生器 Task 5 沒有離線技術阻塞。Task 4 修復後 live 驗證已確認卡片 profile
-會啟用，但產品名稱無法唯一映射現有區域契約，現於「產品區域」fail closed；OP
-確認設計已獲核准但尚待書面規格審閱與實作，URL-only 正式頁解析仍不能宣稱可用。完整
+說明會產生器 Task 5 與產品區域確認沒有離線技術阻塞。區域修復後尚未重新執行
+live GET，因此 URL-only 正式頁解析仍不能宣稱已驗收可用。完整
 6–8 分鐘版本尚未產生；JMA
 資料及 LIST Word COM／視覺驗證也尚未實作或端對端驗證。掃描型無文字 PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與

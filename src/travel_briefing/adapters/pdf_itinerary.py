@@ -19,7 +19,7 @@ from ..input_validation import ValidatedPdfInput
 from ..models import Flight, ItineraryDay, Product, SourceEvidence
 
 
-PARSER_VERSION = "pdf-itinerary/1"
+PARSER_VERSION = "pdf-itinerary/2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,9 +325,9 @@ def _parse_day_count(value: str) -> int:
 
 def _parse_region(product_name: str) -> str:
     regions = tuple(region for region in ("大阪", "東北", "北海道") if region in product_name)
-    if len(regions) != 1:
+    if len(regions) > 1:
         _contract_changed("產品區域")
-    return regions[0]
+    return regions[0] if regions else ""
 
 
 def _split_items(value: str) -> tuple[str, ...]:
