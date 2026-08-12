@@ -1,0 +1,4 @@
+interface:
+  display_name: "EasyTravel 說明會資料"
+  short_description: "從新魅力 URL 或 PDF 建立可審核的 LIST Word 與 Yating 語音"
+  default_prompt: "Use $easytravel-briefing-materials to prepare this local travel briefing for OP review."

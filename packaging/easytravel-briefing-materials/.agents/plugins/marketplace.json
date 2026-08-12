@@ -1,0 +1,20 @@
+{
+  "name": "easytravel-briefing-local",
+  "interface": {
+    "displayName": "Easytravel Briefing Local"
+  },
+  "plugins": [
+    {
+      "name": "easytravel-briefing-materials",
+      "source": {
+        "source": "local",
+        "path": "./plugins/easytravel-briefing-materials"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

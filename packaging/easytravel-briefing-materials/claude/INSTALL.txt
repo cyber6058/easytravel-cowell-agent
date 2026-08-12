@@ -1,0 +1,10 @@
+Claude Code installation
+========================
+
+The package installer copies the canonical skill to:
+
+%USERPROFILE%\.claude\skills\easytravel-briefing-materials
+
+Use `-SkipClaudeSkillInstall` to leave the existing Claude configuration
+untouched. The Claude and Codex copies are generated from the same canonical
+SKILL.md and references; do not edit either installed copy independently.

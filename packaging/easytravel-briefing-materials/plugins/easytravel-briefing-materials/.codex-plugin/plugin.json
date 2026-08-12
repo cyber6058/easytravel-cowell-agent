@@ -1,0 +1,18 @@
+{
+  "name": "easytravel-briefing-materials",
+  "version": "0.1.0",
+  "description": "Reviewable LIST Word and local Yating briefing artifacts for EasyTravel OPs.",
+  "author": {
+    "name": "EasyTravel tooling"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "EasyTravel 說明會資料",
+    "shortDescription": "新魅力 LIST Word 與本機 Yating 語音",
+    "longDescription": "從新魅力 URL 或行程 PDF 建立來源可追溯、需 OP 審核的 LIST Word、逐字稿、字幕與本機 Yating 語音。",
+    "developerName": "EasyTravel tooling",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use $easytravel-briefing-materials to prepare this local travel briefing for OP review."
+  }
+}

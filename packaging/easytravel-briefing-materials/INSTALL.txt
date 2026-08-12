@@ -1,0 +1,30 @@
+EasyTravel Briefing Materials 0.1.0
+====================================
+
+需求：
+- Windows 與 Python 3.12 以上。
+- Microsoft Word、Microsoft Yating 與已核准的私有 LIST 範本。
+- 現有 pdftoppm；若需要 MP3，另提供現有 ffmpeg 路徑。
+- 安裝 Python 套件時可連線網路。
+- Codex CLI 或 Claude Code 可個別略過安裝。
+
+安裝：
+1. 解壓縮 ZIP 到新的資料夾。
+2. 在該資料夾執行：
+
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-EasyTravelBriefingMaterials.ps1
+
+3. 依提示提供私有 LIST 範本路徑、已核准的 layout fingerprint、pdftoppm 路徑，
+   以及選用的既有 ffmpeg 路徑。安裝器不啟動 Word 或語音。
+4. 開新對話並呼叫 `easytravel-briefing-materials` Skill，提供一個新魅力 URL、
+   本機 PDF 路徑，或兩者。
+
+選項：
+- `-SkipCodexPluginInstall`：只裝應用程式與 Claude Skill。
+- `-SkipClaudeSkillInstall`：只裝應用程式與 Codex plugin。
+- 兩者同時使用：只安裝獨立 briefing app 與本機 config。
+
+重要限制：
+- 安裝包不含私有 LIST 範本、來源 PDF、旅客或員工資料、manifest 或產出。
+- live 新魅力／JMA、Word COM、Yating、ffmpeg 設定與正式確認是分開的當次核准關卡。
+- 本功能不猜值、不使用雲端 TTS、不自動傳 LINE、不製作影片或對外發布。

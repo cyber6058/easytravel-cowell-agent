@@ -1,6 +1,9 @@
 # EasyTravel Cowell Agent
 
-立益旅行社專用的單一整合 Skill 與本機 CLI。這個專案只處理兩條工作流：
+立益旅行社專用的本機工具。本專案包含 Cowell 名單／分房與獨立的說明會資料
+產生器；兩者套件、設定與權限互不相依。
+
+Cowell Skill 處理兩條工作流：
 
 1. 從護照 PDF／照片整理、驗證並輸出科威官方 19 欄 Excel 名單。
 2. 針對 OP 已建立的科威訂單，讀取 DOCX／XLSX 分房表後：
@@ -60,3 +63,21 @@ python -m venv .venv
 
 先確認測試綠燈，再依 Skill 安裝說明設定 Cowell URL 與受控 Chrome。
 不要把真實護照、分房表或產出檔放在 repo 內。
+
+## 說明會資料 Skill
+
+`easytravel-briefing-materials` 針對單一新魅力大阪、東北或北海道產品，從 URL、
+本機行程 PDF 或兩者建立可審核 manifest，再依序產生 LIST Word 草稿、逐字稿、
+Microsoft Yating 本機語音與字幕。缺值、來源衝突、範本漂移或 QA 失敗都會保留為
+review，不猜值、不使用雲端 TTS，也不自動傳 LINE。
+
+建立獨立 `0.1.0` 安裝包：
+
+~~~powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_easytravel_briefing_package.ps1
+~~~
+
+安裝包只含 `travel_briefing`、briefing scripts／config、Codex plugin 與由同一份
+canonical 規則產生的 Claude Skill，不含 Cowell、私有 LIST 範本、來源或產出。
+操作邊界見
+[SKILL.md](packaging/easytravel-briefing-materials/shared/SKILL.md)。

@@ -16,6 +16,22 @@ This repository is the dedicated private EasyTravel/立益 product.
 Never add group creation, order creation, payments, seat inventory, reports, or
 unrelated Cowell discovery without a new approved design.
 
+## Briefing scope
+
+- Prepare reviewable briefing manifests, LIST Word drafts, narration scripts,
+  Microsoft Yating audio, subtitles, and local confirmed artifacts for one
+  NewAmazing product in Osaka, Tohoku, or Hokkaido.
+- Use only an OP-provided NewAmazing URL, local itinerary PDF, approved JMA
+  evidence, and explicit OP decisions bound to the current draft ID.
+- Preserve missing or conflicting facts for review; never guess values or use an
+  unapproved source, template, voice, or fallback.
+- Never send LINE, upload artifacts, create video, use cloud TTS, deploy, or
+  publish from the briefing workflow.
+- Live source requests, private template access, Word COM, local synthesis,
+  dependency installation, and confirmation are separate approval gates.
+
+This briefing scope does not expand any Cowell read or write permission.
+
 ## Safety
 
 - Run parse and plan offline before any Cowell access.
