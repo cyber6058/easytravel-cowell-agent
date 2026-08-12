@@ -127,3 +127,45 @@ class Mp3ConverterUnavailableError(BriefingCliError):
             message="A configured ffmpeg executable is required for MP3 output",
             exit_code=NEEDS_REVIEW,
         )
+
+
+class WordAutomationUnavailableError(BriefingCliError):
+    def __init__(self, message: str = "Microsoft Word automation is unavailable") -> None:
+        from .exit_codes import NEEDS_REVIEW
+
+        super().__init__(
+            code="WORD_AUTOMATION_UNAVAILABLE",
+            message=message,
+            exit_code=NEEDS_REVIEW,
+        )
+
+
+class WordGenerationError(BriefingCliError):
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
+        from .exit_codes import SOURCE_ERROR
+
+        super().__init__(
+            code="WORD_GENERATION_FAILED",
+            message=message,
+            exit_code=SOURCE_ERROR,
+            details=details or {},
+        )
+
+
+class UnknownWordResultError(BriefingCliError):
+    def __init__(
+        self,
+        message: str = (
+            "Word automation timed out after one attempt; inspect current "
+            "outputs before retry"
+        ),
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        from .exit_codes import NEEDS_REVIEW
+
+        super().__init__(
+            code="WORD_RESULT_UNKNOWN",
+            message=message,
+            exit_code=NEEDS_REVIEW,
+            details=details or {},
+        )

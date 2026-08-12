@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 6 離線實作已完成；Task 4 正式頁驗證
-與 Task 6 JMA synthetic XML 回歸都通過，但 GitHub 遠端目前意外為 public，禁止
-push；第一次實際 JMA 預報讀取尚未執行。
+立益 Cowell 專用功能與說明會產生器 Task 8 離線實作已完成；LIST Word patch／QA
+程式與完整離線回歸都通過，但私有範本、Word COM 與視覺 QA 尚未執行，GitHub 遠端
+目前意外為 public，仍禁止 push。
 
 ## 這次做了什麼
 
@@ -238,8 +238,23 @@ push；第一次實際 JMA 預報讀取尚未執行。
   Yating integration tests；compileall、行寬檢查與 `git diff --check` 均通過。
 - 本次實作只使用 synthetic XML，沒有實際 JMA 預報 request、live response、Word
   COM、ffmpeg 安裝、完整音訊、LINE、Cowell access、部署或外部發布。
-- 2026-08-12 接續檢查：`git pull --ff-only` 回傳 `Already up to date.`；本機仍比
-  `origin/main` 多 3 個 Task 6 commits，工作樹當時乾淨。
+- 2026-08-12 經使用者指示繼續開發後，完成 Task 8 的離線 LIST Word 基礎：新增
+  `template_contract.py`、`word_list.py`、`word_qa.py`、Windows Word adapter、
+  patch／render PowerShell scripts，以及需顯式 opt-in 的私有範本 integration test。
+- LIST 契約驗證四表格、八個欄位錨點、合併格座標、四段標題、header QR
+  candidate、單 section、A4 portrait 與不含團務／PII 文字的 layout fingerprint；
+  5／6／7 天共用 master table 動態增減列，缺值保留黃色 `待 OP 確認`，安全縮寫後
+  仍過長即 blocked，不截斷內容。
+- Word adapter command line 只帶 OS temp job 路徑；所有權由 nonce、精確 WINWORD
+  PID 與 process start time 綁定。逾時只檢查一次暫存輸出、不 retry、不掃描或停止
+  其他 Word 程序。PowerShell scripts 為 ASCII-only，中文錨點只從 UTF-8 job 讀取。
+- PDF／PNG QA 程式要求單頁 A4、必要文字、非空文字與至少一個圖片物件，再以明確
+  設定的 `pdftoppm` 產生單張 150 DPI PNG；正式 DOCX 仍須逐頁人工看圖才能通過。
+- Task 8 新增 39 個單元測試；針對性回歸為 `39 passed in 0.78s`，最終完整離線回歸為
+  `309 passed, 3 skipped in 8.66s`。第三個 skip 是未授權的私有 LIST／Word
+  integration；本次未啟動 COM、未讀私有範本、未產生任何正式 Word／PDF／PNG。
+- 2026-08-12 接續檢查：`git pull --ff-only` 回傳 `Already up to date.`；本機比
+  `origin/main` 多 4 個 commits（Task 6 與 public remote 阻塞紀錄），工作樹當時乾淨。
 - 2026-08-12 由接手者重新執行完整離線回歸：`270 passed, 2 skipped in 8.56s`；
   compileall、Python 100 字元行寬檢查及 `git diff --check origin/main..HEAD` 通過，
   待推送範圍未發現產出檔、credentials 或旅客 PII。
@@ -252,11 +267,13 @@ push；第一次實際 JMA 預報讀取尚未執行。
 
 ## 下一步
 
-Task 6 離線實作已完成。下一步須由使用者明確核准將 GitHub repo 改回 private，或
-由使用者自行改回後通知；重新驗證 `PRIVATE` 後，再另行確認是否 push 本機 Task 6
-commits。若要驗證正式 JMA 電文，仍須再核准一次受限唯讀 GET，不與 visibility 或
-push 合併授權。Cowell 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP
-登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+Task 8 離線實作已完成但實機驗收尚未開始。下一步須由使用者明確核准將 GitHub repo
+改回 private，或由使用者自行改回後通知；重新驗證 `PRIVATE` 後，再另行確認是否
+push 本機 Task 6 與 Task 8 commits。若要實跑 Task 8，須另行核准啟動 Word COM、
+讀取已確認的私有 LIST 範本並逐頁視覺 QA；若要驗證正式 JMA 電文，仍須再核准一次
+受限唯讀 GET，這些關卡都不與 visibility 或 push 合併授權。Cowell 部分維持到立益
+公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status
+與 rooms preview。
 
 ## 阻塞點
 
@@ -266,12 +283,13 @@ apply 必須在公司環境針對最終 preview 另行取得當次明確核准�
 GitHub 遠端截至 2026-08-12 即時驗證為 public；這是目前 push 的首要阻塞。依私有
 產品與「不可把內容複製到公開處」規則，在 repo 重新驗證為 private 前不得 push。
 
-說明會產生器 Task 4／Task 5／Task 6 沒有 parser、merge 或離線天氣技術阻塞；
+說明會產生器 Task 4／Task 5／Task 6 與 Task 8 離線程式沒有 parser、merge、天氣或
+Word plan 技術阻塞；
 URL-only 正式頁已
 驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
 `product_region`，不能跳過此人工欄位。完整
 6–8 分鐘版本尚未產生；Task 6 JMA parser 與離線選擇邏輯已完成，但正式資料取得及
-LIST Word COM／視覺驗證仍未實作或端對端驗證。第一批 alias 只有 synthetic 大阪
+LIST Word COM／私有範本／視覺驗證仍未實跑或端對端驗證。第一批 alias 只有 synthetic 大阪
 案例；仙台、札幌等城市必須取得 JMA 預報區證據與測試後才能加入。掃描型無文字
 PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與

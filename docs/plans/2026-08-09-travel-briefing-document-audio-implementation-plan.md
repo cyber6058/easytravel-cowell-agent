@@ -381,6 +381,24 @@ Azure integration test，也沒有本 Task 的 implementation commit。未來若
 
 Commit：`feat(briefing): patch and validate LIST templates`
 
+離線實作紀錄（2026-08-12）：已將既有 `briefing-material-builder` 的四表格修補
+契約移入 repo，新增 5／6／7 天 patch plan、固定安全縮寫、黃色 `待 OP 確認`、
+來源不覆寫與 exclusive-create 輸出。Word adapter 只接收 OS temp 中的 UTF-8 job
+路徑，並以 nonce、精確 WINWORD PID 與 process start time 綁定所有權；逾時不 retry，
+且只能終止本次明確建立的 PID。PowerShell 腳本維持 ASCII-only，中文錨點由 UTF-8
+job JSON 傳入，避免 Windows PowerShell 5.1 的無 BOM UTF-8 解碼問題。
+
+範本契約現會驗證四表格、八個固定欄位錨點、合併格可存取座標、四段標題、
+header QR candidate、單 section、A4 portrait 與不含團務／PII 文字的 layout
+fingerprint。PDF QA 另檢查單頁 A4、必要文字、非空文字與圖片物件，再以明確設定的
+`pdftoppm` 產生單張 150 DPI PNG。Task 8 新增 39 個單元測試；完整離線回歸為
+`309 passed, 3 skipped in 8.66s`，第三個 skip 是需顯式 opt-in 且必須提供私有範本、
+已核准 fingerprint 與 pdftoppm 路徑的 Word integration test。
+
+本紀錄不代表 Task 8 正式驗收完成：本次沒有啟動 Word COM、沒有讀取私有 LIST
+範本，也沒有產生或人工查看 5／6／7 天 Word／PDF／PNG。實機 probe、三份私有
+範本 integration 與逐頁視覺 QA 仍是獨立核准關卡；正式驗收不能以目前 skip 取代。
+
 ## Task 9：端對端 workflow、產出與正式確認
 
 ### 檔案
@@ -485,9 +503,9 @@ git status --short
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。
-- 下一個安全入口是取得 Task 6 commits 的 push 核准；之後若要做第一次實際 JMA
-  預報唯讀驗證，仍須另行明確核准。Task 8 Word COM 與私有 LIST 範本也維持獨立
-  關卡。
+- Task 8 離線程式已完成，但 Word COM、私有 LIST 範本與視覺 QA 仍未執行。下一個
+  外部入口須先解除 public GitHub remote 的 push 阻塞；實際 JMA 預報、Task 8
+  integration 與 push 仍各自需要明確核准，不能合併推定。
 
 ## 實作核准關卡
 
