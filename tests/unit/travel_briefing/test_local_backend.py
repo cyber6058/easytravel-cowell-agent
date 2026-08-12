@@ -1,19 +1,46 @@
 import json
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from travel_briefing.config import BriefingConfig
+from tests.unit.travel_briefing.test_list_calibration import manifest
 from travel_briefing.models import BriefingDraft, DraftStatus, Flight, Product
 from travel_briefing.workflow import LocalRenderBackend
 
 
 def config(tmp_path, *, with_ffmpeg=True):
+    master = tmp_path / "LIST-master.docx"
+    master.write_bytes(b"synthetic master")
+    calibrated = manifest()
+    manifest_path = tmp_path / "calibration-manifest.json"
+    calibrated_payload = calibrated.to_dict()
+    master_hash = hashlib.sha256(master.read_bytes()).hexdigest()
+    calibrated_payload["master_sha256"] = master_hash
+    manifest_text = json.dumps(
+        calibrated_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    manifest_path.write_text(manifest_text, encoding="utf-8")
     return BriefingConfig(
         output_root=tmp_path / "briefings",
-        template_path=tmp_path / "LIST.doc",
-        template_layout_fingerprint="a" * 64,
+        master_path=master,
+        calibration_manifest_path=manifest_path,
+        master_sha256=master_hash,
+        calibration_manifest_sha256=hashlib.sha256(
+            manifest_path.read_bytes()
+        ).hexdigest(),
+        master_structure_fingerprint=(
+            calibrated.master_structure_fingerprint
+        ),
+        layout_profiles=tuple(
+            item.to_dict() for item in calibrated.layout_profiles
+        ),
+        calibration_manifest=type(calibrated).from_dict(calibrated_payload),
         ffmpeg_path=(tmp_path / "ffmpeg.exe") if with_ffmpeg else None,
         pdftoppm_path=tmp_path / "pdftoppm.exe",
     )
@@ -103,7 +130,19 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
     assert evidence.page_count == 2
     assert len(evidence.page_sha256s) == 2
     assert evidence.qr_image_count == 2
-    assert calls["build"][1]["template_path"] == value.template_path
+    assert calls["build"][1]["template_path"] == value.master_path
+    assert calls["build"][1]["master_sha256"] == value.master_sha256
+    assert calls["build"][1]["calibration_manifest_sha256"] == (
+        value.calibration_manifest_sha256
+    )
+    assert calls["build"][1]["normalized_structure_fingerprint"] == (
+        value.master_structure_fingerprint
+    )
+    assert calls["build"][1]["layout_profiles"] == value.layout_profiles
+    assert evidence.master_sha256 == value.master_sha256
+    assert evidence.calibration_manifest_sha256 == (
+        value.calibration_manifest_sha256
+    )
     assert calls["qa"][1]["required_text"] == ("SYN-OSA-260901", "SY100")
     assert calls["qa"][1]["pdftoppm_path"] == value.pdftoppm_path
 

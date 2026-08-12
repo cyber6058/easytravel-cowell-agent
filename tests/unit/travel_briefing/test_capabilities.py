@@ -2,10 +2,13 @@ import subprocess
 
 from travel_briefing import capabilities
 from travel_briefing.capabilities import (
+    list_calibration_check,
     configured_executable,
     tool_check,
     yating_registered,
 )
+from tests.unit.travel_briefing.test_briefing_config import valid_config
+from travel_briefing.config import parse_config
 
 
 class YatingProbeRunner:
@@ -83,3 +86,20 @@ def test_yating_probe_fails_closed_on_ambiguous_output(monkeypatch):
     monkeypatch.setattr(capabilities.sys, "platform", "win32")
 
     assert yating_registered(runner=runner) is False
+
+
+def test_list_calibration_capability_is_hash_only_and_offline(tmp_path):
+    config = parse_config(valid_config(tmp_path))
+
+    assert list_calibration_check(config) == {
+        "status": "ok",
+        "schema_version": 2,
+        "generator_version": "list-calibration/2",
+        "master_sha256_matches": True,
+        "normalized_structure_fingerprint": True,
+    }
+
+    config.master_path.write_bytes(b"changed")
+    check = list_calibration_check(config)
+    assert check["status"] == "changed"
+    assert str(config.master_path) not in str(check)

@@ -1,12 +1,12 @@
 # Copy to %LOCALAPPDATA%\EasyTravelBriefing\config.toml and use local paths.
-# Never commit the private LIST template or generated briefing artifacts.
+# Never commit the private LIST master, calibration manifest, or artifacts.
 
 [output]
 root = "C:\\EasyTravel\\output\\briefings"
 
 [template]
-path = "C:\\EasyTravel\\private\\LIST-template.doc"
-layout_fingerprint = "0000000000000000000000000000000000000000000000000000000000000000"
+master_path = "C:\\EasyTravel\\private\\LIST-master.docx"
+calibration_manifest = "C:\\EasyTravel\\private\\calibration-manifest.json"
 
 [tools]
 pdftoppm = "C:\\Program Files\\poppler\\bin\\pdftoppm.exe"

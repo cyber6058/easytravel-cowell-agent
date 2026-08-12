@@ -14,6 +14,7 @@ from typing import Any, Sequence
 from . import __version__
 from .capabilities import (
     hanhan_registered,
+    list_calibration_check,
     tool_check,
     word_com_registered,
     yating_registered,
@@ -21,6 +22,8 @@ from .capabilities import (
 from .errors import BriefingCliError, BriefingInputError
 from .exit_codes import INTERNAL_ERROR, NEEDS_REVIEW, SUCCESS
 from .config import load_config
+from .list_calibration import calibrate_list_templates
+from .adapters.windows_word import WindowsWordAdapter
 from .models import BriefingDraft, DraftStatus
 from .workflow import (
     LocalRenderBackend,
@@ -53,8 +56,25 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     doctor = subparsers.add_parser("doctor", help="Check local briefing capabilities")
+    doctor.add_argument("--config", type=Path)
     doctor.add_argument("--format", choices=("text", "json"), default="text")
     doctor.set_defaults(handler=run_doctor)
+
+    calibrate = subparsers.add_parser(
+        "calibrate-list",
+        help="Create one private calibrated LIST master",
+    )
+    calibrate.add_argument(
+        "--sample",
+        action="append",
+        type=Path,
+        required=True,
+    )
+    calibrate.add_argument("--private-dir", type=Path, required=True)
+    calibrate.add_argument("--pdftoppm", type=Path, required=True)
+    calibrate.add_argument("--generated-at")
+    calibrate.add_argument("--format", choices=("text", "json"), default="text")
+    calibrate.set_defaults(handler=run_calibrate_list)
 
     prepare = subparsers.add_parser("prepare", help="Create a reviewable manifest")
     prepare.add_argument("--url")
@@ -85,7 +105,6 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--script", type=Path, required=True)
     render.add_argument("--config", type=Path)
     render.add_argument("--output-dir", type=Path)
-    render.add_argument("--template", type=Path)
     render.add_argument("--tts", choices=("yating",), default="yating")
     render.add_argument("--confirm-draft-id")
     render.add_argument("--generated-at")
@@ -94,10 +113,20 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_doctor(_: argparse.Namespace) -> dict[str, Any]:
+def run_doctor(args: argparse.Namespace) -> dict[str, Any]:
     yating_available = yating_registered()
     hanhan_available = hanhan_registered()
     word_registered = word_com_registered()
+    config = None
+    calibration_configured = False
+    calibration_status = "missing"
+    try:
+        config = load_config(getattr(args, "config", None))
+        calibration_configured = True
+    except BriefingCliError as error:
+        reported = error.details.get("status")
+        if isinstance(reported, str):
+            calibration_status = reported
     checks = {
         "python": {
             "status": "ok" if sys.version_info >= (3, 12) else "error",
@@ -132,14 +161,22 @@ def run_doctor(_: argparse.Namespace) -> dict[str, Any]:
             "registered": word_registered,
             "probe": "registry_only",
         },
-        "pdftoppm": tool_check("pdftoppm"),
+        "pdftoppm": tool_check(
+            "pdftoppm",
+            str(config.pdftoppm_path) if config else None,
+        ),
+        "list_calibration": list_calibration_check(
+            config,
+            configured=calibration_configured,
+            failure_status=calibration_status,
+        ),
     }
     statuses = {check["status"] for check in checks.values()}
     status = (
         "error"
         if "error" in statuses
         else "warning"
-        if "warning" in statuses
+        if {"warning", "missing", "changed", "unsupported"} & statuses
         else "ok"
     )
     return {
@@ -147,6 +184,70 @@ def run_doctor(_: argparse.Namespace) -> dict[str, Any]:
         "status": status,
         "command": "doctor",
         "checks": checks,
+    }
+
+
+def run_calibrate_list(args: argparse.Namespace) -> dict[str, Any]:
+    samples = tuple(path.expanduser().resolve() for path in args.sample)
+    if len(samples) != 3 or len(set(samples)) != 3:
+        raise BriefingInputError(
+            "calibrate-list requires exactly three unique samples"
+        )
+    if any(
+        not path.is_file() or path.suffix.casefold() not in {".doc", ".docx"}
+        for path in samples
+    ):
+        raise BriefingInputError(
+            "calibrate-list samples must be existing DOC or DOCX files"
+        )
+    private = args.private_dir.expanduser().resolve()
+    if private.exists():
+        raise BriefingInputError(
+            "calibrate-list private directory must not exist"
+        )
+    pdftoppm = args.pdftoppm.expanduser().resolve()
+    if not pdftoppm.is_file():
+        raise BriefingInputError(
+            "calibrate-list pdftoppm must be an existing executable"
+        )
+    try:
+        private.mkdir(parents=True)
+        result = calibrate_list_templates(
+            samples,
+            master_path=private / "LIST-master.docx",
+            manifest_path=private / "calibration-manifest.json",
+            adapter=WindowsWordAdapter(
+                script_path=(
+                    _briefing_scripts_root()
+                    / "patch_list_template.ps1"
+                )
+            ),
+            created_at=_generated_at(args.generated_at),
+            timeout_seconds=180,
+        )
+    except Exception:
+        try:
+            if private.is_dir() and not any(private.iterdir()):
+                private.rmdir()
+        except OSError:
+            pass
+        raise
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": "ok",
+        "command": "calibrate-list",
+        "master_path": str(result.master_path),
+        "calibration_manifest": str(result.manifest_path),
+        "master_sha256": result.master_sha256,
+        "calibration_manifest_sha256": result.manifest_sha256,
+        "samples": [
+            {
+                "sha256": item.source_sha256,
+                "day_count": item.day_count,
+            }
+            for item in result.sample_evidence
+        ],
+        "word_version": result.word_version,
     }
 
 
@@ -206,16 +307,6 @@ def run_render(args: argparse.Namespace) -> dict[str, Any]:
         config = load_config(args.config)
         if args.output_dir is not None:
             config = replace(config, output_root=args.output_dir.expanduser().resolve())
-        if args.template is not None:
-            template = args.template.expanduser().resolve()
-            if not template.is_file() or template.suffix.casefold() not in {
-                ".doc",
-                ".docx",
-            }:
-                raise BriefingInputError(
-                    "render --template must be an existing DOC or DOCX"
-                )
-            config = replace(config, template_path=template)
         output_root = config.output_root
         backend = LocalRenderBackend.from_config(
             config,
@@ -260,6 +351,8 @@ def render_text(payload: dict[str, Any]) -> str:
         "review",
         "narration_input",
         "report",
+        "master_path",
+        "calibration_manifest",
     ):
         if name in payload:
             lines.append(f"- {name}: {payload[name]}")

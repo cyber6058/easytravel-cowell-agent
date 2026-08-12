@@ -50,7 +50,7 @@ from .word_list import build_list_word
 from .word_qa import render_list_word_for_qa
 
 
-WORKFLOW_VERSION = "briefing-workflow/1"
+WORKFLOW_VERSION = "travel-briefing/0.2.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +76,8 @@ class WordRenderEvidence:
     qr_image_count: int
     qa_index_sha256: str
     page_sha256s: tuple[str, ...]
+    master_sha256: str = ""
+    calibration_manifest_sha256: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,11 +151,16 @@ class LocalRenderBackend:
     ) -> WordRenderEvidence:
         built = build_list_word(
             draft,
-            template_path=self.config.template_path,
+            template_path=self.config.master_path,
             output_docx=output_docx,
-            expected_layout_fingerprint=(
-                self.config.template_layout_fingerprint
+            master_sha256=self.config.master_sha256,
+            calibration_manifest_sha256=(
+                self.config.calibration_manifest_sha256
             ),
+            normalized_structure_fingerprint=(
+                self.config.master_structure_fingerprint
+            ),
+            layout_profiles=self.config.layout_profiles,
             adapter=self.patch_adapter,
         )
         required_text = tuple(
@@ -196,6 +203,10 @@ class LocalRenderBackend:
             qa_index_sha256=qa.qa_index_sha256,
             page_sha256s=tuple(
                 _sha256_file(path) for path in qa.png_paths
+            ),
+            master_sha256=self.config.master_sha256,
+            calibration_manifest_sha256=(
+                self.config.calibration_manifest_sha256
             ),
         )
 
@@ -474,6 +485,12 @@ def _render_draft(
                 or word_evidence.qr_image_count < 1
                 or len(word_evidence.page_sha256s)
                 != word_evidence.page_count
+                or not _valid_sha256_or_legacy_empty(
+                    word_evidence.master_sha256
+                )
+                or not _valid_sha256_or_legacy_empty(
+                    word_evidence.calibration_manifest_sha256
+                )
             ):
                 raise ValueError(
                     "Word QA evidence did not prove every page with first-page QR"
@@ -492,6 +509,10 @@ def _render_draft(
             _validate_word_qa_index(
                 paths["word_qa_index"],
                 page_paths=page_paths,
+                evidence=word_evidence,
+            )
+            _write_word_render_evidence(
+                paths["word_evidence"],
                 evidence=word_evidence,
             )
             word_accepted = True
@@ -648,6 +669,7 @@ def _confirm_render(
         raise BriefingInputError("Confirmation contains unresolved OP fields")
     static_required_kinds = {
         "word",
+        "word_evidence",
         "word_qa",
         "word_qa_index",
         "audio_wav",
@@ -683,6 +705,11 @@ def _confirm_render(
     ):
         raise BriefingInputError("Confirmation requires completed Word and audio QA")
     _validate_recorded_word_qa_artifacts(
+        source_run,
+        completed=completed,
+        page_kinds=page_kinds,
+    )
+    _validate_recorded_word_evidence(
         source_run,
         completed=completed,
         page_kinds=page_kinds,
@@ -865,6 +892,12 @@ def _prepare_artifacts(run: Path, product_code: str) -> tuple[Artifact, ...]:
             WORKFLOW_VERSION,
         ),
         ("word", f"{prefix}_說明會資料.docx", "missing", "list-word/2"),
+        (
+            "word_evidence",
+            "qa/word-evidence.json",
+            "missing",
+            "list-word/2",
+        ),
         ("word_qa", f"{prefix}_Word-QA.pdf", "missing", "list-word/2"),
         (
             "word_qa_index",
@@ -901,6 +934,7 @@ def _render_paths(run: Path, prefix: str) -> dict[str, Path]:
         "word_qa_pdf": run / f"{prefix}_Word-QA.pdf",
         "word_qa_directory": run / "qa",
         "word_qa_index": run / "qa" / "index.json",
+        "word_evidence": run / "qa" / "word-evidence.json",
         "audio_mp3": run / f"{prefix}_說明會語音.mp3",
         "audio_wav": run / f"{prefix}_說明會語音.wav",
         "transcript": run / f"{prefix}_逐字稿.txt",
@@ -926,6 +960,17 @@ def _word_artifacts(
                 "completed"
                 if accepted
                 else _incomplete_status(paths["word"])
+            ),
+            generator_version=version,
+        ),
+        artifact_record(
+            run,
+            kind="word_evidence",
+            expected_name="qa/word-evidence.json",
+            status=(
+                "completed"
+                if accepted
+                else _incomplete_status(paths["word_evidence"])
             ),
             generator_version=version,
         ),
@@ -1176,6 +1221,82 @@ def _validate_recorded_word_qa_artifacts(
         )
 
 
+def _write_word_render_evidence(
+    path: Path,
+    *,
+    evidence: WordRenderEvidence,
+) -> None:
+    payload = {
+        "schema_version": 2,
+        "generator_version": evidence.generator_version,
+        "master_sha256": evidence.master_sha256,
+        "calibration_manifest_sha256": (
+            evidence.calibration_manifest_sha256
+        ),
+        "page_count": evidence.page_count,
+        "qr_image_count": evidence.qr_image_count,
+        "qa_index_sha256": evidence.qa_index_sha256,
+        "page_sha256s": list(evidence.page_sha256s),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8", newline="\n") as stream:
+        stream.write(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        )
+
+
+def _validate_recorded_word_evidence(
+    run: Path,
+    *,
+    completed: Mapping[str, Artifact],
+    page_kinds: tuple[str, ...],
+) -> None:
+    record = completed["word_evidence"]
+    try:
+        payload = json.loads(
+            (run / record.actual_path).read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise BriefingInputError("Word render evidence is invalid") from error
+    expected_keys = {
+        "schema_version",
+        "generator_version",
+        "master_sha256",
+        "calibration_manifest_sha256",
+        "page_count",
+        "qr_image_count",
+        "qa_index_sha256",
+        "page_sha256s",
+    }
+    pages = payload.get("page_sha256s") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != expected_keys
+        or payload.get("schema_version") != 2
+        or payload.get("generator_version") != record.generator_version
+        or not _valid_sha256(payload.get("master_sha256"))
+        or not _valid_sha256(payload.get("calibration_manifest_sha256"))
+        or payload.get("page_count") != len(page_kinds)
+        or isinstance(payload.get("qr_image_count"), bool)
+        or not isinstance(payload.get("qr_image_count"), int)
+        or payload["qr_image_count"] < 1
+        or not isinstance(pages, list)
+        or pages
+        != [completed[kind].sha256 for kind in page_kinds]
+        or payload.get("qa_index_sha256")
+        != completed["word_qa_index"].sha256
+    ):
+        raise BriefingInputError(
+            "Word render evidence does not match recorded artifacts"
+        )
+
+
 def _load_audio_metadata(path: Path) -> dict[str, object]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -1239,6 +1360,7 @@ def _validate_renderable_source_state(draft: BriefingDraft) -> None:
         "word",
         "word_qa",
         "word_qa_index",
+        "word_evidence",
         "audio_wav",
         "audio_mp3",
         "transcript",
@@ -1284,3 +1406,15 @@ def _sha256_file(path: Path) -> str:
         while chunk := stream.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _valid_sha256_or_legacy_empty(value: str) -> bool:
+    return value == "" or (
+        len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+        and value != "0" * 64
+    )
+
+
+def _valid_sha256(value: object) -> bool:
+    return isinstance(value, str) and _valid_sha256_or_legacy_empty(value) and bool(value)

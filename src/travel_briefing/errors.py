@@ -27,6 +27,21 @@ class BriefingInputError(BriefingCliError):
         )
 
 
+class ListRecalibrationRequiredError(BriefingInputError):
+    def __init__(self, *, status: str = "changed") -> None:
+        if status not in {"missing", "changed", "unsupported"}:
+            status = "changed"
+        super().__init__(
+            (
+                "LIST_RECALIBRATION_REQUIRED: run briefing calibrate-list "
+                "and update template.master_path plus "
+                "template.calibration_manifest"
+            ),
+            {"status": status},
+        )
+        self.code = "LIST_RECALIBRATION_REQUIRED"
+
+
 class BriefingSourceError(BriefingCliError):
     def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         from .exit_codes import SOURCE_ERROR

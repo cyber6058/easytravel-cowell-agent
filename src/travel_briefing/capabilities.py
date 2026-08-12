@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable
+
+from .config import BriefingConfig
 
 
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -61,6 +64,60 @@ def tool_check(
         "usable": usable,
         "configured_path": bool(configured_path),
         "discovery": discovery,
+    }
+
+
+def list_calibration_check(
+    config: BriefingConfig | None,
+    *,
+    configured: bool = True,
+    failure_status: str = "missing",
+) -> dict[str, Any]:
+    if not configured or config is None:
+        status = (
+            failure_status
+            if failure_status in {"missing", "changed", "unsupported"}
+            else "missing"
+        )
+        return {
+            "status": status,
+            "schema_version": 2,
+            "generator_version": "list-calibration/2",
+            "master_sha256_matches": False,
+            "normalized_structure_fingerprint": False,
+        }
+    manifest = config.calibration_manifest
+    try:
+        actual_master_hash = _sha256_file(config.master_path)
+        actual_manifest_hash = _sha256_file(
+            config.calibration_manifest_path
+        )
+    except OSError:
+        status = "missing"
+    else:
+        if (
+            manifest.schema_version != 2
+            or manifest.generator_version != "list-calibration/2"
+        ):
+            status = "unsupported"
+        elif (
+            actual_master_hash != config.master_sha256
+            or actual_master_hash != manifest.master_sha256
+            or actual_manifest_hash
+            != config.calibration_manifest_sha256
+        ):
+            status = "changed"
+        else:
+            status = "ok"
+    return {
+        "status": status,
+        "schema_version": 2,
+        "generator_version": "list-calibration/2",
+        "master_sha256_matches": status == "ok",
+        "normalized_structure_fingerprint": (
+            status == "ok"
+            and bool(config.master_structure_fingerprint)
+        ),
     }
 
 
@@ -157,3 +214,11 @@ def _registry_children_contain(path: str, needle: str) -> bool:
                 index += 1
     except (ImportError, OSError):
         return False
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()

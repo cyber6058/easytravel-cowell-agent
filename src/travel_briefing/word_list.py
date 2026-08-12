@@ -375,7 +375,10 @@ def build_list_word(
     *,
     template_path: Path,
     output_docx: Path,
-    expected_layout_fingerprint: str,
+    expected_layout_fingerprint: str | None = None,
+    master_sha256: str | None = None,
+    calibration_manifest_sha256: str | None = None,
+    normalized_structure_fingerprint: str | None = None,
     layout_profiles: tuple[dict[str, Any], ...] | None = None,
     adapter: WordAdapter,
     timeout_seconds: int = 120,
@@ -395,9 +398,21 @@ def build_list_word(
         raise ValueError("LIST output must not already exist")
     if timeout_seconds <= 0:
         raise ValueError("Word generation timeout must be positive")
+    actual_master_sha256 = _sha256_file(template)
+    configured_master_sha256 = _validate_fingerprint(
+        master_sha256 or expected_layout_fingerprint or ""
+    )
+    if (
+        master_sha256 is not None
+        and actual_master_sha256 != configured_master_sha256
+    ):
+        raise ValueError("LIST master SHA-256 changed before Word generation")
     plan = build_list_patch_plan(
         draft,
         expected_layout_fingerprint=expected_layout_fingerprint,
+        master_sha256=configured_master_sha256,
+        calibration_manifest_sha256=calibration_manifest_sha256,
+        normalized_structure_fingerprint=normalized_structure_fingerprint,
         layout_profiles=layout_profiles,
         route_character_limit=route_character_limit,
     )
@@ -450,7 +465,9 @@ def build_list_word(
         source_fingerprint = validate_list_template(
             source_inspection,
             day_count=source_day_count,
-            expected_layout_fingerprint=expected_layout_fingerprint,
+            expected_layout_fingerprint=layout_fingerprint(
+                source_inspection
+            ),
         )
         output_inspection = report["output_inspection"]
         output_fingerprint = layout_fingerprint(output_inspection)
@@ -464,6 +481,11 @@ def build_list_word(
             != source_inspection.header_qr_candidate_count
         ):
             raise ValueError("LIST output did not preserve the template QR candidate")
+        if (
+            master_sha256 is not None
+            and _sha256_file(template) != configured_master_sha256
+        ):
+            raise ValueError("LIST master changed during Word generation")
         _copy_exclusive(temporary_docx, output)
     return ListWordBuildResult(
         docx_path=output,

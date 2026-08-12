@@ -72,6 +72,7 @@ def test_prepare_from_supplied_html_creates_a_new_reviewable_version(tmp_path):
     assert artifacts["review"]["status"] == "completed"
     assert artifacts["narration_input"]["status"] == "completed"
     assert artifacts["word"]["status"] == "missing"
+    assert artifacts["word_evidence"]["status"] == "missing"
     assert artifacts["word_qa"]["status"] == "missing"
     assert artifacts["word_qa_index"]["status"] == "missing"
     assert not any(
@@ -328,6 +329,8 @@ class SyntheticRenderBackend:
                 output_qa_index.read_bytes()
             ).hexdigest(),
             page_sha256s=tuple(page_hashes),
+            master_sha256="a" * 64,
+            calibration_manifest_sha256="b" * 64,
         )
 
     def render_audio(
@@ -377,12 +380,24 @@ def test_render_builds_a_new_draft_then_confirms_without_rerunning_generators(
     assert backend.audio_calls == 1
     statuses = {item.kind: item.status for item in draft_render.draft.artifacts}
     assert statuses["word"] == "completed"
+    assert statuses["word_evidence"] == "completed"
     assert statuses["word_qa"] == "completed"
     assert statuses["word_qa_index"] == "completed"
     assert statuses["word_qa_page_001"] == "completed"
     assert statuses["word_qa_page_002"] == "completed"
     assert statuses["audio_wav"] == "completed"
     assert statuses["audio_mp3"] == "completed"
+    word_evidence = json.loads(
+        (
+            draft_render.run_directory
+            / "qa"
+            / "word-evidence.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert word_evidence["master_sha256"] == "a" * 64
+    assert word_evidence["calibration_manifest_sha256"] == "b" * 64
+    assert word_evidence["page_count"] == 2
+    assert word_evidence["qa_index_sha256"]
     script_check = json.loads(
         (draft_render.run_directory / "script-check.json").read_text(
             encoding="utf-8"
@@ -420,6 +435,7 @@ def test_render_builds_a_new_draft_then_confirms_without_rerunning_generators(
         "narration_input",
         "script_check",
         "word_qa_index",
+        "word_evidence",
         "word_qa_page_001",
         "word_qa_page_002",
     } <= set(confirmed_artifacts)
@@ -634,6 +650,7 @@ def test_confirmation_rejects_legacy_single_png_qa_manifest(tmp_path):
         artifact
         for artifact in source.artifacts
         if artifact.kind not in {
+            "word_evidence",
             "word_qa_index",
             "word_qa_page_001",
             "word_qa_page_002",

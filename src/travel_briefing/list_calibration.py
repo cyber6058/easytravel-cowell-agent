@@ -653,6 +653,7 @@ class ListCalibrationBuildResult:
     master_sha256: str
     manifest_sha256: str
     word_version: str
+    sample_evidence: tuple[CalibrationSampleEvidence, ...]
 
 
 def inspect_list_templates_v2(
@@ -809,8 +810,9 @@ def calibrate_list_templates(
         master_path=master,
         manifest_path=manifest_destination,
         master_sha256=master_hash,
-        manifest_sha256=manifest_sha256(calibration_manifest),
+        manifest_sha256=_sha256_file(manifest_destination),
         word_version=report["word_version"],
+        sample_evidence=calibration_manifest.sample_evidence,
     )
 
 

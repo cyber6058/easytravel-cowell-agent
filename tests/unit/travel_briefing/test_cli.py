@@ -34,6 +34,7 @@ def test_doctor_reports_offline_capabilities_without_exposing_secrets(
         "ffmpeg",
         "word_com",
         "pdftoppm",
+        "list_calibration",
     }
     assert payload["checks"]["yating"] == {
         "status": "ok",
@@ -110,10 +111,27 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
     rendered = parser.parse_args(
         ["render", "--manifest", "manifest.json", "--script", "script.txt"]
     )
+    calibrated = parser.parse_args(
+        [
+            "calibrate-list",
+            "--sample",
+            "one.doc",
+            "--sample",
+            "two.doc",
+            "--sample",
+            "three.docx",
+            "--private-dir",
+            "private",
+            "--pdftoppm",
+            "pdftoppm.exe",
+        ]
+    )
 
     assert prepared.command == "prepare"
     assert checked.command == "check-script"
     assert rendered.tts == "yating"
+    assert calibrated.command == "calibrate-list"
+    assert not hasattr(rendered, "template")
     with pytest.raises(cli.BriefingInputError):
         parser.parse_args(
             [
@@ -126,6 +144,136 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
                 "hanhan",
             ]
         )
+    with pytest.raises(cli.BriefingInputError):
+        parser.parse_args(
+            [
+                "render",
+                "--manifest",
+                "manifest.json",
+                "--script",
+                "script.txt",
+                "--template",
+                "LIST.doc",
+            ]
+        )
+
+
+def test_calibrate_list_cli_uses_exact_three_samples_and_safe_json(
+    monkeypatch, capsys, tmp_path
+):
+    samples = []
+    for number in range(1, 4):
+        path = tmp_path / f"private-source-{number}.doc"
+        path.write_bytes(f"source-{number}".encode())
+        samples.append(path)
+    pdftoppm = tmp_path / "pdftoppm.exe"
+    pdftoppm.write_bytes(b"synthetic")
+    private = tmp_path / "new-private"
+    captured = {}
+
+    def calibrate(paths, **kwargs):
+        captured.update(paths=paths, **kwargs)
+        master = private / "LIST-master.docx"
+        manifest_path = private / "calibration-manifest.json"
+        master.write_bytes(b"master")
+        manifest_path.write_text("{}", encoding="utf-8")
+        return SimpleNamespace(
+            master_path=master,
+            manifest_path=manifest_path,
+            master_sha256="a" * 64,
+            manifest_sha256="b" * 64,
+            sample_evidence=tuple(
+                SimpleNamespace(
+                    source_sha256=character * 64,
+                    day_count=day_count,
+                )
+                for character, day_count in zip("cde", (5, 6, 7))
+            ),
+            word_version="16.0-synthetic",
+        )
+
+    monkeypatch.setattr(cli, "calibrate_list_templates", calibrate)
+    exit_code = cli.main(
+        [
+            "calibrate-list",
+            *sum((["--sample", str(path)] for path in samples), []),
+            "--private-dir",
+            str(private),
+            "--pdftoppm",
+            str(pdftoppm),
+            "--generated-at",
+            "2026-08-13T09:00:00+08:00",
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload == {
+        "schema_version": 1,
+        "status": "ok",
+        "command": "calibrate-list",
+        "master_path": str(private / "LIST-master.docx"),
+        "calibration_manifest": str(
+            private / "calibration-manifest.json"
+        ),
+        "master_sha256": "a" * 64,
+        "calibration_manifest_sha256": "b" * 64,
+        "samples": [
+            {"sha256": "c" * 64, "day_count": 5},
+            {"sha256": "d" * 64, "day_count": 6},
+            {"sha256": "e" * 64, "day_count": 7},
+        ],
+        "word_version": "16.0-synthetic",
+    }
+    output = json.dumps(payload)
+    assert all(path.name not in output for path in samples)
+    assert captured["adapter"].script_path.name == (
+        "patch_list_template.ps1"
+    )
+
+
+def test_calibrate_list_rejects_existing_private_dir_before_word(tmp_path):
+    private = tmp_path / "private"
+    private.mkdir()
+    samples = tuple(tmp_path / f"sample-{number}.doc" for number in range(3))
+    for sample in samples:
+        sample.write_bytes(b"synthetic")
+    pdftoppm = tmp_path / "pdftoppm.exe"
+    pdftoppm.write_bytes(b"synthetic")
+    args = SimpleNamespace(
+        sample=samples,
+        private_dir=private,
+        pdftoppm=pdftoppm,
+        generated_at="2026-08-13T09:00:00+08:00",
+    )
+
+    with pytest.raises(cli.BriefingInputError, match="must not exist"):
+        cli.run_calibrate_list(args)
+
+
+def test_doctor_preserves_changed_calibration_status_without_private_paths(
+    monkeypatch,
+):
+    private_path = r"C:\private\LIST-master.docx"
+    error = cli.BriefingInputError(
+        "LIST_RECALIBRATION_REQUIRED",
+        {"status": "changed", "path": private_path},
+    )
+    monkeypatch.setattr(
+        cli,
+        "load_config",
+        lambda _: (_ for _ in ()).throw(error),
+    )
+    monkeypatch.setattr(cli, "yating_registered", lambda: False)
+    monkeypatch.setattr(cli, "hanhan_registered", lambda: False)
+    monkeypatch.setattr(cli, "word_com_registered", lambda: False)
+
+    payload = cli.run_doctor(SimpleNamespace(config=None))
+
+    assert payload["checks"]["list_calibration"]["status"] == "changed"
+    assert private_path not in json.dumps(payload)
 
 
 def test_invalid_cli_arguments_return_the_stable_input_error_code(capsys):
