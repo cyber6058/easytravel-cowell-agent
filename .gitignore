@@ -15,6 +15,15 @@ config.toml
 *.lock
 browser-profile/
 
+# Briefing local state and transient adapter jobs
+briefing-state/
+.briefing/
+briefing-tmp-*/
+word-job.json
+word-owner.json
+speech-job.json
+bookmarks.json
+
 # Passenger PII and generated business files
 travelers*.json
 passport*/
@@ -30,10 +39,16 @@ outputs/
 *.bmp
 *.webp
 *.pdf
+*.doc
 *.docx
+*.wav
+*.mp3
+*.srt
+*_逐字稿.txt
 *.xlsx
 *.xls
 *.csv
 
 # Explicitly keep repository documentation and examples
 !config/config.example.toml
+!config/briefing.example.toml

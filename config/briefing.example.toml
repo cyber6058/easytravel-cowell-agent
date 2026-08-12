@@ -1,0 +1,14 @@
+# Copy to %LOCALAPPDATA%\EasyTravelBriefing\config.toml and use local paths.
+# Never commit the private LIST template or generated briefing artifacts.
+
+[output]
+root = "C:\\EasyTravel\\output\\briefings"
+
+[template]
+path = "C:\\EasyTravel\\private\\LIST-template.doc"
+layout_fingerprint = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[tools]
+pdftoppm = "C:\\Program Files\\poppler\\bin\\pdftoppm.exe"
+# Omit ffmpeg until an existing executable path is approved and configured.
+# ffmpeg = "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe"
