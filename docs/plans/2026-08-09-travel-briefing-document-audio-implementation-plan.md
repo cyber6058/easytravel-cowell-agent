@@ -436,7 +436,7 @@ PII 與 secret 掃描均通過。本次沒有 live URL／JMA request、私有範
 ffmpeg 安裝、LINE、Cowell、部署或外部發布；GitHub visibility 依使用者指示維持現況，
 因此沒有 push。
 
-## Task 10：建立 Codex／Claude 對話 Skill 與 0.1.0 安裝包
+## Task 10：建立 Codex／Claude 對話 Skill 與 0.1.0 安裝包（已完成）
 
 ### 檔案
 
@@ -465,6 +465,15 @@ ffmpeg 安裝、LINE、Cowell、部署或外部發布；GitHub visibility 依使
 6. 執行 Skill validator、plugin validator、build，並計算 zip SHA-256。
 
 Commit：`build(briefing): package conversational workflow`
+
+2026-08-12 Task 10 已本機完成並提交為 `0daf457`。canonical Skill、Codex plugin、
+Claude Skill、獨立 briefing pyproject／installer 與 allowlist build 均已建立；三份
+Skill validator 與 plugin validator 通過。最終完整離線回歸為
+`365 passed, 3 skipped in 15.74s`；`EasyTravel-Briefing-Materials-0.1.0.zip` 的 SHA-256
+為 `14db8cc9e7e8ce9c90eec37a62069b59f018f940674e795c18f88339b4ab93e5`。ZIP 共
+67 個 archive entries，allowlist 與 secret pattern scan 均通過。本次沒有安裝套件、
+讀取私有範本、啟動 Word COM／Yating、安裝 ffmpeg、發出 live request、傳 LINE、
+存取 Cowell、部署、發布或 push；GitHub visibility 依使用者指示維持現況。
 
 ## Task 11：三區域驗收與交付
 
@@ -506,10 +515,10 @@ git status --short
 
 ## 計畫自檢
 
-- 12 個 Task headings：5 個已完成、1 個已完成 live 契約離線修復但待正式頁重驗、
-  1 個已取消、5 個尚待執行。
-- 12 個 commit 邊界：6 個既有 implementation commits、1 個新增的 Task 4 live
-  契約修復邊界、5 個後續小步 commits；取消的 Task 7 沒有 implementation commit。
+- 12 個 Task headings：9 個已完成或離線實作完成、1 個 live parser 已驗收但產品區域
+  仍需 OP 決定、1 個已取消、1 個尚待執行。
+- Task 10 的 implementation commit 已完成；Task 11 的實機驗收與最終文件 commit
+  仍待各自關卡核准。取消的 Task 7 沒有 implementation commit。
 - 0 個未定欄位或佔位內容。
 - 0 個可執行的 Azure adapter／key／quota／自動 TTS selector；第一階段只有
   `--tts yating`。

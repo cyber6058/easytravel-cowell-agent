@@ -2,9 +2,10 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 9 離線實作已完成；端對端草稿、artifact、
-本機 render 與精確確認流程及完整離線回歸都通過，但私有範本、Word COM、視覺 QA、
-正式 JMA 與實際產品驗收尚未執行；GitHub 遠端維持 public，因此仍禁止 push。
+立益 Cowell 專用功能與說明會產生器 Task 10 離線實作已完成；對話 Skill、Codex／
+Claude wrappers、獨立 0.1.0 安裝包及完整離線回歸都通過，但尚未安裝套件，也未執行
+私有範本、Word COM、視覺 QA、正式 JMA 與三區域實際產品驗收；GitHub 遠端維持
+public，因此仍禁止 push。
 
 ## 這次做了什麼
 
@@ -283,16 +284,35 @@
   `git diff --check`、staged 禁用產出路徑、PII 與 secret 掃描均通過。
 - Task 9 程式已本機提交為 `e487db7`；使用者明確指示不改成 private，因此沒有變更
   visibility，也沒有向目前 public 的 `origin` push。
+- 2026-08-12 完成 Task 10 本機離線實作：新增 canonical
+  `easytravel-briefing-materials` Skill、byte-identical Codex／Claude copies、Codex
+  plugin／local marketplace、獨立 briefing pyproject／installer、allowlist build 與
+  packaging contract tests。安裝器先驗證必要路徑與範本 fingerprint，再建立自己的
+  app／venv／config；不讀 Cowell session 或 credentials，也不覆蓋既有安裝。
+- 正式 `render` CLI 測試鎖定只暴露 Yating；Hanhan 腳本不進安裝包。Skill 明確分開
+  live source、私有範本／Word COM、Yating、ffmpeg、draft confirmation 與外部傳送關卡，
+  並禁止猜值、雲端 TTS、自動 LINE、影片、部署與發布。
+- 三份 Skill validator 皆回傳 `Skill is valid!`；plugin validator 回傳
+  `Plugin validation passed`。PowerShell parser、compileall、行寬、`git diff --check`、
+  staged artifact／PII／secret scan、ZIP allowlist 與 ZIP secret pattern scan 均通過。
+- Task 10 最終完整離線回歸為 `365 passed, 3 skipped in 15.74s`；三個 skip 仍是需明確
+  opt-in 的 Hanhan、Yating 與私有 LIST／Word integration tests。
+- 本機套件為 `dist/EasyTravel-Briefing-Materials-0.1.0.zip`，SHA-256：
+  `14db8cc9e7e8ce9c90eec37a62069b59f018f940674e795c18f88339b4ab93e5`；ZIP 有
+  67 個 archive entries，未含 Cowell、credentials、私有來源、範本或生成 artifacts。
+- Task 10 實作已本機提交為 `0daf457`。本次未安裝套件、未改 GitHub visibility、
+  未 push，也未執行 live URL／JMA、私有範本、Word COM、Yating、ffmpeg 安裝、LINE、
+  Cowell、部署或外部發布。
 
 ## 下一步
 
-Task 9 離線實作已完成。下一個安全里程碑是 Task 10：只在本機建立共用對話 Skill、
-Codex／Claude thin wrappers、獨立 briefing app 安裝包與打包驗證；不得夾帶 Cowell、
-session、credentials、旅客資料或產出檔。GitHub visibility 依使用者指示不變，但在
-目前 public 狀態下仍不得 push。若要實跑 Task 8／9，須另行核准啟動 Word COM、讀取
-已確認的私有 LIST 範本並逐頁視覺 QA；正式 JMA 電文也須另行核准受限唯讀 GET。
-Cowell 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，
-依序驗證 auth status 與 rooms preview。
+Task 10 離線實作已完成。下一個安全里程碑是 Task 11，但需拆成獨立核准關卡：先在
+一般 OP shell 安裝或以乾淨暫存環境驗證 0.1.0 套件；再分別核准私有 LIST 範本與
+Word COM／逐頁視覺 QA、正式 JMA 受限唯讀 GET、Yating 正式合成與既有 ffmpeg 設定，
+最後才以大阪 URL-only、東北 PDF-only、北海道 URL+PDF 做三區域驗收。任何本機
+CONFIRMED 仍不授權 LINE、上傳、部署或發布。GitHub visibility 依使用者指示不變，
+目前 public 狀態下仍不得 push。Cowell 部分維持到立益公司電腦 clone、先跑完整離線
+測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
@@ -302,8 +322,8 @@ apply 必須在公司環境針對最終 preview 另行取得當次明確核准�
 GitHub 遠端截至 2026-08-12 即時驗證為 public；這是目前 push 的首要阻塞。依私有
 產品與「不可把內容複製到公開處」規則，在 repo 重新驗證為 private 前不得 push。
 
-說明會產生器 Task 4／Task 5／Task 6／Task 8／Task 9 離線程式沒有 parser、merge、
-天氣、Word plan 或 workflow 技術阻塞；
+說明會產生器 Task 4／Task 5／Task 6／Task 8／Task 9／Task 10 離線程式沒有
+parser、merge、天氣、Word plan、workflow 或 packaging 技術阻塞；
 URL-only 正式頁已
 驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
 `product_region`，不能跳過此人工欄位。完整
