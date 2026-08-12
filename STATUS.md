@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 8 離線實作已完成；LIST Word patch／QA
-程式與完整離線回歸都通過，但私有範本、Word COM 與視覺 QA 尚未執行，GitHub 遠端
-目前意外為 public，仍禁止 push。
+立益 Cowell 專用功能與說明會產生器 Task 9 離線實作已完成；端對端草稿、artifact、
+本機 render 與精確確認流程及完整離線回歸都通過，但私有範本、Word COM、視覺 QA、
+正式 JMA 與實際產品驗收尚未執行；GitHub 遠端維持 public，因此仍禁止 push。
 
 ## 這次做了什麼
 
@@ -265,16 +265,34 @@
 - 針對全部 28 個本機 Git commits 的唯讀歷史掃描未發現禁用 artifact 副檔名；3 個
   高可信 credential pattern 命中只位於 PII 掃描器規則與其遮蔽測試 fixture，不是
   實際 credential。這不是完整外洩鑑識，也不代表 repo 曾公開的風險已撤銷。
+- 2026-08-12 依使用者指示不變更 GitHub visibility，繼續完成 Task 9 本機離線實作：
+  新增受限來源 fetch、artifact store、strict local config、workflow orchestration、
+  Word／Yating local backend，以及 `prepare`、`check-script`、`render` CLI。
+- 每個 run 只能建立在 `output/briefings/<product-code>/<timestamp>/` 的全新目錄；
+  manifest 與來源、artifact、口語稿均以 hash 綁定。部分 render 失敗保留安全 artifact
+  並可從目前狀態重試；任意 BLOCKED 狀態、路徑漂移、hash 漂移與重複 artifact 均
+  fail closed。
+- `render --confirm-draft-id` 要求 exact draft ID、script hash、零 blocking conflict、
+  零黃色必要欄位、Word PDF／PNG QA 與完整音訊 artifact；確認只在本機複製並移除
+  `DRAFT` 檔名前綴，不重新 render、不傳 LINE、不上傳。
+- 外部 HTML 僅可經 allowlisted HTTPS host、最多一次同 host redirect、無 retry 且
+  5 MB 上限取得；raw response 只暫存於 OS temp，manifest 僅保存 hash 與證據。本次
+  測試全用 synthetic data／mock transport，沒有送出 live request。
+- Task 9 最終完整離線回歸為 `358 passed, 3 skipped in 8.51s`；三個 skip 仍是需明確
+  opt-in 的 Hanhan、Yating 與私有 LIST／Word integration。compileall、
+  `git diff --check`、staged 禁用產出路徑、PII 與 secret 掃描均通過。
+- Task 9 程式已本機提交為 `e487db7`；使用者明確指示不改成 private，因此沒有變更
+  visibility，也沒有向目前 public 的 `origin` push。
 
 ## 下一步
 
-Task 8 離線實作已完成但實機驗收尚未開始。下一步須由使用者明確核准將 GitHub repo
-改回 private，或由使用者自行改回後通知；重新驗證 `PRIVATE` 後，再另行確認是否
-push 本機 Task 6 與 Task 8 commits。若要實跑 Task 8，須另行核准啟動 Word COM、
-讀取已確認的私有 LIST 範本並逐頁視覺 QA；若要驗證正式 JMA 電文，仍須再核准一次
-受限唯讀 GET，這些關卡都不與 visibility 或 push 合併授權。Cowell 部分維持到立益
-公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status
-與 rooms preview。
+Task 9 離線實作已完成。下一個安全里程碑是 Task 10：只在本機建立共用對話 Skill、
+Codex／Claude thin wrappers、獨立 briefing app 安裝包與打包驗證；不得夾帶 Cowell、
+session、credentials、旅客資料或產出檔。GitHub visibility 依使用者指示不變，但在
+目前 public 狀態下仍不得 push。若要實跑 Task 8／9，須另行核准啟動 Word COM、讀取
+已確認的私有 LIST 範本並逐頁視覺 QA；正式 JMA 電文也須另行核准受限唯讀 GET。
+Cowell 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，
+依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
@@ -284,13 +302,14 @@ apply 必須在公司環境針對最終 preview 另行取得當次明確核准�
 GitHub 遠端截至 2026-08-12 即時驗證為 public；這是目前 push 的首要阻塞。依私有
 產品與「不可把內容複製到公開處」規則，在 repo 重新驗證為 private 前不得 push。
 
-說明會產生器 Task 4／Task 5／Task 6 與 Task 8 離線程式沒有 parser、merge、天氣或
-Word plan 技術阻塞；
+說明會產生器 Task 4／Task 5／Task 6／Task 8／Task 9 離線程式沒有 parser、merge、
+天氣、Word plan 或 workflow 技術阻塞；
 URL-only 正式頁已
 驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
 `product_region`，不能跳過此人工欄位。完整
-6–8 分鐘版本尚未產生；Task 6 JMA parser 與離線選擇邏輯已完成，但正式資料取得及
-LIST Word COM／私有範本／視覺驗證仍未實跑或端對端驗證。第一批 alias 只有 synthetic 大阪
+6–8 分鐘正式版本尚未產生；Task 6 JMA parser、離線選擇與 Task 9 orchestration 已
+完成，但正式資料取得及 LIST Word COM／私有範本／視覺驗證仍未實跑或端對端驗證。
+第一批 alias 只有 synthetic 大阪
 案例；仙台、札幌等城市必須取得 JMA 預報區證據與測試後才能加入。掃描型無文字
 PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與

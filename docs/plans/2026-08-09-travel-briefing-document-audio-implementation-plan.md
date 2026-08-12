@@ -400,14 +400,15 @@ fingerprint。PDF QA 另檢查單頁 A4、必要文字、非空文字與圖片�
 範本 integration 與逐頁視覺 QA 仍是獨立核准關卡；正式驗收不能以目前 skip 取代。
 離線實作已本機提交為 `3b8c64a`；因 public remote 阻塞，尚未 push。
 
-## Task 9：端對端 workflow、產出與正式確認
+## Task 9：端對端 workflow、產出與正式確認（離線實作已完成）
 
 ### 檔案
 
 - 新增 `src/travel_briefing/workflow.py`
 - 新增 `src/travel_briefing/artifact_store.py`
 - 新增 `src/travel_briefing/config.py`
-- 新增 `config/briefing.example.toml`，只包含 output、template 與 ffmpeg 路徑設定
+- 新增 `config/briefing.example.toml`，只包含 output、template、pdftoppm 與 ffmpeg
+  路徑設定
 - 完成 `src/travel_briefing/cli.py`
 - 新增 workflow integration test 與 artifact store unit tests
 - 修改 `.gitignore`，明確加入 briefing local state 與暫存工作檔名稱
@@ -426,6 +427,14 @@ fingerprint。PDF QA 另檢查單頁 A4、必要文字、非空文字與圖片�
 6. PII／secret scan 檢查 Git staged files 與 log；產出檔維持 ignored。
 
 Commit：`feat(briefing): orchestrate draft and confirmed artifacts`
+
+2026-08-12 離線實作已完成並本機提交為 `e487db7`。新增受限來源取得、不可變
+manifest 與 hash 驗證、可恢復的部分產出、content-addressed 口語稿檢查、Word／
+Yating local backend，以及精確 draft ID 的本機確認流程。完整離線回歸實測為
+`358 passed, 3 skipped in 8.51s`；compileall、`git diff --check`、staged 禁用產出路徑、
+PII 與 secret 掃描均通過。本次沒有 live URL／JMA request、私有範本讀取、Word COM、
+ffmpeg 安裝、LINE、Cowell、部署或外部發布；GitHub visibility 依使用者指示維持現況，
+因此沒有 push。
 
 ## Task 10：建立 Codex／Claude 對話 Skill 與 0.1.0 安裝包
 
