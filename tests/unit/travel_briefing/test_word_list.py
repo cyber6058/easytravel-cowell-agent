@@ -116,16 +116,32 @@ def confirmed_op_field(name: str, value: str) -> OpField:
     )
 
 
-@pytest.mark.parametrize("day_count", [5, 6, 7])
-def test_patch_plan_maps_a_draft_to_the_existing_four_table_layout(day_count):
+@pytest.mark.parametrize("day_count", [1, 4, 5, 6, 7, 8, 12])
+def test_patch_plan_maps_any_positive_trip_to_dynamic_daily_rows(day_count):
     plan = build_list_patch_plan(
         draft(day_count),
-        expected_layout_fingerprint="a" * 64,
+        master_sha256="a" * 64,
+        calibration_manifest_sha256="b" * 64,
+        normalized_structure_fingerprint="c" * 64,
+        layout_profiles=(
+            {
+                "name": "normal",
+                "body_font_points": 10.0,
+                "line_spacing_points": 12.0,
+                "paragraph_space_after_points": 1.0,
+                "cell_top_margin_points": 1.4,
+                "cell_bottom_margin_points": 1.4,
+            },
+        ),
     )
 
-    assert plan.schema_version == 1
-    assert plan.generator_version == "list-word/1"
+    assert plan.schema_version == 2
+    assert plan.generator_version == "list-word/2"
+    assert plan.master_sha256 == "a" * 64
+    assert plan.calibration_manifest_sha256 == "b" * 64
+    assert plan.normalized_structure_fingerprint == "c" * 64
     assert plan.target_day_count == day_count
+    assert plan.expected_master_table_shapes[2].rows == 2
     assert plan.expected_table_shapes[2].rows == day_count + 1
     assert plan.header_paragraph(2).text == "團體編號：OSA-SYN-260901"
     assert plan.header_paragraph(3).text == f"團體名稱：合成大阪{day_count}日"
@@ -145,6 +161,16 @@ def test_patch_plan_requires_complete_sequential_days_and_at_most_two_flights():
     with pytest.raises(ValueError, match="day records"):
         build_list_patch_plan(
             replace(source, days=source.days[:-1]),
+            expected_layout_fingerprint="a" * 64,
+        )
+
+    duplicated = replace(
+        source,
+        days=(source.days[0], source.days[0], *source.days[2:]),
+    )
+    with pytest.raises(ValueError, match="sequential"):
+        build_list_patch_plan(
+            duplicated,
             expected_layout_fingerprint="a" * 64,
         )
     with pytest.raises(ValueError, match="flight rows"):
@@ -341,7 +367,7 @@ def test_build_list_word_uses_a_temp_job_and_publishes_exclusively(tmp_path):
     template = tmp_path / "private-template.doc"
     template.write_bytes(b"synthetic private template")
     output = tmp_path / "new-output.docx"
-    source_inspection = template_inspection(5)
+    source_inspection = template_inspection(1)
     adapter = SyntheticWordAdapter(source_inspection, template_inspection(7))
 
     result = build_list_word(
@@ -360,6 +386,10 @@ def test_build_list_word_uses_a_temp_job_and_publishes_exclusively(tmp_path):
     assert result.source_layout_fingerprint == layout_fingerprint(source_inspection)
     assert result.output_layout_fingerprint == layout_fingerprint(
         template_inspection(7)
+    )
+    assert (
+        result.source_layout_fingerprint
+        == result.output_layout_fingerprint
     )
     received_job, timeout = adapter.jobs[0]
     assert timeout == 90
@@ -392,7 +422,7 @@ def test_build_list_word_rejects_report_or_qr_drift_without_publishing(tmp_path)
     template = tmp_path / "private-template.docx"
     template.write_bytes(b"synthetic private template")
     output = tmp_path / "new-output.docx"
-    source_inspection = template_inspection(5)
+    source_inspection = template_inspection(1)
     changed_output = replace(
         template_inspection(5),
         header_qr_candidate_count=0,

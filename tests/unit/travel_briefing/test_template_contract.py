@@ -32,9 +32,9 @@ def inspection(day_count: int = 5) -> ListTemplateInspection:
 
 @pytest.mark.parametrize(
     ("day_count", "daily_rows"),
-    [(5, 6), (6, 7), (7, 8)],
+    [(1, 2), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (12, 13)],
 )
-def test_list_contract_supports_exactly_five_six_or_seven_days(
+def test_list_contract_supports_any_positive_trip_length(
     day_count, daily_rows
 ):
     shapes = expected_list_table_shapes(day_count)
@@ -47,9 +47,9 @@ def test_list_contract_supports_exactly_five_six_or_seven_days(
     )
 
 
-@pytest.mark.parametrize("day_count", [4, 8])
-def test_list_contract_rejects_unsupported_day_counts(day_count):
-    with pytest.raises(ValueError, match="5, 6, or 7"):
+@pytest.mark.parametrize("day_count", [0, -1, True])
+def test_list_contract_rejects_nonpositive_or_boolean_day_counts(day_count):
+    with pytest.raises(ValueError, match="positive integer"):
         expected_list_table_shapes(day_count)
 
 
@@ -106,6 +106,14 @@ def test_layout_fingerprint_is_canonical_and_contains_no_document_text():
 
     assert layout_fingerprint(first) == layout_fingerprint(second)
     assert len(layout_fingerprint(first)) == 64
+
+
+def test_layout_fingerprint_normalizes_only_daily_body_row_count():
+    assert layout_fingerprint(inspection(1)) == layout_fingerprint(
+        inspection(12)
+    )
+    changed = replace(inspection(1), header_qr_candidate_count=2)
+    assert layout_fingerprint(changed) != layout_fingerprint(inspection(1))
 
 
 @pytest.mark.parametrize(

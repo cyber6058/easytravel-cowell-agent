@@ -29,7 +29,7 @@ from .template_contract import (
 
 
 WAITING_FOR_OP = "待 OP 確認"
-LIST_WORD_GENERATOR_VERSION = "list-word/1"
+LIST_WORD_GENERATOR_VERSION = "list-word/2"
 DEFAULT_ROUTE_CHARACTER_LIMIT = 56
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _PARENTHETICAL_DETAIL = re.compile(r"\s*[（(][^）)]*[）)]\s*")
@@ -90,7 +90,11 @@ class ListPatchPlan:
     draft_id: str
     document_status: str
     target_day_count: int
-    expected_layout_fingerprint: str
+    master_sha256: str
+    calibration_manifest_sha256: str
+    normalized_structure_fingerprint: str
+    layout_profiles: tuple[dict[str, Any], ...]
+    expected_master_table_shapes: tuple[TableShape, ...]
     expected_table_shapes: tuple[TableShape, ...]
     anchor_checks: tuple[AnchorCheck, ...]
     header_paragraphs: tuple[HeaderParagraphPatch, ...]
@@ -119,7 +123,17 @@ class ListPatchPlan:
             "draft_id": self.draft_id,
             "document_status": self.document_status,
             "target_day_count": self.target_day_count,
-            "expected_layout_fingerprint": self.expected_layout_fingerprint,
+            "master_sha256": self.master_sha256,
+            "calibration_manifest_sha256": (
+                self.calibration_manifest_sha256
+            ),
+            "normalized_structure_fingerprint": (
+                self.normalized_structure_fingerprint
+            ),
+            "layout_profiles": list(self.layout_profiles),
+            "expected_master_table_shapes": [
+                shape.to_dict() for shape in self.expected_master_table_shapes
+            ],
             "expected_table_shapes": [
                 shape.to_dict() for shape in self.expected_table_shapes
             ],
@@ -249,10 +263,34 @@ def inspect_list_template(
 def build_list_patch_plan(
     draft: BriefingDraft,
     *,
-    expected_layout_fingerprint: str,
+    expected_layout_fingerprint: str | None = None,
+    master_sha256: str | None = None,
+    calibration_manifest_sha256: str | None = None,
+    normalized_structure_fingerprint: str | None = None,
+    layout_profiles: tuple[dict[str, Any], ...] | None = None,
     route_character_limit: int = DEFAULT_ROUTE_CHARACTER_LIMIT,
 ) -> ListPatchPlan:
-    fingerprint = _validate_fingerprint(expected_layout_fingerprint)
+    legacy_fingerprint = expected_layout_fingerprint
+    master_hash = _validate_fingerprint(
+        master_sha256 or legacy_fingerprint or ""
+    )
+    calibration_hash = _validate_fingerprint(
+        calibration_manifest_sha256 or legacy_fingerprint or ""
+    )
+    normalized_fingerprint = _validate_fingerprint(
+        normalized_structure_fingerprint or legacy_fingerprint or ""
+    )
+    profiles = layout_profiles or (
+        {
+            "name": "normal",
+            "body_font_points": 10.0,
+            "line_spacing_points": 12.0,
+            "paragraph_space_after_points": 1.0,
+            "cell_top_margin_points": 1.0,
+            "cell_bottom_margin_points": 1.0,
+        },
+    )
+    _validate_layout_profiles(profiles)
     shapes = expected_list_table_shapes(draft.product.day_count)
     _validate_draft_shape(draft)
     _validate_document_state(draft)
@@ -283,12 +321,16 @@ def build_list_patch_plan(
     )
     cells.extend(_build_guide_cells(op_fields))
     return ListPatchPlan(
-        schema_version=1,
+        schema_version=2,
         generator_version=LIST_WORD_GENERATOR_VERSION,
         draft_id=draft.draft_id,
         document_status=draft.status.value,
         target_day_count=draft.product.day_count,
-        expected_layout_fingerprint=fingerprint,
+        master_sha256=master_hash,
+        calibration_manifest_sha256=calibration_hash,
+        normalized_structure_fingerprint=normalized_fingerprint,
+        layout_profiles=profiles,
+        expected_master_table_shapes=expected_list_table_shapes(1),
         expected_table_shapes=shapes,
         anchor_checks=_list_anchor_checks(),
         header_paragraphs=header_paragraphs,
@@ -606,6 +648,29 @@ def _validate_fingerprint(value: str) -> str:
     if not isinstance(value, str) or _SHA256_PATTERN.fullmatch(value) is None:
         raise ValueError("expected layout fingerprint must be lowercase SHA-256")
     return value
+
+
+def _validate_layout_profiles(
+    profiles: tuple[dict[str, Any], ...],
+) -> None:
+    required = {
+        "name",
+        "body_font_points",
+        "line_spacing_points",
+        "paragraph_space_after_points",
+        "cell_top_margin_points",
+        "cell_bottom_margin_points",
+    }
+    if (
+        not isinstance(profiles, tuple)
+        or not profiles
+        or any(
+            not isinstance(item, dict) or set(item) != required
+            for item in profiles
+        )
+        or profiles[0].get("name") != "normal"
+    ):
+        raise ValueError("LIST layout profiles are invalid")
 
 
 def _list_anchor_checks() -> tuple[AnchorCheck, ...]:

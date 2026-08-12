@@ -513,8 +513,7 @@ function Assert-BasicListContract {
     $dailyRows = [int]$Inspection.table_shapes[2].rows
     if (
         [int]$Inspection.table_shapes[2].columns -ne 7 -or
-        $dailyRows -lt 6 -or
-        $dailyRows -gt 8
+        $dailyRows -lt 2
     ) {
         throw "LIST_DAILY_TABLE_SHAPE_CHANGED"
     }
@@ -622,7 +621,9 @@ function Set-DailyRowCount {
         $Table.Rows.Item($Table.Rows.Count).Delete()
     }
     while ($Table.Rows.Count -lt $targetRows) {
-        [void]$Table.Rows.Add()
+        $prototype = $Table.Rows.Item(2)
+        $newRow = $Table.Rows.Add()
+        $newRow.Range.FormattedText = $prototype.Range.FormattedText
     }
 }
 
@@ -671,7 +672,8 @@ function Invoke-Inspect {
             -AnchorChecks $Job.anchor_checks
         Assert-BasicListContract `
             -Inspection $inspection `
-            -RequiredAnchorLabels $requiredLabels
+            -RequiredAnchorLabels $requiredLabels `
+            -RequiredDayCount 1
         $result = [ordered]@{
             schema_version = 1
             action = "inspect"
@@ -866,8 +868,8 @@ function Invoke-Patch {
         throw "LIST_OUTPUT_NOT_EXCLUSIVE"
     }
     if (
-        [int]$Job.plan.schema_version -ne 1 -or
-        [string]$Job.plan.generator_version -cne "list-word/1"
+        [int]$Job.plan.schema_version -ne 2 -or
+        [string]$Job.plan.generator_version -cne "list-word/2"
     ) {
         throw "LIST_PATCH_PLAN_UNSUPPORTED"
     }
@@ -899,7 +901,7 @@ function Invoke-Patch {
             -Inspection $sourceInspection `
             -RequiredAnchorLabels $requiredLabels
         $dayCount = [int]$Job.plan.target_day_count
-        if ($dayCount -lt 5 -or $dayCount -gt 7) {
+        if ($dayCount -le 0) {
             throw "LIST_DAY_COUNT_UNSUPPORTED"
         }
         Set-DailyRowCount -Table $document.Tables.Item(3) -DayCount $dayCount

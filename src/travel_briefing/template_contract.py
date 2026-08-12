@@ -10,7 +10,6 @@ from typing import Any
 A4_WIDTH_POINTS = 595.28
 A4_HEIGHT_POINTS = 841.89
 _PAGE_SIZE_TOLERANCE_POINTS = 2.0
-_SUPPORTED_DAY_COUNTS = frozenset({5, 6, 7})
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 # Word exposes only the first coordinate of a horizontally merged cell.  This
@@ -150,8 +149,12 @@ class ListTemplateInspection:
 
 
 def expected_list_table_shapes(day_count: int) -> tuple[TableShape, ...]:
-    if day_count not in _SUPPORTED_DAY_COUNTS:
-        raise ValueError("LIST template day count must be 5, 6, or 7")
+    if (
+        isinstance(day_count, bool)
+        or not isinstance(day_count, int)
+        or day_count <= 0
+    ):
+        raise ValueError("LIST template day count must be a positive integer")
     return (
         TableShape(rows=4, columns=3),
         TableShape(rows=3, columns=6),
@@ -162,11 +165,14 @@ def expected_list_table_shapes(day_count: int) -> tuple[TableShape, ...]:
 
 def layout_fingerprint(inspection: ListTemplateInspection) -> str:
     value = inspection.to_dict()
+    table_shapes = list(value["table_shapes"])
+    if len(table_shapes) == 4 and table_shapes[2]["columns"] == 7:
+        table_shapes[2] = {"rows": 2, "columns": 7}
     canonical_lines = (
-        "list-template-layout/1",
+        "list-template-layout/2",
         "table_shapes="
         + ",".join(
-            f"{shape['rows']}x{shape['columns']}" for shape in value["table_shapes"]
+            f"{shape['rows']}x{shape['columns']}" for shape in table_shapes
         ),
         "anchor_labels=" + ",".join(value["anchor_labels"]),
         "list_header_accessible_cells="
