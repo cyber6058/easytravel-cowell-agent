@@ -15,6 +15,14 @@ from travel_briefing.errors import (
 )
 
 
+PATCH_SCRIPT = (
+    Path(__file__).parents[3]
+    / "scripts"
+    / "briefing"
+    / "patch_list_template.ps1"
+)
+
+
 class WordRunner:
     def __init__(self, *, return_code=0, stderr="") -> None:
         self.return_code = return_code
@@ -244,3 +252,15 @@ def test_inspect_v2_requires_exactly_three_unique_resolved_word_paths(
 
     with pytest.raises(WordGenerationError, match="schema version 2"):
         word.run(path, timeout_seconds=90)
+
+
+def test_calibration_preserves_fixed_header_labels_when_values_are_cleared():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    calibrate = script.split("function Invoke-Calibrate", 1)[1].split(
+        "function Invoke-Patch", 1
+    )[0]
+
+    assert "for ($paragraphNumber = 2; $paragraphNumber -le 3;" in calibrate
+    assert "LIST_HEADER_LABEL_MISSING" in calibrate
+    assert "$originalText.Substring(0, $labelBreak + 1)" in calibrate
+    assert "$headerCell.Range.Paragraphs.Item(4)" in calibrate

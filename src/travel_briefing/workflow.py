@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from dataclasses import dataclass, replace
@@ -73,6 +74,8 @@ class WordRenderEvidence:
     generator_version: str
     page_count: int
     qr_image_count: int
+    qa_index_sha256: str
+    page_sha256s: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +93,8 @@ class RenderBackend(Protocol):
         *,
         output_docx: Path,
         output_qa_pdf: Path,
-        output_qa_png: Path,
+        output_qa_directory: Path,
+        output_qa_index: Path,
     ) -> WordRenderEvidence: ...
 
     def render_audio(
@@ -140,7 +144,8 @@ class LocalRenderBackend:
         *,
         output_docx: Path,
         output_qa_pdf: Path,
-        output_qa_png: Path,
+        output_qa_directory: Path,
+        output_qa_index: Path,
     ) -> WordRenderEvidence:
         built = build_list_word(
             draft,
@@ -162,8 +167,25 @@ class LocalRenderBackend:
         qa = render_list_word_for_qa(
             built.docx_path,
             output_pdf=output_qa_pdf,
-            output_png=output_qa_png,
+            output_png_directory=output_qa_directory,
+            output_qa_index=output_qa_index,
+            expected_page_count=built.computed_page_count,
             required_text=required_text,
+            continuation_required_text=(
+                draft.product.code,
+                "日期",
+                "行程",
+                "住宿",
+                "早餐",
+                "午餐",
+                "晚餐",
+            ),
+            day_page_map=built.day_page_map,
+            day_tokens={
+                day.number: day.date
+                for day in draft.days
+                if day.date
+            },
             adapter=self.render_adapter,
             pdftoppm_path=self.config.pdftoppm_path,
         )
@@ -171,6 +193,10 @@ class LocalRenderBackend:
             generator_version=built.generator_version,
             page_count=qa.pdf_inspection.page_count,
             qr_image_count=qa.pdf_inspection.image_count,
+            qa_index_sha256=qa.qa_index_sha256,
+            page_sha256s=tuple(
+                _sha256_file(path) for path in qa.png_paths
+            ),
         )
 
     def render_audio(
@@ -440,14 +466,33 @@ def _render_draft(
                 base_draft,
                 output_docx=paths["word"],
                 output_qa_pdf=paths["word_qa_pdf"],
-                output_qa_png=paths["word_qa_png"],
+                output_qa_directory=paths["word_qa_directory"],
+                output_qa_index=paths["word_qa_index"],
             )
-            if word_evidence.page_count != 1 or word_evidence.qr_image_count < 1:
-                raise ValueError("Word QA evidence did not prove one page with QR")
+            if (
+                word_evidence.page_count <= 0
+                or word_evidence.qr_image_count < 1
+                or len(word_evidence.page_sha256s)
+                != word_evidence.page_count
+            ):
+                raise ValueError(
+                    "Word QA evidence did not prove every page with first-page QR"
+                )
+            page_paths = tuple(
+                paths["word_qa_directory"]
+                / f"page-{number:03d}.png"
+                for number in range(1, word_evidence.page_count + 1)
+            )
             _require_nonempty_files(
                 paths["word"],
                 paths["word_qa_pdf"],
-                paths["word_qa_png"],
+                paths["word_qa_index"],
+                *page_paths,
+            )
+            _validate_word_qa_index(
+                paths["word_qa_index"],
+                page_paths=page_paths,
+                evidence=word_evidence,
             )
             word_accepted = True
         except (BriefingCliError, OSError, ValueError) as error:
@@ -601,10 +646,10 @@ def _confirm_render(
         or not source_draft.product.region
     ):
         raise BriefingInputError("Confirmation contains unresolved OP fields")
-    required_kinds = {
+    static_required_kinds = {
         "word",
         "word_qa",
-        "word_qa_png",
+        "word_qa_index",
         "audio_wav",
         "audio_mp3",
         "transcript",
@@ -616,8 +661,33 @@ def _confirm_render(
         for artifact in source_draft.artifacts
         if artifact.status == "completed"
     }
-    if not required_kinds <= set(completed):
+    if "word_qa_png" in completed and "word_qa_index" not in completed:
+        raise BriefingInputError(
+            "LEGACY_LIST_QA_REQUIRES_RERENDER: rerender LIST QA pages"
+        )
+    page_kinds = tuple(
+        sorted(
+            kind
+            for kind in completed
+            if kind.startswith("word_qa_page_")
+        )
+    )
+    expected_page_kinds = tuple(
+        f"word_qa_page_{number:03d}"
+        for number in range(1, len(page_kinds) + 1)
+    )
+    if (
+        not static_required_kinds <= set(completed)
+        or not page_kinds
+        or page_kinds != expected_page_kinds
+    ):
         raise BriefingInputError("Confirmation requires completed Word and audio QA")
+    _validate_recorded_word_qa_artifacts(
+        source_run,
+        completed=completed,
+        page_kinds=page_kinds,
+    )
+    required_kinds = static_required_kinds | set(page_kinds)
 
     run = create_run_directory(
         output_root,
@@ -794,9 +864,14 @@ def _prepare_artifacts(run: Path, product_code: str) -> tuple[Artifact, ...]:
             "completed",
             WORKFLOW_VERSION,
         ),
-        ("word", f"{prefix}_說明會資料.docx", "missing", "list-word/1"),
-        ("word_qa", f"{prefix}_Word-QA.pdf", "missing", "list-word/1"),
-        ("word_qa_png", f"{prefix}_Word-QA.png", "missing", "list-word/1"),
+        ("word", f"{prefix}_說明會資料.docx", "missing", "list-word/2"),
+        ("word_qa", f"{prefix}_Word-QA.pdf", "missing", "list-word/2"),
+        (
+            "word_qa_index",
+            "qa/index.json",
+            "missing",
+            "list-word/2",
+        ),
         ("audio_mp3", f"{prefix}_說明會語音.mp3", "missing", "ffmpeg/unknown"),
         ("audio_wav", f"{prefix}_說明會語音.wav", "missing", "yating/1"),
         ("transcript", f"{prefix}_逐字稿.txt", "missing", "yating/1"),
@@ -824,7 +899,8 @@ def _render_paths(run: Path, prefix: str) -> dict[str, Path]:
     return {
         "word": run / f"{prefix}_說明會資料.docx",
         "word_qa_pdf": run / f"{prefix}_Word-QA.pdf",
-        "word_qa_png": run / f"{prefix}_Word-QA.png",
+        "word_qa_directory": run / "qa",
+        "word_qa_index": run / "qa" / "index.json",
         "audio_mp3": run / f"{prefix}_說明會語音.mp3",
         "audio_wav": run / f"{prefix}_說明會語音.wav",
         "transcript": run / f"{prefix}_逐字稿.txt",
@@ -840,8 +916,8 @@ def _word_artifacts(
     *,
     accepted: bool,
 ) -> tuple[Artifact, ...]:
-    version = evidence.generator_version if evidence else "list-word/1"
-    return (
+    version = evidence.generator_version if evidence else "list-word/2"
+    artifacts = [
         artifact_record(
             run,
             kind="word",
@@ -866,16 +942,33 @@ def _word_artifacts(
         ),
         artifact_record(
             run,
-            kind="word_qa_png",
-            expected_name=paths["word_qa_png"].name,
+            kind="word_qa_index",
+            expected_name="qa/index.json",
             status=(
                 "completed"
                 if accepted
-                else _incomplete_status(paths["word_qa_png"])
+                else _incomplete_status(paths["word_qa_index"])
             ),
             generator_version=version,
         ),
-    )
+    ]
+    page_count = evidence.page_count if evidence else 0
+    for number in range(1, page_count + 1):
+        page = paths["word_qa_directory"] / f"page-{number:03d}.png"
+        artifacts.append(
+            artifact_record(
+                run,
+                kind=f"word_qa_page_{number:03d}",
+                expected_name=f"qa/page-{number:03d}.png",
+                status=(
+                    "completed"
+                    if accepted
+                    else _incomplete_status(page)
+                ),
+                generator_version=version,
+            )
+        )
+    return tuple(artifacts)
 
 
 def _audio_artifacts(
@@ -958,6 +1051,131 @@ def _require_nonempty_files(*paths: Path) -> None:
         raise ValueError("Render backend reported success without required artifacts")
 
 
+def _validate_word_qa_index(
+    index_path: Path,
+    *,
+    page_paths: tuple[Path, ...],
+    evidence: WordRenderEvidence,
+) -> None:
+    try:
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("Word QA index is not valid UTF-8 JSON") from error
+    expected_keys = {
+        "schema_version",
+        "page_count",
+        "pages",
+        "day_page_map",
+    }
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != expected_keys
+        or payload.get("schema_version") != 2
+        or payload.get("page_count") != evidence.page_count
+        or not isinstance(payload.get("pages"), list)
+        or len(payload["pages"]) != evidence.page_count
+        or not isinstance(payload.get("day_page_map"), list)
+        or _sha256_file(index_path) != evidence.qa_index_sha256
+    ):
+        raise ValueError("Word QA index does not match render evidence")
+    expected_names = tuple(
+        f"page-{number:03d}.png"
+        for number in range(1, evidence.page_count + 1)
+    )
+    observed_names = tuple(
+        item.get("relative_path")
+        if isinstance(item, dict)
+        else None
+        for item in payload["pages"]
+    )
+    observed_hashes = tuple(
+        item.get("sha256") if isinstance(item, dict) else None
+        for item in payload["pages"]
+    )
+    actual_hashes = tuple(_sha256_file(path) for path in page_paths)
+    if (
+        observed_names != expected_names
+        or observed_hashes != evidence.page_sha256s
+        or actual_hashes != evidence.page_sha256s
+    ):
+        raise ValueError("Word QA page set does not match its index")
+
+
+def _validate_recorded_word_qa_artifacts(
+    run: Path,
+    *,
+    completed: Mapping[str, Artifact],
+    page_kinds: tuple[str, ...],
+) -> None:
+    index_record = completed["word_qa_index"]
+    index_path = run / index_record.actual_path
+    try:
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise BriefingInputError("Word QA index is invalid or changed") from error
+    expected_keys = {
+        "schema_version",
+        "page_count",
+        "pages",
+        "day_page_map",
+    }
+    pages = payload.get("pages") if isinstance(payload, dict) else None
+    day_map = payload.get("day_page_map") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != expected_keys
+        or payload.get("schema_version") != 2
+        or payload.get("page_count") != len(page_kinds)
+        or not isinstance(pages, list)
+        or len(pages) != len(page_kinds)
+        or not isinstance(day_map, list)
+    ):
+        raise BriefingInputError(
+            "Word QA index does not match recorded page artifacts"
+        )
+    for number, (kind, page) in enumerate(
+        zip(page_kinds, pages, strict=True), start=1
+    ):
+        record = completed[kind]
+        expected_name = f"page-{number:03d}.png"
+        expected_path = f"qa/{expected_name}"
+        if (
+            not isinstance(page, dict)
+            or set(page)
+            != {
+                "page_number",
+                "relative_path",
+                "sha256",
+                "required_text_check",
+            }
+            or page.get("page_number") != number
+            or page.get("relative_path") != expected_name
+            or page.get("sha256") != record.sha256
+            or page.get("required_text_check") is not True
+            or record.expected_path != expected_path
+            or record.actual_path != expected_path
+        ):
+            raise BriefingInputError(
+                "Word QA index does not match recorded page artifacts"
+            )
+    expected_days = tuple(range(1, len(day_map) + 1))
+    observed_days = tuple(
+        item.get("day_number") if isinstance(item, dict) else None
+        for item in day_map
+    )
+    if observed_days != expected_days or any(
+        set(item) != {"day_number", "page_number"}
+        or isinstance(item.get("page_number"), bool)
+        or not isinstance(item.get("page_number"), int)
+        or not 1 <= item["page_number"] <= len(page_kinds)
+        for item in day_map
+        if isinstance(item, dict)
+    ) or any(not isinstance(item, dict) for item in day_map):
+        raise BriefingInputError(
+            "Word QA index does not match recorded day mapping"
+        )
+
+
 def _load_audio_metadata(path: Path) -> dict[str, object]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -1020,13 +1238,18 @@ def _validate_renderable_source_state(draft: BriefingDraft) -> None:
     render_kinds = {
         "word",
         "word_qa",
-        "word_qa_png",
+        "word_qa_index",
         "audio_wav",
         "audio_mp3",
         "transcript",
         "subtitle",
         "audio_metadata",
     }
+    render_kinds.update(
+        kind
+        for kind in failed_artifacts
+        if kind.startswith("word_qa_page_")
+    )
     if failed_artifacts & render_kinds:
         return
     raise BriefingInputError("Blocked briefing state has no recoverable render blocker")
@@ -1053,3 +1276,11 @@ def _read_text_file(path: Path, *, label: str) -> str:
     if not value.strip():
         raise BriefingInputError(f"{label} must not be empty")
     return value
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()

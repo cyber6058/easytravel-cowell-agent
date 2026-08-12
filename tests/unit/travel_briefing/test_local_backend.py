@@ -62,15 +62,30 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
         kwargs["output_docx"].write_bytes(b"docx")
         return SimpleNamespace(
             docx_path=kwargs["output_docx"],
-            generator_version="list-word/1",
+            generator_version="list-word/2",
+            computed_page_count=2,
+            day_page_map=(),
         )
 
     def qa(source, **kwargs):
         calls["qa"] = (source, kwargs)
         kwargs["output_pdf"].write_bytes(b"pdf")
-        kwargs["output_png"].write_bytes(b"png")
+        kwargs["output_png_directory"].mkdir(
+            parents=True, exist_ok=True
+        )
+        page_paths = []
+        for number in range(1, 3):
+            page = (
+                kwargs["output_png_directory"]
+                / f"page-{number:03d}.png"
+            )
+            page.write_bytes(f"png-{number}".encode())
+            page_paths.append(page)
+        kwargs["output_qa_index"].write_bytes(b"index")
         return SimpleNamespace(
-            pdf_inspection=SimpleNamespace(page_count=1, image_count=2),
+            pdf_inspection=SimpleNamespace(page_count=2, image_count=2),
+            qa_index_sha256="a" * 64,
+            png_paths=tuple(page_paths),
         )
 
     monkeypatch.setattr("travel_briefing.workflow.build_list_word", build)
@@ -79,12 +94,14 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
     outputs = {
         "output_docx": tmp_path / "draft.docx",
         "output_qa_pdf": tmp_path / "qa.pdf",
-        "output_qa_png": tmp_path / "qa.png",
+        "output_qa_directory": tmp_path / "qa",
+        "output_qa_index": tmp_path / "qa" / "index.json",
     }
 
     evidence = backend(value).render_word(draft(), **outputs)
 
-    assert evidence.page_count == 1
+    assert evidence.page_count == 2
+    assert len(evidence.page_sha256s) == 2
     assert evidence.qr_image_count == 2
     assert calls["build"][1]["template_path"] == value.template_path
     assert calls["qa"][1]["required_text"] == ("SYN-OSA-260901", "SY100")

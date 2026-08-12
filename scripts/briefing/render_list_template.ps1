@@ -103,9 +103,7 @@ try {
     $document = $word.Documents.Open($inputDocx, $false, $true)
     $document.Repaginate()
     $pageCount = [int]$document.ComputeStatistics($WdStatisticPages)
-    if ($pageCount -ne 1) {
-        throw "LIST_PAGE_COUNT_BLOCKED"
-    }
+    if ($pageCount -le 0) { throw "LIST_PAGE_COUNT_INVALID" }
     $document.ExportAsFixedFormat($outputPdf, $WdExportFormatPdf)
     if (-not [IO.File]::Exists($outputPdf)) {
         throw "LIST_PDF_NOT_CREATED"

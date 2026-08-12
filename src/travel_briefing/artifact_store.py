@@ -40,6 +40,7 @@ def publish_text(run_directory: Path, name: str, text: str) -> Path:
     if not isinstance(text, str):
         raise TypeError("Briefing artifact content must be text")
     destination = _artifact_path(run_directory, name)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     created = False
     try:
         with destination.open("x", encoding="utf-8", newline="\n") as output:
@@ -61,6 +62,7 @@ def copy_artifact(
     if not source_path.is_file():
         raise ValueError("Briefing artifact source does not exist")
     destination = _artifact_path(run_directory, name)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     created = False
     try:
         with source_path.open("rb") as input_stream, destination.open("xb") as output:
@@ -209,16 +211,23 @@ def _artifact_path(run_directory: Path, name: str) -> Path:
     run = run_directory.expanduser().resolve()
     if not run.is_dir():
         raise ValueError("Briefing run directory does not exist")
+    if not isinstance(name, str) or not name or "\\" in name:
+        raise ValueError(
+            "Briefing artifact name/path must be safe relative text"
+        )
+    relative = Path(name)
     if (
-        not isinstance(name, str)
-        or not name
-        or Path(name).name != name
-        or name in {".", ".."}
-        or "/" in name
-        or "\\" in name
+        relative.is_absolute()
+        or relative.drive
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or "//" in name
+        or name.startswith("/")
+        or name.endswith("/")
     ):
-        raise ValueError("Briefing artifact name must be a single safe filename")
-    destination = (run / name).resolve()
+        raise ValueError(
+            "Briefing artifact name/path must be safe relative text"
+        )
+    destination = (run / relative).resolve()
     if not destination.is_relative_to(run):
         raise ValueError("Briefing artifact escaped the run directory")
     return destination

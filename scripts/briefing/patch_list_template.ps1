@@ -827,10 +827,23 @@ function Invoke-Calibrate {
         $document = $Word.Documents.Open($workingCopy, $false, $false)
         $anchorChecks = Get-DefaultAnchorChecks
         $headerCell = Get-Cell -Table $document.Tables.Item(1) -Row 1 -Column 1
-        for ($paragraphNumber = 2; $paragraphNumber -le 4; $paragraphNumber += 1) {
+        for ($paragraphNumber = 2; $paragraphNumber -le 3; $paragraphNumber += 1) {
             $paragraph = $headerCell.Range.Paragraphs.Item($paragraphNumber)
-            $paragraph.Range.Text = [string][char]13
+            $originalText = ([string]$paragraph.Range.Text).TrimEnd(
+                [char]13, [char]7
+            )
+            $labelBreak = $originalText.IndexOf(
+                ([string][char]0xFF1A)
+            )
+            if ($labelBreak -lt 0) {
+                throw "LIST_HEADER_LABEL_MISSING"
+            }
+            $paragraph.Range.Text = (
+                $originalText.Substring(0, $labelBreak + 1) +
+                [string][char]13
+            )
         }
+        $headerCell.Range.Paragraphs.Item(4).Range.Text = [string][char]13
         foreach ($coordinate in @(
             @(1, 2, 1), @(1, 2, 2), @(1, 2, 3),
             @(1, 3, 1), @(1, 4, 1), @(1, 4, 2)

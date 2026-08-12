@@ -73,7 +73,10 @@ def test_prepare_from_supplied_html_creates_a_new_reviewable_version(tmp_path):
     assert artifacts["narration_input"]["status"] == "completed"
     assert artifacts["word"]["status"] == "missing"
     assert artifacts["word_qa"]["status"] == "missing"
-    assert artifacts["word_qa_png"]["status"] == "missing"
+    assert artifacts["word_qa_index"]["status"] == "missing"
+    assert not any(
+        kind.startswith("word_qa_page_") for kind in artifacts
+    )
     assert artifacts["audio_wav"]["status"] == "missing"
     assert artifacts["audio_metadata"]["status"] == "missing"
     assert not any(
@@ -256,8 +259,9 @@ class SyntheticRenderBackend:
     word_calls: int = 0
     audio_calls: int = 0
     fail_word: bool = False
-    omit_word_png: bool = False
+    omit_word_page: bool = False
     omit_audio_metadata: bool = False
+    word_page_count: int = 2
 
     def render_word(
         self,
@@ -265,19 +269,65 @@ class SyntheticRenderBackend:
         *,
         output_docx,
         output_qa_pdf,
-        output_qa_png,
+        output_qa_directory,
+        output_qa_index,
     ):
         self.word_calls += 1
         output_docx.write_bytes(b"synthetic verified docx")
         if self.fail_word:
             raise WordGenerationError("Synthetic Word QA failed")
         output_qa_pdf.write_bytes(b"synthetic verified pdf")
-        if not self.omit_word_png:
-            output_qa_png.write_bytes(b"synthetic verified png")
+        output_qa_directory.mkdir(parents=True, exist_ok=True)
+        page_hashes = []
+        for page_number in range(1, self.word_page_count + 1):
+            path = output_qa_directory / f"page-{page_number:03d}.png"
+            if not (
+                self.omit_word_page
+                and page_number == self.word_page_count
+            ):
+                content = f"synthetic page {page_number}".encode()
+                path.write_bytes(content)
+                import hashlib
+
+                page_hashes.append(hashlib.sha256(content).hexdigest())
+        output_qa_index.write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "page_count": self.word_page_count,
+                    "pages": [
+                        {
+                            "page_number": number,
+                            "relative_path": f"page-{number:03d}.png",
+                            "sha256": page_hashes[number - 1]
+                            if number <= len(page_hashes)
+                            else "0" * 64,
+                            "required_text_check": True,
+                        }
+                        for number in range(
+                            1, self.word_page_count + 1
+                        )
+                    ],
+                    "day_page_map": [
+                        {"day_number": number, "page_number": 1}
+                        for number in range(1, draft.product.day_count + 1)
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        import hashlib
+
         return WordRenderEvidence(
-            generator_version="synthetic-word/1",
-            page_count=1,
+            generator_version="synthetic-word/2",
+            page_count=self.word_page_count,
             qr_image_count=1,
+            qa_index_sha256=hashlib.sha256(
+                output_qa_index.read_bytes()
+            ).hexdigest(),
+            page_sha256s=tuple(page_hashes),
         )
 
     def render_audio(
@@ -328,6 +378,9 @@ def test_render_builds_a_new_draft_then_confirms_without_rerunning_generators(
     statuses = {item.kind: item.status for item in draft_render.draft.artifacts}
     assert statuses["word"] == "completed"
     assert statuses["word_qa"] == "completed"
+    assert statuses["word_qa_index"] == "completed"
+    assert statuses["word_qa_page_001"] == "completed"
+    assert statuses["word_qa_page_002"] == "completed"
     assert statuses["audio_wav"] == "completed"
     assert statuses["audio_mp3"] == "completed"
     script_check = json.loads(
@@ -366,9 +419,14 @@ def test_render_builds_a_new_draft_then_confirms_without_rerunning_generators(
         "review",
         "narration_input",
         "script_check",
-        "word_qa_png",
+        "word_qa_index",
+        "word_qa_page_001",
+        "word_qa_page_002",
     } <= set(confirmed_artifacts)
-    assert confirmed_artifacts["word_qa_png"].status == "completed"
+    assert confirmed_artifacts["word_qa_page_002"].status == "completed"
+    assert (
+        confirmed.run_directory / "qa" / "page-002.png"
+    ).is_file()
     assert "`CONFIRMED`" in (
         confirmed.run_directory / "review.md"
     ).read_text(encoding="utf-8")
@@ -492,7 +550,10 @@ def test_render_rejects_an_inconsistent_blocked_source(tmp_path):
 @pytest.mark.parametrize(
     ("backend", "missing_kind"),
     (
-        (SyntheticRenderBackend(omit_word_png=True), "word_qa_png"),
+        (
+            SyntheticRenderBackend(omit_word_page=True),
+            "word_qa_page_002",
+        ),
         (SyntheticRenderBackend(omit_audio_metadata=True), "audio_metadata"),
     ),
 )
@@ -553,6 +614,103 @@ def test_prepare_revision_requires_a_hash_bound_manifest_in_the_same_output_root
             op_values=decisions,
         )
 
+
+def test_confirmation_rejects_legacy_single_png_qa_manifest(tmp_path):
+    output_root = tmp_path / "briefings"
+    manifest, script_path = ready_manifest_and_script(output_root, tmp_path)
+    rendered = render_briefing(
+        output_root=output_root,
+        manifest_path=manifest,
+        script_path=script_path,
+        generated_at="2026-08-12T16:00:00+08:00",
+        backend=SyntheticRenderBackend(),
+    )
+    run = rendered.run_directory
+    source = rendered.draft
+    manifest_path = rendered.manifest_path
+    manifest_path.unlink()
+    (run / "manifest.sha256").unlink()
+    legacy = tuple(
+        artifact
+        for artifact in source.artifacts
+        if artifact.kind not in {
+            "word_qa_index",
+            "word_qa_page_001",
+            "word_qa_page_002",
+        }
+    ) + (
+        artifact_record(
+            run,
+            kind="word_qa_png",
+            expected_name="qa/page-001.png",
+            status="completed",
+            generator_version="list-word/1",
+        ),
+    )
+    legacy_manifest = write_manifest(
+        run,
+        replace(source, artifacts=legacy),
+    )
+
+    with pytest.raises(
+        BriefingInputError,
+        match="LEGACY_LIST_QA_REQUIRES_RERENDER",
+    ):
+        render_briefing(
+            output_root=output_root,
+            manifest_path=legacy_manifest,
+            script_path=script_path,
+            generated_at="2026-08-12T16:01:00+08:00",
+            confirm_draft_id=source.draft_id,
+            backend=SyntheticRenderBackend(),
+        )
+
+
+def test_confirmation_rejects_semantically_inconsistent_qa_index(tmp_path):
+    output_root = tmp_path / "briefings"
+    manifest, script_path = ready_manifest_and_script(output_root, tmp_path)
+    rendered = render_briefing(
+        output_root=output_root,
+        manifest_path=manifest,
+        script_path=script_path,
+        generated_at="2026-08-12T16:00:00+08:00",
+        backend=SyntheticRenderBackend(),
+    )
+    run = rendered.run_directory
+    index_path = run / "qa" / "index.json"
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    payload["pages"][1]["relative_path"] = "page-999.png"
+    index_path.write_text(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    source = rendered.draft
+    changed_artifacts = tuple(
+        artifact_record(
+            run,
+            kind=item.kind,
+            expected_name=item.expected_path,
+            status=item.status,
+            generator_version=item.generator_version,
+        )
+        if item.kind == "word_qa_index"
+        else item
+        for item in source.artifacts
+    )
+    rendered.manifest_path.unlink()
+    (run / "manifest.sha256").unlink()
+    changed = replace(source, artifacts=changed_artifacts).with_recomputed_id()
+    changed_manifest = write_manifest(run, changed)
+
+    with pytest.raises(BriefingInputError, match="Word QA index"):
+        render_briefing(
+            output_root=output_root,
+            manifest_path=changed_manifest,
+            script_path=script_path,
+            generated_at="2026-08-12T16:01:00+08:00",
+            confirm_draft_id=changed.draft_id,
+            backend=SyntheticRenderBackend(),
+        )
 
 def test_prepare_revision_clears_prior_render_artifacts_and_script_binding(tmp_path):
     output_root = tmp_path / "briefings"

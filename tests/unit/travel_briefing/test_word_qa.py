@@ -10,8 +10,10 @@ from PIL import Image
 from travel_briefing.word_qa import (
     inspect_list_pdf,
     render_list_pdf_to_png,
+    render_list_pdf_to_pngs,
     render_list_word_for_qa,
 )
+from travel_briefing.word_list import DayPagePlacement
 from travel_briefing.errors import WordGenerationError
 
 
@@ -26,6 +28,117 @@ def write_pdf(path: Path, *, pages=1, text="OSA-SYN-260901 JX820 JX821") -> None
         page.insert_image(fitz.Rect(72, 90, 104, 122), stream=buffer.getvalue())
     document.save(path)
     document.close()
+
+
+def write_multipage_list_pdf(path: Path, *, pages: int) -> None:
+    document = fitz.open()
+    for page_number in range(1, pages + 1):
+        page = document.new_page(width=595.28, height=841.89)
+        if page_number == 1:
+            text = (
+                "OSA-SYN-260901 JX820 JX821 "
+                "DATE ROUTE HOTEL BREAKFAST LUNCH DINNER 2026-09-01"
+            )
+        else:
+            text = (
+                "OSA-SYN-260901 合成大阪行程 "
+                "DATE ROUTE HOTEL BREAKFAST LUNCH DINNER "
+                f"2026-09-0{page_number}"
+            )
+        page.insert_text((72, 72), text)
+        if page_number == 1:
+            image = Image.new("RGB", (16, 16), color="black")
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            page.insert_image(
+                fitz.Rect(72, 90, 104, 122),
+                stream=buffer.getvalue(),
+            )
+    document.save(path)
+    document.close()
+
+
+@pytest.mark.parametrize("page_count", [1, 2, 3])
+def test_pdf_inspection_validates_every_page_and_day_mapping(
+    tmp_path, page_count
+):
+    pdf = tmp_path / "list.pdf"
+    write_multipage_list_pdf(pdf, pages=page_count)
+    day_map = tuple(
+        DayPagePlacement(number, number, number)
+        for number in range(1, page_count + 1)
+    )
+    day_tokens = {
+        number: f"2026-09-0{number}"
+        for number in range(1, page_count + 1)
+    }
+
+    inspection = inspect_list_pdf(
+        pdf,
+        required_text=("OSA-SYN-260901", "JX820", "JX821"),
+        continuation_required_text=(
+            "OSA-SYN-260901",
+            "DATE",
+            "ROUTE",
+            "HOTEL",
+            "BREAKFAST",
+            "LUNCH",
+            "DINNER",
+        ),
+        day_page_map=day_map,
+        day_tokens=day_tokens,
+    )
+
+    assert inspection.page_count == page_count
+    assert len(inspection.pages) == page_count
+    assert inspection.pages[0].image_count == 1
+    assert all(page.image_count == 0 for page in inspection.pages[1:])
+    assert tuple(page.page_number for page in inspection.pages) == tuple(
+        range(1, page_count + 1)
+    )
+
+
+def test_pdf_inspection_blocks_missing_continuation_identity_or_wrong_day_page(
+    tmp_path,
+):
+    pdf = tmp_path / "list.pdf"
+    write_multipage_list_pdf(pdf, pages=2)
+    day_map = (
+        DayPagePlacement(1, 1, 1),
+        DayPagePlacement(2, 2, 2),
+    )
+
+    with pytest.raises(ValueError, match="continuation"):
+        inspect_list_pdf(
+            pdf,
+            required_text=("OSA-SYN-260901",),
+            continuation_required_text=("MISSING-GROUP", "DATE"),
+            day_page_map=day_map,
+            day_tokens={1: "2026-09-01", 2: "2026-09-02"},
+        )
+    with pytest.raises(ValueError, match="day page mapping"):
+        inspect_list_pdf(
+            pdf,
+            required_text=("OSA-SYN-260901",),
+            continuation_required_text=("OSA-SYN-260901", "DATE"),
+            day_page_map=day_map,
+            day_tokens={1: "2026-09-02", 2: "2026-09-01"},
+        )
+
+    repeated = tmp_path / "repeated-day.pdf"
+    write_multipage_list_pdf(repeated, pages=1)
+    document = fitz.open(repeated)
+    page = document[0]
+    page.insert_text((72, 140), "2026-09-01")
+    document.save(repeated, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
+    document.close()
+    with pytest.raises(ValueError, match="day page mapping"):
+        inspect_list_pdf(
+            repeated,
+            required_text=("OSA-SYN-260901",),
+            day_page_map=(DayPagePlacement(1, 1, 1),),
+            day_tokens={1: "2026-09-01"},
+        )
 
 
 def test_pdf_inspection_requires_one_a4_page_text_and_an_image(tmp_path):
@@ -47,7 +160,7 @@ def test_pdf_inspection_requires_one_a4_page_text_and_an_image(tmp_path):
 def test_pdf_inspection_fails_closed_on_page_text_or_qr_drift(tmp_path):
     two_pages = tmp_path / "two-pages.pdf"
     write_pdf(two_pages, pages=2)
-    with pytest.raises(ValueError, match="one page"):
+    with pytest.raises(ValueError, match="insufficient"):
         inspect_list_pdf(two_pages, required_text=("OSA-SYN-260901",))
 
     missing_text = tmp_path / "missing-text.pdf"
@@ -81,6 +194,98 @@ class PdftoppmRunner:
             returncode=self.return_code,
             stdout="",
             stderr="",
+        )
+
+
+class MultiPagePdftoppmRunner:
+    def __init__(self, page_count: int, *, extra_page: bool = False) -> None:
+        self.page_count = page_count
+        self.extra_page = extra_page
+        self.calls = []
+
+    def __call__(self, command, **options):
+        self.calls.append((command, options))
+        prefix = Path(command[-1])
+        count = self.page_count + int(self.extra_page)
+        for page_number in range(1, count + 1):
+            Path(f"{prefix}-{page_number}.png").write_bytes(
+                f"page-{page_number}".encode()
+            )
+        return subprocess.CompletedProcess(
+            command,
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
+
+@pytest.mark.parametrize("page_count", [1, 2, 3])
+def test_pdftoppm_renders_all_pages_once_with_contiguous_names(
+    tmp_path, page_count
+):
+    pdf = tmp_path / "list.pdf"
+    write_multipage_list_pdf(pdf, pages=page_count)
+    executable = tmp_path / "pdftoppm.exe"
+    executable.write_bytes(b"synthetic executable")
+    output_directory = tmp_path / "qa"
+    runner = MultiPagePdftoppmRunner(page_count)
+
+    result = render_list_pdf_to_pngs(
+        pdf,
+        output_directory=output_directory,
+        expected_page_count=page_count,
+        pdftoppm_path=executable,
+        runner=runner,
+    )
+
+    assert len(runner.calls) == 1
+    assert [page.png_path.name for page in result.pages] == [
+        f"page-{number:03d}.png"
+        for number in range(1, page_count + 1)
+    ]
+    assert all(page.byte_count > 0 for page in result.pages)
+    command = runner.calls[0][0]
+    assert "-singlefile" not in command
+    assert "-f" not in command
+    assert "-l" not in command
+
+
+def test_pdftoppm_rejects_extra_or_existing_page_sets(tmp_path):
+    pdf = tmp_path / "list.pdf"
+    write_multipage_list_pdf(pdf, pages=2)
+    executable = tmp_path / "pdftoppm.exe"
+    executable.write_bytes(b"synthetic executable")
+
+    with pytest.raises(WordGenerationError, match="page set"):
+        render_list_pdf_to_pngs(
+            pdf,
+            output_directory=tmp_path / "qa-extra",
+            expected_page_count=2,
+            pdftoppm_path=executable,
+            runner=MultiPagePdftoppmRunner(2, extra_page=True),
+        )
+
+    existing = tmp_path / "qa-existing"
+    existing.mkdir()
+    (existing / "page-001.png").write_bytes(b"user owned")
+    with pytest.raises(ValueError, match="must not already exist"):
+        render_list_pdf_to_pngs(
+            pdf,
+            output_directory=existing,
+            expected_page_count=2,
+            pdftoppm_path=executable,
+            runner=MultiPagePdftoppmRunner(2),
+        )
+
+    existing_file = tmp_path / "qa-file"
+    existing_file.write_bytes(b"user owned")
+    with pytest.raises(ValueError, match="must not already exist"):
+        render_list_pdf_to_pngs(
+            pdf,
+            output_directory=existing_file,
+            expected_page_count=2,
+            pdftoppm_path=executable,
+            runner=MultiPagePdftoppmRunner(2),
         )
 
 
@@ -146,21 +351,25 @@ def test_pdftoppm_render_refuses_overwrite_and_failed_or_missing_output(tmp_path
 
 
 class SyntheticRenderAdapter:
-    def __init__(self) -> None:
+    def __init__(self, page_count=1) -> None:
         self.jobs = []
+        self.page_count = page_count
 
     def run(self, job_path: Path, *, timeout_seconds: int) -> None:
         self.jobs.append((job_path, timeout_seconds))
         job = json.loads(job_path.read_text(encoding="utf-8"))
         output_pdf = Path(job["output_pdf"])
-        write_pdf(output_pdf)
+        write_multipage_list_pdf(
+            output_pdf,
+            pages=self.page_count,
+        )
         Path(job["report_path"]).write_text(
             json.dumps(
                 {
                     "schema_version": 1,
                     "action": "render",
                     "word_version": "synthetic",
-                    "computed_page_count": 1,
+                    "computed_page_count": self.page_count,
                     "output_bytes": output_pdf.stat().st_size,
                 }
             ),
@@ -168,21 +377,37 @@ class SyntheticRenderAdapter:
         )
 
 
-def test_word_pdf_render_runs_qa_before_publishing_pdf_and_png(tmp_path):
+@pytest.mark.parametrize("page_count", [1, 2, 3])
+def test_word_pdf_render_publishes_every_page_and_hash_bound_index(
+    tmp_path, page_count
+):
     docx = tmp_path / "list.docx"
     docx.write_bytes(b"synthetic docx")
     pdftoppm = tmp_path / "pdftoppm.exe"
     pdftoppm.write_bytes(b"synthetic executable")
     output_pdf = tmp_path / "qa" / "list.pdf"
-    output_png = tmp_path / "qa" / "list.png"
-    word = SyntheticRenderAdapter()
-    raster = PdftoppmRunner()
+    output_pages = tmp_path / "qa"
+    output_index = output_pages / "index.json"
+    word = SyntheticRenderAdapter(page_count)
+    raster = MultiPagePdftoppmRunner(page_count)
+    day_map = tuple(
+        DayPagePlacement(number, number, number)
+        for number in range(1, page_count + 1)
+    )
 
     result = render_list_word_for_qa(
         docx,
         output_pdf=output_pdf,
-        output_png=output_png,
+        output_png_directory=output_pages,
+        output_qa_index=output_index,
+        expected_page_count=page_count,
         required_text=("OSA-SYN-260901", "JX820", "JX821"),
+        continuation_required_text=("OSA-SYN-260901", "DATE"),
+        day_page_map=day_map,
+        day_tokens={
+            number: f"2026-09-0{number}"
+            for number in range(1, page_count + 1)
+        },
         adapter=word,
         pdftoppm_path=pdftoppm,
         pdftoppm_runner=raster,
@@ -190,11 +415,48 @@ def test_word_pdf_render_runs_qa_before_publishing_pdf_and_png(tmp_path):
     )
 
     assert result.pdf_path == output_pdf.resolve()
-    assert result.png_path == output_png.resolve()
-    assert result.pdf_inspection.page_count == 1
+    assert result.qa_index_path == output_index.resolve()
+    assert result.pdf_inspection.page_count == page_count
     assert result.pdf_inspection.image_count == 1
+    assert [path.name for path in result.png_paths] == [
+        f"page-{number:03d}.png"
+        for number in range(1, page_count + 1)
+    ]
     assert output_pdf.stat().st_size > 0
-    assert output_png.read_bytes() == b"synthetic png"
+    index = json.loads(output_index.read_text(encoding="utf-8"))
+    assert index["schema_version"] == 2
+    assert index["page_count"] == page_count
+    assert [item["relative_path"] for item in index["pages"]] == [
+        f"page-{number:03d}.png"
+        for number in range(1, page_count + 1)
+    ]
+    assert len({item["sha256"] for item in index["pages"]}) == page_count
+    assert "OSA-SYN-260901" not in output_index.read_text(
+        encoding="utf-8"
+    )
     received_job, timeout = word.jobs[0]
     assert timeout == 90
     assert not received_job.exists()
+
+
+def test_word_pdf_render_rejects_page_count_mismatch_before_publish(tmp_path):
+    docx = tmp_path / "list.docx"
+    docx.write_bytes(b"synthetic docx")
+    pdftoppm = tmp_path / "pdftoppm.exe"
+    pdftoppm.write_bytes(b"synthetic executable")
+
+    with pytest.raises(ValueError, match="page count"):
+        render_list_word_for_qa(
+            docx,
+            output_pdf=tmp_path / "list.pdf",
+            output_png_directory=tmp_path / "qa",
+            output_qa_index=tmp_path / "qa" / "index.json",
+            expected_page_count=2,
+            required_text=("OSA-SYN-260901",),
+            adapter=SyntheticRenderAdapter(page_count=1),
+            pdftoppm_path=pdftoppm,
+            pdftoppm_runner=MultiPagePdftoppmRunner(1),
+        )
+
+    assert not (tmp_path / "list.pdf").exists()
+    assert not (tmp_path / "qa" / "index.json").exists()

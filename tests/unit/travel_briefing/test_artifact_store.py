@@ -4,6 +4,7 @@ import pytest
 
 from travel_briefing.artifact_store import (
     artifact_record,
+    copy_artifact,
     create_run_directory,
     load_run_manifest,
     publish_text,
@@ -132,6 +133,60 @@ def test_store_refuses_path_escape_and_never_overwrites(tmp_path):
 
     assert published.read_text(encoding="utf-8") == "first\n"
     assert not (tmp_path / "briefings" / "outside.txt").exists()
+
+
+def test_store_allows_safe_nested_artifacts_and_creates_parents(tmp_path):
+    run = create_run_directory(
+        tmp_path / "briefings",
+        product_code="SYN-OSA-260901",
+        timestamp="20260812T153000+0800",
+    )
+    source = tmp_path / "page.png"
+    source.write_bytes(b"synthetic page")
+
+    text_path = publish_text(run, "qa/index.json", '{"page_count":1}\n')
+    page_path = copy_artifact(source, run, "qa/page-001.png")
+    index = artifact_record(
+        run,
+        kind="word_qa_index",
+        expected_name="qa/index.json",
+        status="completed",
+        generator_version="list-word/2",
+    )
+    page = artifact_record(
+        run,
+        kind="word_qa_page_001",
+        expected_name="qa/page-001.png",
+        status="completed",
+        generator_version="list-word/2",
+    )
+
+    assert text_path == run / "qa" / "index.json"
+    assert page_path == run / "qa" / "page-001.png"
+    verify_artifacts(run, (index, page))
+
+
+@pytest.mark.parametrize(
+    "name",
+    (
+        "../qa/page.png",
+        "qa/../page.png",
+        "qa//page.png",
+        "/qa/page.png",
+        r"C:\qa\page.png",
+        r"\\server\share\page.png",
+        r"qa\page.png",
+    ),
+)
+def test_store_rejects_unsafe_nested_artifact_paths(tmp_path, name):
+    run = create_run_directory(
+        tmp_path / "briefings",
+        product_code="SYN-OSA-260901",
+        timestamp="20260812T153000+0800",
+    )
+
+    with pytest.raises(ValueError, match="artifact"):
+        publish_text(run, name, "blocked")
 
 
 def test_manifest_load_and_artifact_verification_are_scoped_and_hash_bound(tmp_path):
