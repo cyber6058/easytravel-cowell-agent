@@ -6,24 +6,28 @@ The installer creates `%LOCALAPPDATA%\EasyTravelBriefing\config.toml` once and
 does not overwrite it. The file contains only:
 
 - a local output root;
-- the private LIST `.doc` or `.docx` path and its approved layout SHA-256;
+- one private `LIST-master.docx` `master_path`;
+- one private schema 2 `calibration_manifest` path;
 - an existing `pdftoppm.exe` path; and
 - an optional existing `ffmpeg.exe` path.
 
-Never put the private template, its contents, generated artifacts, or OP data in
-the package or Git. Never invent a layout fingerprint or accept the example's
-zero placeholder as an approved fingerprint.
+Never put the private master, calibration manifest, their contents, generated
+artifacts, or OP data in the package or Git. The runtime validates both hashes
+and never selects a template by day count.
 
 ## Word
 
-Rendering starts a hidden, owned Word instance only after current approval. It
-opens the confirmed LIST template read-only, creates a new DOCX, and checks the
-table, anchor, merged-cell, QR, section, A4 portrait, and layout fingerprint
-contracts. It then creates a one-page PDF and PNG for QA.
+The current one-request DRAFT authorization allows rendering to start one hidden,
+owned Word instance. It opens the canonical LIST master read-only, creates a new
+DOCX, dynamically creates the verified number of daily rows, and checks the
+table, anchor, merged-cell, QR, section, A4 portrait, calibration hash, and
+layout contracts. Word decides the page count from content; long trips continue
+at normal readable settings.
 
-Automated checks do not prove visual correctness. Inspect the PNG at readable
-resolution for cropping, table borders, merged cells, QR code, daily rows, and
-yellow fields. Never confirm a draft with an unviewed Word QA image.
+Automated checks do not prove visual correctness. Inspect every QA page at
+readable resolution for cropping, table borders, merged cells, first-page QR,
+continuation identity/header, daily rows, and yellow fields. Never confirm a
+draft with an unviewed Word QA page.
 
 ## Audio
 
@@ -37,8 +41,8 @@ timing. If Yating is absent or the bookmark/audio result is unknown, keep safe
 Word, narration, and review artifacts and stop.
 
 MP3 is derived only from the verified WAV through an already configured ffmpeg.
-Do not install ffmpeg as a side effect. A missing MP3 blocks confirmation even
-when WAV, TXT, and SRT are valid.
+Do not install ffmpeg as a side effect. If ffmpeg is missing, preserve the DRAFT
+WAV, TXT, and SRT for review. A missing MP3 still blocks confirmation.
 
 ## Confirmation
 
@@ -48,7 +52,8 @@ Confirmation requires all of the following:
 - the exact current draft ID;
 - no unresolved blocking conflict;
 - all required OP fields confirmed with no yellow highlight;
-- completed Word, Word PDF/PNG QA, WAV, MP3, TXT, SRT, and audio metadata; and
+- completed Word, Word PDF/every QA page, WAV, MP3, TXT, SRT, and audio metadata;
+  and
 - current OP approval after visual and listening review.
 
 Confirmation creates a new local run, removes the `DRAFT_` filename prefix, and

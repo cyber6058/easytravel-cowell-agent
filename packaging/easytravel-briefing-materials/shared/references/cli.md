@@ -17,7 +17,8 @@ free text. Do not echo source contents or OP values.
 & $briefingPython -m travel_briefing.cli doctor --format json
 ```
 
-`doctor` enumerates Yating, Word registration, pdftoppm, and configured ffmpeg.
+`doctor` enumerates Yating, Word registration, pdftoppm, configured ffmpeg, and
+the canonical LIST calibration hash/schema state.
 It does not start Word, synthesize speech, install anything, or make a network
 request. A warning is an unavailable capability, not permission to add a fallback.
 
@@ -33,9 +34,11 @@ Use at least one of `--url` and `--pdf`:
   --format json
 ```
 
-Supplying `--url` performs a live allowlisted GET and therefore requires its own
-current approval. PDF-only preparation is local. Every call creates a new
-`<product-code>/<timestamp>` directory; never choose an existing run directory.
+When the same user message supplies the URL and asks to generate briefing
+materials, that one-request DRAFT authorization includes this allowlisted GET.
+Do not ask again. A different URL requires a new generation request. PDF-only
+preparation is local. Every call creates a new `<product-code>/<timestamp>`
+directory; never choose an existing run directory.
 
 ## Apply reviewed OP decisions
 
@@ -72,7 +75,7 @@ Do not render audio until `ready` is true.
 
 ## Render a DRAFT
 
-After approval to use the private template, Word COM, and local Yating:
+Under the current one-request DRAFT authorization:
 
 ```powershell
 & $briefingPython -m travel_briefing.cli render `

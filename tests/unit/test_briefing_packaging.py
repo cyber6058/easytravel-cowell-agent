@@ -110,6 +110,60 @@ def test_briefing_skill_enforces_the_reviewed_local_workflow():
     assert "cowell_cli" not in skill
 
 
+def test_one_generation_request_authorizes_one_bounded_local_draft():
+    skill = _read(CANONICAL_SKILL)
+    cli_reference = _read(
+        PACKAGE / "shared" / "references" / "cli.md"
+    )
+    template_reference = _read(
+        PACKAGE
+        / "shared"
+        / "references"
+        / "audio-and-template.md"
+    )
+
+    for required_text in (
+        "One-request DRAFT authorization",
+        "supplied NewAmazing URL",
+        "canonical LIST master",
+        "owned hidden Word",
+        "pdftoppm",
+        "Microsoft Yating",
+        "configured ffmpeg",
+        "Do not ask for another approval",
+        "new generation request",
+    ):
+        assert required_text in skill
+    for excluded_gate in (
+        "LIST calibration",
+        "live JMA",
+        "dependency installation",
+        "CONFIRMED",
+        "LINE",
+        "upload",
+        "deploy",
+        "publish",
+        "Cowell",
+    ):
+        assert excluded_gate in skill
+    assert "5/6/7 template selection" not in skill
+    assert "--template" not in cli_reference
+    assert "master_path" in template_reference
+    assert "calibration_manifest" in template_reference
+    assert "every QA page" in template_reference
+    assert "WAV, TXT, and SRT" in template_reference
+
+
+def test_one_request_policy_is_recorded_in_project_rules_and_readme():
+    agents = _read(REPO / "AGENTS.md")
+    readme = _read(REPO / "README.md")
+
+    assert "one local DRAFT" in agents
+    assert "does not expand any Cowell" in agents
+    assert "one local DRAFT" in readme
+    assert "canonical LIST master" in readme
+
+
 def test_briefing_app_and_installer_are_isolated_from_cowell():
     app_pyproject = _read(PACKAGE / "app-pyproject.toml")
     installer = _read(PACKAGE / "Install-EasyTravelBriefingMaterials.ps1")

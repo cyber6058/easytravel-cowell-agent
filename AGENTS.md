@@ -27,8 +27,14 @@ unrelated Cowell discovery without a new approved design.
   unapproved source, template, voice, or fallback.
 - Never send LINE, upload artifacts, create video, use cloud TTS, deploy, or
   publish from the briefing workflow.
-- Live source requests, private template access, Word COM, local synthesis,
-  dependency installation, and confirmation are separate approval gates.
+- Outside the one-request DRAFT rule below, source access, calibration,
+  dependency installation, and confirmation remain separate approval gates.
+- After 0.2.0 calibration, one explicit request that supplies a NewAmazing URL
+  and/or PDF and asks to generate briefing materials authorizes one local DRAFT:
+  the supplied source, canonical master, owned Word, pdftoppm, Microsoft Yating,
+  and already configured ffmpeg. Do not repeat normal-stage approval prompts.
+- That one-DRAFT boundary excludes calibration, live JMA, installation,
+  CONFIRMED, LINE, upload, deploy, publish, push, and any Cowell access.
 
 This briefing scope does not expand any Cowell read or write permission.
 
