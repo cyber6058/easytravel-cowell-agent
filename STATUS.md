@@ -3,7 +3,8 @@
 ## 一句話現況
 
 立益 Cowell 專用功能與說明會產生器 Task 6 離線實作已完成；Task 4 正式頁驗證
-與 Task 6 JMA synthetic XML 回歸都通過，第一次實際 JMA 預報讀取尚未執行。
+與 Task 6 JMA synthetic XML 回歸都通過，但 GitHub 遠端目前意外為 public，禁止
+push；第一次實際 JMA 預報讀取尚未執行。
 
 ## 這次做了什麼
 
@@ -237,18 +238,33 @@
   Yating integration tests；compileall、行寬檢查與 `git diff --check` 均通過。
 - 本次實作只使用 synthetic XML，沒有實際 JMA 預報 request、live response、Word
   COM、ffmpeg 安裝、完整音訊、LINE、Cowell access、部署或外部發布。
+- 2026-08-12 接續檢查：`git pull --ff-only` 回傳 `Already up to date.`；本機仍比
+  `origin/main` 多 3 個 Task 6 commits，工作樹當時乾淨。
+- 2026-08-12 由接手者重新執行完整離線回歸：`270 passed, 2 skipped in 8.56s`；
+  compileall、Python 100 字元行寬檢查及 `git diff --check origin/main..HEAD` 通過，
+  待推送範圍未發現產出檔、credentials 或旅客 PII。
+- 2026-08-12 兩次 GitHub 即時唯讀查詢均顯示
+  `cyber6058/easytravel-cowell-agent` 為 `PUBLIC`／`private: false`，與本專案必須
+  private 的規則及先前 STATUS 紀錄矛盾；因此沒有 push，也沒有變更 repo visibility。
+- 針對全部 28 個本機 Git commits 的唯讀歷史掃描未發現禁用 artifact 副檔名；3 個
+  高可信 credential pattern 命中只位於 PII 掃描器規則與其遮蔽測試 fixture，不是
+  實際 credential。這不是完整外洩鑑識，也不代表 repo 曾公開的風險已撤銷。
 
 ## 下一步
 
-Task 6 離線實作已完成。下一步先取得設計、功能與本 STATUS commits 的 push 核准；
-若要驗證正式 JMA 電文，再另行核准一次受限唯讀 GET，不與 push 合併授權。Cowell
-部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序
-驗證 auth status 與 rooms preview。
+Task 6 離線實作已完成。下一步須由使用者明確核准將 GitHub repo 改回 private，或
+由使用者自行改回後通知；重新驗證 `PRIVATE` 後，再另行確認是否 push 本機 Task 6
+commits。若要驗證正式 JMA 電文，仍須再核准一次受限唯讀 GET，不與 visibility 或
+push 合併授權。Cowell 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP
+登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
+
+GitHub 遠端截至 2026-08-12 即時驗證為 public；這是目前 push 的首要阻塞。依私有
+產品與「不可把內容複製到公開處」規則，在 repo 重新驗證為 private 前不得 push。
 
 說明會產生器 Task 4／Task 5／Task 6 沒有 parser、merge 或離線天氣技術阻塞；
 URL-only 正式頁已
