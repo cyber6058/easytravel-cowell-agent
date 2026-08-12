@@ -2,10 +2,10 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 11 第一關已完成：0.1.0 ZIP 在全新暫存
-環境的安裝、console launcher、config 與防覆蓋驗證均通過；尚未執行私有範本、
-Word COM、視覺 QA、正式 JMA、完整 Yating／MP3 與三區域實際產品驗收。GitHub
-遠端維持 public，因此仍禁止 push。
+立益 Cowell 專用功能與說明會產生器 0.1.0 乾淨安裝關卡已通過；使用者另已採用
+「三份 LIST 只校準一次、執行期使用單一動態 master、長行程自動續頁」方向，
+書面規格已完成但仍待使用者複核後才能規劃 0.2.0 實作。尚未讀取私有範本內容、
+啟動 Word COM 或執行視覺 QA；GitHub 遠端維持 public，因此仍禁止 push。
 
 ## 這次做了什麼
 
@@ -324,17 +324,30 @@ Word COM、視覺 QA、正式 JMA、完整 Yating／MP3 與三區域實際產品
 - 驗證後已刪除唯一的 temp root（1,524 files／253 directories）以及本次在 repo
   產生的 pip／PowerShell cache；沒有保留安裝、synthetic 範本或測試 config，也沒有
   live request、Word COM、語音合成、LINE、Cowell、部署、發布或 push。
+- 2026-08-12 使用者採用新的全自動使用方式：提供新魅力 URL、行程 PDF 或兩者並
+  要求「產生說明會資料」，同一次要求即可啟動該 `draft_id` 的受限來源讀取、私人
+  LIST master、Word COM、Yating、pdftoppm 與已設定 ffmpeg DRAFT 管線；正常情況
+  不再逐步詢問，只有缺值、衝突、契約漂移或 QA 失敗才集中回報。
+- 新設計把三份 `.doc` 定位為一次性格式校準樣本；校準通過後只保留一份私人
+  canonical master，依來源實際 N 天複製每日列，不再有 5／6／7 天範本選擇。
+  內容在可讀性下限內放不下一頁時自動續頁，續頁重複團體識別與每日表頭，不能
+  靠過度縮字、截字或刪除事實硬塞單頁。
+- 書面規格為
+  `docs/specs/2026-08-12-automatic-briefing-dynamic-list-design.md`；它在使用者複核
+  後取代舊設計的 5／6／7 天限定與單頁即阻擋規則。規格自檢沒有 TODO／TBD，
+  `git diff --check` 通過。本輪只寫文件，沒有讀取三份私有範本內容、啟動 Word
+  COM／Yating、發出 live URL／JMA request、安裝 ffmpeg 或產生任何 artifact。
 
 ## 下一步
 
-Task 11 的乾淨安裝關卡已通過。下一個最小關卡是由使用者提供或確認精確的私有 LIST
-範本路徑，另行核准只讀取該範本、啟動一個最長 20 秒的隱藏 Word COM instance，並以
-synthetic 行程建立 DRAFT DOCX／單頁 PDF／PNG 後逐頁視覺 QA；此關卡不做 live URL／
-JMA、Yating、MP3、LINE、CONFIRMED、Cowell、部署或發布。之後再分別核准正式 JMA
-受限唯讀 GET、Yating 正式合成與既有 ffmpeg 設定，最後才做大阪 URL-only、東北
-PDF-only、北海道 URL+PDF 三區域驗收。GitHub visibility 依使用者指示不變，目前
-public 狀態下仍不得 push。Cowell 部分維持到立益公司電腦 clone、先跑完整離線測試，
-再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+先由使用者複核
+`docs/specs/2026-08-12-automatic-briefing-dynamic-list-design.md`。通過後建立 0.2.0
+逐檔案、逐測試、逐 commit 的實作計畫；第一個實機關卡才會只讀檢查三份私有 LIST、
+啟動受限 Word COM、建立私人 canonical master，並用 synthetic 4／5／6／7／8／12
+天行程做逐頁視覺 QA。正式 JMA、真實產品、完整 Yating／MP3、CONFIRMED 與 LINE
+仍依規格分開處理。GitHub visibility 依使用者指示不變，目前 public 狀態下仍不得
+push。Cowell 部分維持到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控
+Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
@@ -362,5 +375,9 @@ PDF 會明確
 Word COM 仍須在 Task 8 以最長 20 秒的隱藏 instance 另測。
 Task 11 隔離安裝已證明新 `briefing.exe` 可啟動，且顯式 config 可載入外部
 `pdftoppm`；私有範本契約及 Word 實機 render 仍未驗證。
+目前 0.1.0 Word 契約仍寫死 5／6／7 天形狀與單頁成功條件，不能當成新需求已完成；
+必須等動態 LIST 書面規格複核後，以 0.2.0 計畫改造並實際校準三份樣本。若三份
+樣本除日數、內容及可證明的自適應排版外仍有無法歸一的結構差異，校準必須
+fail closed 並請使用者決定，不能自行挑一份或平均差異。
 安裝 ffmpeg、再次 live 官網 request、首次實際 JMA 預報 request、任何雲端 TTS、LINE、
 影片與部署都不包含在本次剩餘授權內，必須各自另行確認。
