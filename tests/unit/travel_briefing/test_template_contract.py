@@ -11,6 +11,7 @@ from travel_briefing.template_contract import (
     TableShape,
     expected_list_table_shapes,
     layout_fingerprint,
+    normalize_word_points,
     validate_list_template,
 )
 
@@ -105,3 +106,11 @@ def test_layout_fingerprint_is_canonical_and_contains_no_document_text():
 
     assert layout_fingerprint(first) == layout_fingerprint(second)
     assert len(layout_fingerprint(first)) == 64
+
+
+@pytest.mark.parametrize(
+    ("raw", "normalized"),
+    [(31.504, 31.5), (31.505, 31.51), (31, 31.0)],
+)
+def test_word_points_are_normalized_to_hundredths(raw, normalized):
+    assert normalize_word_points(raw) == normalized

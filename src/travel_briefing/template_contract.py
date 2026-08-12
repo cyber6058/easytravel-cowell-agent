@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 
@@ -35,6 +36,16 @@ LIST_ANCHOR_LABELS = (
     "識別牌",
     "機場專員",
 )
+
+
+def normalize_word_points(value: int | float) -> float:
+    """Return a stable hundredth-point value for Word COM measurements."""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("Word points must be numeric")
+    return float(
+        Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    )
 
 
 @dataclass(frozen=True, slots=True)
