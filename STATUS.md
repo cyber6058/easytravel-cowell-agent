@@ -2,10 +2,10 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 Task 10 離線實作已完成；對話 Skill、Codex／
-Claude wrappers、獨立 0.1.0 安裝包及完整離線回歸都通過，但尚未安裝套件，也未執行
-私有範本、Word COM、視覺 QA、正式 JMA 與三區域實際產品驗收；GitHub 遠端維持
-public，因此仍禁止 push。
+立益 Cowell 專用功能與說明會產生器 Task 11 第一關已完成：0.1.0 ZIP 在全新暫存
+環境的安裝、console launcher、config 與防覆蓋驗證均通過；尚未執行私有範本、
+Word COM、視覺 QA、正式 JMA、完整 Yating／MP3 與三區域實際產品驗收。GitHub
+遠端維持 public，因此仍禁止 push。
 
 ## 這次做了什麼
 
@@ -303,16 +303,38 @@ public，因此仍禁止 push。
 - Task 10 實作已本機提交為 `0daf457`。本次未安裝套件、未改 GitHub visibility、
   未 push，也未執行 live URL／JMA、私有範本、Word COM、Yating、ffmpeg 安裝、LINE、
   Cowell、部署或外部發布。
+- 2026-08-12 經使用者明確核准 Task 11 第一關，只在新的 OS temp root 解壓及安裝
+  `EasyTravel-Briefing-Materials-0.1.0.zip`；安裝時把 `LOCALAPPDATA`／`USERPROFILE`
+  指向該 root，並使用 `-SkipCodexPluginInstall -SkipClaudeSkillInstall`，沒有改動使用者
+  現有 Codex／Claude 設定。範本是當次建立的純 synthetic DOCX，沒有讀私有 LIST。
+- ZIP SHA-256 重驗仍為
+  `14db8cc9e7e8ce9c90eec37a62069b59f018f940674e795c18f88339b4ab93e5`；Python
+  3.14 暫存 venv 成功安裝 briefing 0.1.0、Beautiful Soup 4.15.0、httpx 0.28.1、
+  PyMuPDF 1.28.2 與其依賴，`pip check` 回傳 `No broken requirements found.`。
+- 已安裝的 `briefing --version` 回傳 `briefing 0.1.0`；`render --help` 只暴露
+  `--tts {yating}`。config 可從隔離的 `LOCALAPPDATA` 載入 synthetic `.docx`、output
+  root、layout hash 與現有 `pdftoppm`；`cowell_cli` 不可匯入，且安裝包沒有 Hanhan
+  script。
+- 安裝器執行的 `doctor` 與後續 JSON probe 均實測 Python／Windows／Yating voice
+  enumeration／Word registry／pdftoppm 為 ok；ffmpeg 未設定所以整體狀態為 warning。
+  這不代表 Word COM 已啟動、Yating 已合成或 MP3 已驗收。
+- 對同一隔離目錄重跑 installer 會以 exit 1 拒絕，訊息為 app already exists；app、
+  config 與檔案數均保持不變，證明不覆蓋既有安裝。PyMuPDF 1.28.2 會印出既有
+  `fitz` API 未來棄用 warning，未影響本次命令，但應在後續維護處理。
+- 驗證後已刪除唯一的 temp root（1,524 files／253 directories）以及本次在 repo
+  產生的 pip／PowerShell cache；沒有保留安裝、synthetic 範本或測試 config，也沒有
+  live request、Word COM、語音合成、LINE、Cowell、部署、發布或 push。
 
 ## 下一步
 
-Task 10 離線實作已完成。下一個安全里程碑是 Task 11，但需拆成獨立核准關卡：先在
-一般 OP shell 安裝或以乾淨暫存環境驗證 0.1.0 套件；再分別核准私有 LIST 範本與
-Word COM／逐頁視覺 QA、正式 JMA 受限唯讀 GET、Yating 正式合成與既有 ffmpeg 設定，
-最後才以大阪 URL-only、東北 PDF-only、北海道 URL+PDF 做三區域驗收。任何本機
-CONFIRMED 仍不授權 LINE、上傳、部署或發布。GitHub visibility 依使用者指示不變，
-目前 public 狀態下仍不得 push。Cowell 部分維持到立益公司電腦 clone、先跑完整離線
-測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+Task 11 的乾淨安裝關卡已通過。下一個最小關卡是由使用者提供或確認精確的私有 LIST
+範本路徑，另行核准只讀取該範本、啟動一個最長 20 秒的隱藏 Word COM instance，並以
+synthetic 行程建立 DRAFT DOCX／單頁 PDF／PNG 後逐頁視覺 QA；此關卡不做 live URL／
+JMA、Yating、MP3、LINE、CONFIRMED、Cowell、部署或發布。之後再分別核准正式 JMA
+受限唯讀 GET、Yating 正式合成與既有 ffmpeg 設定，最後才做大阪 URL-only、東北
+PDF-only、北海道 URL+PDF 三區域驗收。GitHub visibility 依使用者指示不變，目前
+public 狀態下仍不得 push。Cowell 部分維持到立益公司電腦 clone、先跑完整離線測試，
+再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
@@ -338,7 +360,7 @@ PDF 會明確
 本機 capability probe 與真實 integration 顯示 Yating 可用且正式管線可合成，
 `pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊，但 `ffmpeg` 尚未找到；
 Word COM 仍須在 Task 8 以最長 20 秒的隱藏 instance 另測。
-Codex 沙箱直接啟動新 `briefing.exe` 時看不到外部 WinGet Poppler 路徑，但同一
-程式由專案 Python 啟動可正確偵測，需在一般 OP shell 再驗證 console launcher。
+Task 11 隔離安裝已證明新 `briefing.exe` 可啟動，且顯式 config 可載入外部
+`pdftoppm`；私有範本契約及 Word 實機 render 仍未驗證。
 安裝 ffmpeg、再次 live 官網 request、首次實際 JMA 預報 request、任何雲端 TTS、LINE、
 影片與部署都不包含在本次剩餘授權內，必須各自另行確認。

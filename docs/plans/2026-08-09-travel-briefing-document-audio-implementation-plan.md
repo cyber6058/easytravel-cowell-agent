@@ -475,7 +475,16 @@ Skill validator 與 plugin validator 通過。最終完整離線回歸為
 讀取私有範本、啟動 Word COM／Yating、安裝 ffmpeg、發出 live request、傳 LINE、
 存取 Cowell、部署、發布或 push；GitHub visibility 依使用者指示維持現況。
 
-## Task 11：三區域驗收與交付
+## Task 11：三區域驗收與交付（進行中；乾淨安裝已通過）
+
+2026-08-12 第一個獨立關卡已通過：以原始 0.1.0 ZIP 在新建 OS temp root 完成
+Python 3.14 venv 安裝，跳過 Codex／Claude 註冊並使用純 synthetic DOCX。已安裝的
+`briefing --version` 為 0.1.0，`render --help` 只有 `--tts {yating}`，`pip check`
+無 broken requirements，config 載入、Cowell 隔離及 installer 防覆蓋均通過。
+`doctor` 只做 capability probe：Yating voice enumeration、Word registry 與
+`pdftoppm` 為 ok，ffmpeg 未設定為 warning；沒有啟動 Word COM 或語音，也沒有讀取
+私有 LIST、發出 live request 或改動真實 agent 設定。PyMuPDF 1.28.2 另有 `fitz` API
+未來棄用 warning。驗證後 temp root 與本次 cache 已全部刪除。
 
 ### 離線驗證
 
