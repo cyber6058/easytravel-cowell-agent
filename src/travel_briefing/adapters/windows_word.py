@@ -151,12 +151,24 @@ def _read_job_metadata(path: Path) -> dict[str, str | Path]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise WordGenerationError("Word automation job is not valid UTF-8 JSON") from error
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
-        raise WordGenerationError("Word automation job does not match schema version 1")
+    if not isinstance(payload, dict):
+        raise WordGenerationError("Word automation job must be a JSON object")
+    schema_version = payload.get("schema_version")
+    if schema_version not in {1, 2}:
+        raise WordGenerationError(
+            "Word automation job schema version is unsupported"
+        )
     action = payload.get("action")
     nonce = payload.get("ownership_nonce")
     pid_path = payload.get("word_pid_path")
-    if action not in {"probe", "inspect", "patch", "render"}:
+    if action not in {
+        "probe",
+        "inspect",
+        "patch",
+        "render",
+        "inspect-v2",
+        "calibrate",
+    }:
         raise WordGenerationError("Word automation job action is unsupported")
     if (
         not isinstance(nonce, str)
@@ -165,11 +177,92 @@ def _read_job_metadata(path: Path) -> dict[str, str | Path]:
         or not pid_path
     ):
         raise WordGenerationError("Word automation ownership metadata is invalid")
+    if schema_version == 2:
+        _validate_schema_two_job(payload, path.parent.resolve())
     return {
         "action": action,
         "ownership_nonce": nonce,
         "word_pid_path": Path(pid_path).expanduser().resolve(),
     }
+
+
+def _validate_schema_two_job(
+    payload: dict[str, Any],
+    job_directory: Path,
+) -> None:
+    common = {
+        "schema_version",
+        "action",
+        "ownership_nonce",
+        "word_pid_path",
+        "report_path",
+    }
+    action = payload["action"]
+    if action == "inspect-v2":
+        expected = common | {"sample_paths"}
+        samples = payload.get("sample_paths")
+        if (
+            set(payload) != expected
+            or not isinstance(samples, list)
+            or len(samples) != 3
+            or any(not isinstance(item, str) for item in samples)
+        ):
+            raise WordGenerationError(
+                "Word automation job does not match schema version 2"
+            )
+        sample_paths = tuple(Path(item).expanduser().resolve() for item in samples)
+        if (
+            len(set(sample_paths)) != 3
+            or any(
+                not item.is_file()
+                or item.suffix.lower() not in {".doc", ".docx"}
+                for item in sample_paths
+            )
+        ):
+            raise WordGenerationError(
+                "Word automation job does not match schema version 2"
+            )
+    elif action == "calibrate":
+        expected = common | {
+            "source_path",
+            "working_copy_path",
+            "output_docx",
+        }
+        if set(payload) != expected or any(
+            not isinstance(payload.get(key), str) or not payload[key]
+            for key in (
+                "source_path",
+                "working_copy_path",
+                "output_docx",
+            )
+        ):
+            raise WordGenerationError(
+                "Word automation job does not match schema version 2"
+            )
+        source = Path(payload["source_path"]).expanduser().resolve()
+        working = Path(payload["working_copy_path"]).expanduser().resolve()
+        output = Path(payload["output_docx"]).expanduser().resolve()
+        if (
+            not source.is_file()
+            or source.suffix.lower() not in {".doc", ".docx"}
+            or output.suffix.lower() != ".docx"
+            or len({source, working, output}) != 3
+            or working.exists()
+            or output.exists()
+        ):
+            raise WordGenerationError(
+                "Word automation job does not match schema version 2"
+            )
+    else:
+        raise WordGenerationError(
+            "Word automation job does not match schema version 2"
+        )
+    for key in ("word_pid_path", "report_path"):
+        candidate = Path(payload[key]).expanduser().resolve()
+        if candidate.parent != job_directory:
+            raise WordGenerationError(
+                "Word automation job does not match schema version 2"
+            )
 
 
 def _read_owned_word_process(

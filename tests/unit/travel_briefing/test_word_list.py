@@ -19,7 +19,12 @@ from travel_briefing.word_list import (
     build_list_word,
     compact_route_text,
     inspect_list_template,
+    inspect_list_templates_v2,
     probe_word_capability,
+)
+from travel_briefing.list_calibration import (
+    ListLayoutProfile,
+    ListTemplateInspectionV2,
 )
 from travel_briefing.template_contract import (
     LIST_ANCHOR_LABELS,
@@ -251,6 +256,87 @@ def template_inspection(day_count: int) -> ListTemplateInspection:
     )
 
 
+def template_inspection_v2(day_count: int) -> ListTemplateInspectionV2:
+    hashes = {
+        name: (name.encode("utf-8").hex() + "0" * 64)[:64]
+        for name in (
+            "style",
+            "font",
+            "paragraph",
+            "border",
+            "shading",
+            "daily-header",
+            "daily-body",
+            "dynamic",
+        )
+    }
+    return ListTemplateInspectionV2(
+        day_count=day_count,
+        table_shapes=expected_list_table_shapes(day_count),
+        anchor_labels=LIST_ANCHOR_LABELS,
+        list_header_accessible_cells=LIST_HEADER_ACCESSIBLE_CELLS,
+        list_header_paragraph_count=4,
+        section_count=1,
+        page_width_points=595.28,
+        page_height_points=841.89,
+        orientation="portrait",
+        margins_points=(36.0, 36.0, 31.5, 31.5),
+        header_distance_points=18.0,
+        footer_distance_points=18.0,
+        table_column_widths_points=(
+            (180.0, 180.0, 180.0),
+            (90.0, 90.0, 90.0, 90.0, 90.0, 90.0),
+            (54.0, 72.0, 108.0, 90.0, 72.0, 72.0, 72.0),
+            (180.0, 180.0, 180.0),
+        ),
+        merged_cell_map=("table-1:r1c1-r1c3",),
+        qr_shape_count=1,
+        shape_geometry_points=(("qr", 500.0, 12.0, 42.0, 42.0),),
+        style_digest=hashes["style"],
+        font_digest=hashes["font"],
+        paragraph_digest=hashes["paragraph"],
+        border_digest=hashes["border"],
+        shading_digest=hashes["shading"],
+        daily_header_digest=hashes["daily-header"],
+        daily_body_prototype_digest=hashes["daily-body"],
+        dynamic_content_digest=hashes["dynamic"],
+        adaptive_profiles=(
+            ListLayoutProfile(
+                name="normal",
+                body_font_points=10.0,
+                line_spacing_points=12.0,
+                paragraph_space_after_points=1.0,
+                cell_top_margin_points=1.4,
+                cell_bottom_margin_points=1.4,
+            ),
+        ),
+    )
+
+
+class SyntheticInspectionV2Adapter:
+    def __init__(self, observed: ListTemplateInspectionV2) -> None:
+        self.observed = observed
+
+    def run(self, job_path: Path, *, timeout_seconds: int) -> None:
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        report = {
+            "schema_version": 2,
+            "action": "inspect-v2",
+            "word_version": "16.0-synthetic",
+            "samples": [
+                {
+                    "sample_id": f"sample-{index:03d}",
+                    "inspection": self.observed.to_dict(),
+                }
+                for index in range(1, 4)
+            ],
+        }
+        Path(job["report_path"]).write_text(
+            json.dumps(report, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+
 def test_build_list_word_uses_a_temp_job_and_publishes_exclusively(tmp_path):
     template = tmp_path / "private-template.doc"
     template.write_bytes(b"synthetic private template")
@@ -378,3 +464,22 @@ def test_template_inspection_returns_but_does_not_auto_approve_a_fingerprint(
             adapter=adapter,
             expected_layout_fingerprint="0" * 64,
         )
+
+
+def test_schema_two_inspection_wrapper_returns_sanitized_sample_evidence(
+    tmp_path,
+):
+    paths = tuple(tmp_path / f"sample-{index}.doc" for index in range(1, 4))
+    for path in paths:
+        path.write_bytes(b"synthetic")
+    observed = template_inspection_v2(5)
+    adapter = SyntheticInspectionV2Adapter(observed)
+
+    result = inspect_list_templates_v2(paths, adapter=adapter)
+
+    assert len(result.samples) == 3
+    assert result.word_version == "16.0-synthetic"
+    assert all(
+        item.source_sha256 == result.samples[0].source_sha256
+        for item in result.samples
+    )

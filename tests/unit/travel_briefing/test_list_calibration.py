@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+from pathlib import Path
 from dataclasses import replace
 
 import pytest
@@ -12,6 +14,7 @@ from travel_briefing.list_calibration import (
     ListLayoutProfile,
     ListTemplateInspectionV2,
     build_calibration_manifest,
+    calibrate_list_templates,
     compare_calibration_samples,
     manifest_sha256,
     normalized_structure_fingerprint,
@@ -348,3 +351,190 @@ def test_master_validation_accepts_exact_manifest_identity():
             calibrated.master_structure_fingerprint
         ),
     )
+
+
+class SyntheticCalibrationAdapter:
+    def __init__(
+        self,
+        inspections: tuple[ListTemplateInspectionV2, ...],
+        *,
+        mutate_source: bool = False,
+    ) -> None:
+        self.inspections = inspections
+        self.mutate_source = mutate_source
+        self.actions: list[str] = []
+
+    def run(self, job_path: Path, *, timeout_seconds: int) -> None:
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        self.actions.append(job["action"])
+        if job["action"] == "inspect-v2":
+            assert len(job["sample_paths"]) == 3
+            if self.mutate_source:
+                Path(job["sample_paths"][1]).write_bytes(b"changed")
+            report = {
+                "schema_version": 2,
+                "action": "inspect-v2",
+                "word_version": "16.0-synthetic",
+                "samples": [
+                    {
+                        "sample_id": f"sample-{index:03d}",
+                        "inspection": observed.to_dict(),
+                    }
+                    for index, observed in enumerate(
+                        self.inspections, start=1
+                    )
+                ],
+            }
+        else:
+            source = Path(job["source_path"])
+            working_copy = Path(job["working_copy_path"])
+            output = Path(job["output_docx"])
+            assert source.is_file()
+            assert not working_copy.exists()
+            assert not output.exists()
+            output.write_bytes(b"synthetic calibrated docx")
+            master_inspection = replace(
+                self.inspections[1],
+                day_count=1,
+                table_shapes=(
+                    TableShape(4, 3),
+                    TableShape(3, 6),
+                    TableShape(2, 7),
+                    TableShape(1, 3),
+                ),
+                dynamic_content_digest=digest("empty-master"),
+            )
+            report = {
+                "schema_version": 2,
+                "action": "calibrate",
+                "word_version": "16.0-synthetic",
+                "master_inspection": master_inspection.to_dict(),
+                "forbidden_dynamic_token_types": [],
+                "output_bytes": output.stat().st_size,
+            }
+        Path(job["report_path"]).write_text(
+            json.dumps(report, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+
+def source_files(tmp_path) -> tuple[Path, ...]:
+    paths = tuple(tmp_path / f"LIST-{index}.doc" for index in range(1, 4))
+    for index, path in enumerate(paths, start=1):
+        path.write_bytes(f"synthetic-{index}".encode())
+    return paths
+
+
+def test_calibration_inspects_before_building_and_publishes_private_safe_files(
+    tmp_path,
+):
+    samples = source_files(tmp_path)
+    master = tmp_path / "private" / "list-master.docx"
+    manifest_path = tmp_path / "private" / "calibration-manifest.json"
+    adapter = SyntheticCalibrationAdapter(
+        (
+            inspection(5, dynamic_seed="a"),
+            inspection(6, dynamic_seed="b"),
+            inspection(7, dynamic_seed="c"),
+        )
+    )
+
+    result = calibrate_list_templates(
+        samples,
+        master_path=master,
+        manifest_path=manifest_path,
+        adapter=adapter,
+        created_at="2026-08-13T09:00:00+08:00",
+    )
+
+    assert adapter.actions == ["inspect-v2", "calibrate"]
+    assert result.master_path == master.resolve()
+    assert result.manifest_path == manifest_path.resolve()
+    assert result.master_sha256 == hashlib.sha256(
+        b"synthetic calibrated docx"
+    ).hexdigest()
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert payload["base_sample_sha256"] == hashlib.sha256(
+        b"synthetic-2"
+    ).hexdigest()
+    assert all(
+        set(item)
+        == {
+            "source_sha256",
+            "day_count",
+            "normalized_structure_fingerprint",
+        }
+        for item in payload["sample_evidence"]
+    )
+    assert "LIST-1.doc" not in manifest_path.read_text(encoding="utf-8")
+
+
+def test_calibration_detects_source_mutation_and_never_builds_master(
+    tmp_path,
+):
+    samples = source_files(tmp_path)
+    adapter = SyntheticCalibrationAdapter(
+        (
+            inspection(5),
+            inspection(6),
+            inspection(7),
+        ),
+        mutate_source=True,
+    )
+
+    with pytest.raises(ValueError) as captured:
+        calibrate_list_templates(
+            samples,
+            master_path=tmp_path / "master.docx",
+            manifest_path=tmp_path / "manifest.json",
+            adapter=adapter,
+            created_at="2026-08-13T09:00:00+08:00",
+        )
+
+    assert getattr(captured.value, "code", "") == (
+        "CALIBRATION_SOURCE_CHANGED"
+    )
+    assert adapter.actions == ["inspect-v2"]
+    assert not (tmp_path / "master.docx").exists()
+
+
+def test_calibration_conflict_and_existing_destinations_fail_before_mutation(
+    tmp_path,
+):
+    samples = source_files(tmp_path)
+    conflicted = replace(
+        inspection(7),
+        margins_points=(40.0, 31.5, 36.0, 31.5),
+    )
+    adapter = SyntheticCalibrationAdapter(
+        (inspection(5), inspection(6), conflicted)
+    )
+
+    with pytest.raises(
+        CalibrationContractError,
+        match="margins_points",
+    ):
+        calibrate_list_templates(
+            samples,
+            master_path=tmp_path / "master.docx",
+            manifest_path=tmp_path / "manifest.json",
+            adapter=adapter,
+            created_at="2026-08-13T09:00:00+08:00",
+        )
+    assert adapter.actions == ["inspect-v2"]
+
+    master = tmp_path / "owned.docx"
+    master.write_bytes(b"user owned")
+    clean_adapter = SyntheticCalibrationAdapter(
+        (inspection(5), inspection(6), inspection(7))
+    )
+    with pytest.raises(ValueError, match="must not already exist"):
+        calibrate_list_templates(
+            samples,
+            master_path=master,
+            manifest_path=tmp_path / "manifest.json",
+            adapter=clean_adapter,
+            created_at="2026-08-13T09:00:00+08:00",
+        )
+    assert master.read_bytes() == b"user owned"
+    assert clean_adapter.actions == []

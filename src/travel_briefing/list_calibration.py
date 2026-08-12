@@ -3,8 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import secrets
+import shutil
+import tempfile
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import Any, Protocol
 
 from .template_contract import (
     A4_HEIGHT_POINTS,
@@ -29,6 +33,19 @@ class CalibrationContractError(ValueError):
         self.field_paths = tuple(sorted(set(field_paths)))
         fields = ", ".join(self.field_paths)
         super().__init__(f"{self.code}: structural fields differ: {fields}")
+
+
+class CalibrationSourceChangedError(ValueError):
+    code = "CALIBRATION_SOURCE_CHANGED"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "CALIBRATION_SOURCE_CHANGED: a calibration source changed"
+        )
+
+
+class WordCalibrationAdapter(Protocol):
+    def run(self, job_path: Path, *, timeout_seconds: int) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -623,6 +640,180 @@ class ListCalibrationManifest:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class ListInspectionBatchResult:
+    samples: tuple[ListCalibrationSample, ...]
+    word_version: str
+
+
+@dataclass(frozen=True, slots=True)
+class ListCalibrationBuildResult:
+    master_path: Path
+    manifest_path: Path
+    master_sha256: str
+    manifest_sha256: str
+    word_version: str
+
+
+def inspect_list_templates_v2(
+    sample_paths: tuple[Path, ...],
+    *,
+    adapter: WordCalibrationAdapter,
+    timeout_seconds: int = 120,
+) -> ListInspectionBatchResult:
+    samples = _resolve_sample_paths(sample_paths)
+    if timeout_seconds <= 0:
+        raise ValueError("LIST inspection timeout must be positive")
+    before = tuple(_sha256_file(path) for path in samples)
+    with tempfile.TemporaryDirectory(
+        prefix="easytravel-list-inspect-v2-"
+    ) as temp:
+        work_dir = Path(temp)
+        job_path = work_dir / "word-job.json"
+        report_path = work_dir / "inspection-report.json"
+        job = {
+            "schema_version": 2,
+            "action": "inspect-v2",
+            "ownership_nonce": secrets.token_hex(16),
+            "word_pid_path": str(work_dir / "word-owner.json"),
+            "report_path": str(report_path),
+            "sample_paths": [str(path) for path in samples],
+        }
+        _write_json_exclusive(job_path, job)
+        adapter.run(job_path, timeout_seconds=timeout_seconds)
+        report = _read_inspection_batch_report(report_path)
+    after = tuple(_sha256_file(path) for path in samples)
+    if after != before:
+        raise CalibrationSourceChangedError()
+    return ListInspectionBatchResult(
+        samples=tuple(
+            ListCalibrationSample.from_inspection(source_hash, observed)
+            for source_hash, observed in zip(
+                before, report["inspections"], strict=True
+            )
+        ),
+        word_version=report["word_version"],
+    )
+
+
+def calibrate_list_templates(
+    sample_paths: tuple[Path, ...],
+    *,
+    master_path: Path,
+    manifest_path: Path,
+    adapter: WordCalibrationAdapter,
+    created_at: str,
+    timeout_seconds: int = 180,
+) -> ListCalibrationBuildResult:
+    samples = _resolve_sample_paths(sample_paths)
+    master = master_path.expanduser().resolve()
+    manifest_destination = manifest_path.expanduser().resolve()
+    if master.suffix.lower() != ".docx":
+        raise ValueError("calibrated LIST master must be .docx")
+    if manifest_destination.suffix.lower() != ".json":
+        raise ValueError("calibration manifest must be .json")
+    if master == manifest_destination:
+        raise ValueError("master and manifest destinations must differ")
+    if master.exists() or manifest_destination.exists():
+        raise ValueError(
+            "calibration destinations must not already exist"
+        )
+    if timeout_seconds <= 0:
+        raise ValueError("LIST calibration timeout must be positive")
+    inspected = inspect_list_templates_v2(
+        samples,
+        adapter=adapter,
+        timeout_seconds=timeout_seconds,
+    )
+    comparison = compare_calibration_samples(inspected.samples)
+    base_index = next(
+        index
+        for index, item in enumerate(inspected.samples)
+        if item.source_sha256 == comparison.base_sample_sha256
+    )
+    before_calibration = tuple(_sha256_file(path) for path in samples)
+    with tempfile.TemporaryDirectory(
+        prefix="easytravel-list-calibrate-"
+    ) as temp:
+        work_dir = Path(temp)
+        job_path = work_dir / "word-job.json"
+        report_path = work_dir / "calibration-report.json"
+        temporary_master = work_dir / "list-master.docx"
+        job = {
+            "schema_version": 2,
+            "action": "calibrate",
+            "ownership_nonce": secrets.token_hex(16),
+            "word_pid_path": str(work_dir / "word-owner.json"),
+            "report_path": str(report_path),
+            "source_path": str(samples[base_index]),
+            "working_copy_path": str(
+                work_dir / f"working{samples[base_index].suffix.lower()}"
+            ),
+            "output_docx": str(temporary_master),
+        }
+        _write_json_exclusive(job_path, job)
+        adapter.run(job_path, timeout_seconds=timeout_seconds)
+        report = _read_calibration_report(report_path)
+        after_calibration = tuple(_sha256_file(path) for path in samples)
+        if after_calibration != before_calibration:
+            raise CalibrationSourceChangedError()
+        if (
+            not temporary_master.is_file()
+            or temporary_master.stat().st_size == 0
+        ):
+            raise ValueError(
+                "calibration completed without a master document"
+            )
+        if report["output_bytes"] != temporary_master.stat().st_size:
+            raise ValueError(
+                "calibrated master size does not match report"
+            )
+        if report["forbidden_dynamic_token_types"]:
+            raise ValueError(
+                "calibrated master retains forbidden dynamic tokens"
+            )
+        master_hash = _sha256_file(temporary_master)
+        master_fingerprint = normalized_structure_fingerprint(
+            report["master_inspection"]
+        )
+        if (
+            master_fingerprint
+            != comparison.normalized_structure_fingerprint
+        ):
+            raise CalibrationContractError(
+                ("master_structure_fingerprint",)
+            )
+        calibration_manifest = build_calibration_manifest(
+            comparison,
+            master_sha256=master_hash,
+            master_structure_fingerprint=master_fingerprint,
+            created_at=created_at,
+            word_version=report["word_version"],
+            calibration_report_sha256=_sha256_file(report_path),
+        )
+        master.parent.mkdir(parents=True, exist_ok=True)
+        manifest_destination.parent.mkdir(parents=True, exist_ok=True)
+        master_created = False
+        try:
+            _copy_exclusive(temporary_master, master)
+            master_created = True
+            _write_text_exclusive(
+                manifest_destination,
+                calibration_manifest.to_canonical_json() + "\n",
+            )
+        except BaseException:
+            if master_created:
+                master.unlink(missing_ok=True)
+            raise
+    return ListCalibrationBuildResult(
+        master_path=master,
+        manifest_path=manifest_destination,
+        master_sha256=master_hash,
+        manifest_sha256=manifest_sha256(calibration_manifest),
+        word_version=report["word_version"],
+    )
+
+
 def normalized_structure_fingerprint(
     inspection: ListTemplateInspectionV2,
 ) -> str:
@@ -834,6 +1025,150 @@ def _normalized_layout_dict(
             "daily_body_prototype_digest"
         ],
     }
+
+
+def _resolve_sample_paths(
+    sample_paths: tuple[Path, ...],
+) -> tuple[Path, ...]:
+    if not isinstance(sample_paths, tuple) or len(sample_paths) != 3:
+        raise ValueError(
+            "LIST calibration requires exactly three sample files"
+        )
+    resolved = tuple(path.expanduser().resolve() for path in sample_paths)
+    if len(set(resolved)) != 3:
+        raise ValueError("LIST calibration samples must be unique")
+    if any(
+        not path.is_file()
+        or path.suffix.lower() not in {".doc", ".docx"}
+        for path in resolved
+    ):
+        raise ValueError(
+            "LIST calibration samples must be existing Word files"
+        )
+    return resolved
+
+
+def _read_inspection_batch_report(path: Path) -> dict[str, Any]:
+    payload = _read_json_object(path, "inspection")
+    expected = {
+        "schema_version",
+        "action",
+        "word_version",
+        "samples",
+    }
+    if (
+        set(payload) != expected
+        or payload.get("schema_version") != 2
+        or payload.get("action") != "inspect-v2"
+        or not isinstance(payload.get("word_version"), str)
+        or not payload["word_version"]
+        or not isinstance(payload.get("samples"), list)
+        or len(payload["samples"]) != 3
+    ):
+        raise ValueError(
+            "Word inspection report does not match schema version 2"
+        )
+    inspections = []
+    for index, item in enumerate(payload["samples"], start=1):
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"sample_id", "inspection"}
+            or item.get("sample_id") != f"sample-{index:03d}"
+        ):
+            raise ValueError(
+                "Word inspection report does not match schema version 2"
+            )
+        inspections.append(
+            ListTemplateInspectionV2.from_dict(item["inspection"])
+        )
+    return {
+        "word_version": payload["word_version"],
+        "inspections": tuple(inspections),
+    }
+
+
+def _read_calibration_report(path: Path) -> dict[str, Any]:
+    payload = _read_json_object(path, "calibration")
+    expected = {
+        "schema_version",
+        "action",
+        "word_version",
+        "master_inspection",
+        "forbidden_dynamic_token_types",
+        "output_bytes",
+    }
+    if (
+        set(payload) != expected
+        or payload.get("schema_version") != 2
+        or payload.get("action") != "calibrate"
+        or not isinstance(payload.get("word_version"), str)
+        or not payload["word_version"]
+        or not isinstance(
+            payload.get("forbidden_dynamic_token_types"), list
+        )
+        or any(
+            not isinstance(item, str)
+            for item in payload["forbidden_dynamic_token_types"]
+        )
+        or isinstance(payload.get("output_bytes"), bool)
+        or not isinstance(payload.get("output_bytes"), int)
+        or payload["output_bytes"] <= 0
+    ):
+        raise ValueError(
+            "Word calibration report does not match schema version 2"
+        )
+    return {
+        **payload,
+        "master_inspection": ListTemplateInspectionV2.from_dict(
+            payload["master_inspection"]
+        ),
+    }
+
+
+def _read_json_object(path: Path, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(
+            f"Word {label} report is not valid UTF-8 JSON"
+        ) from error
+    if not isinstance(payload, dict):
+        raise ValueError(f"Word {label} report must be a JSON object")
+    return payload
+
+
+def _write_json_exclusive(path: Path, payload: dict[str, Any]) -> None:
+    _write_text_exclusive(
+        path,
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+    )
+
+
+def _write_text_exclusive(path: Path, value: str) -> None:
+    with path.open("x", encoding="utf-8", newline="\n") as stream:
+        stream.write(value)
+
+
+def _copy_exclusive(source: Path, destination: Path) -> None:
+    created = False
+    try:
+        with source.open("rb") as input_stream, destination.open(
+            "xb"
+        ) as output_stream:
+            created = True
+            shutil.copyfileobj(input_stream, output_stream)
+    except BaseException:
+        if created:
+            destination.unlink(missing_ok=True)
+        raise
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _freeze_object(value: dict[str, Any]) -> tuple[tuple[str, Any], ...]:

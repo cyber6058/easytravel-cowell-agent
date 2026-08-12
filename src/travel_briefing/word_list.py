@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .errors import UnknownWordResultError, WordGenerationError
+from .list_calibration import (
+    ListInspectionBatchResult,
+    WordCalibrationAdapter,
+    inspect_list_templates_v2 as _inspect_list_templates_v2,
+)
 from .models import BriefingDraft, DraftStatus, OpField
 from .op_values import REQUIRED_OP_FIELD_NAMES
 from .template_contract import (
@@ -152,6 +157,19 @@ class ListTemplateProbeResult:
     layout_fingerprint: str
     inspection: ListTemplateInspection
     word_version: str
+
+
+def inspect_list_templates_v2(
+    sample_paths: tuple[Path, ...],
+    *,
+    adapter: WordCalibrationAdapter,
+    timeout_seconds: int = 120,
+) -> ListInspectionBatchResult:
+    return _inspect_list_templates_v2(
+        sample_paths,
+        adapter=adapter,
+        timeout_seconds=timeout_seconds,
+    )
 
 
 def probe_word_capability(
