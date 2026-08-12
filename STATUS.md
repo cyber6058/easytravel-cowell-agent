@@ -253,6 +253,7 @@
 - Task 8 新增 39 個單元測試；針對性回歸為 `39 passed in 0.78s`，最終完整離線回歸為
   `309 passed, 3 skipped in 8.66s`。第三個 skip 是未授權的私有 LIST／Word
   integration；本次未啟動 COM、未讀私有範本、未產生任何正式 Word／PDF／PNG。
+- Task 8 離線實作已本機提交為 `3b8c64a`；因 public remote 阻塞，尚未 push。
 - 2026-08-12 接續檢查：`git pull --ff-only` 回傳 `Already up to date.`；本機比
   `origin/main` 多 4 個 commits（Task 6 與 public remote 阻塞紀錄），工作樹當時乾淨。
 - 2026-08-12 由接手者重新執行完整離線回歸：`270 passed, 2 skipped in 8.56s`；

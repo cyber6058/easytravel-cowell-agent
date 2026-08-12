@@ -398,6 +398,7 @@ fingerprint。PDF QA 另檢查單頁 A4、必要文字、非空文字與圖片�
 本紀錄不代表 Task 8 正式驗收完成：本次沒有啟動 Word COM、沒有讀取私有 LIST
 範本，也沒有產生或人工查看 5／6／7 天 Word／PDF／PNG。實機 probe、三份私有
 範本 integration 與逐頁視覺 QA 仍是獨立核准關卡；正式驗收不能以目前 skip 取代。
+離線實作已本機提交為 `3b8c64a`；因 public remote 阻塞，尚未 push。
 
 ## Task 9：端對端 workflow、產出與正式確認
 
