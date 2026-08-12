@@ -12,11 +12,15 @@ from .config import BriefingConfig
 
 
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
+_SPEECH_RUNTIME_TYPE = (
+    "Windows.Media.SpeechSynthesis.SpeechSynthesizer,"
+    " Windows.Media.SpeechSynthesis, ContentType=WindowsRuntime"
+)
 
 _YATING_PROBE_SCRIPT = r'''
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
-[Windows.Media.SpeechSynthesis.SpeechSynthesizer, Windows.Media.SpeechSynthesis, ContentType=WindowsRuntime] | Out-Null
+[SPEECH_RUNTIME_TYPE] | Out-Null
 $matchingVoices = @(
     [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices |
         Where-Object {
@@ -29,7 +33,7 @@ if ($matchingVoices.Count -eq 1) {
     exit 0
 }
 exit 21
-'''.strip()
+'''.replace("SPEECH_RUNTIME_TYPE", _SPEECH_RUNTIME_TYPE).strip()
 
 
 def configured_executable(value: Path | str | None) -> Path | None:

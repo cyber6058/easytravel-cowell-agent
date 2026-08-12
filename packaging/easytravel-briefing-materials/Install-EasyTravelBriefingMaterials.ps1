@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$OutputRoot = "",
-    [string]$TemplatePath = "",
-    [string]$TemplateLayoutFingerprint = "",
+    [string]$MasterPath = "",
+    [string]$CalibrationManifestPath = "",
     [string]$PdftoppmPath = "",
     [string]$FfmpegPath = "",
     [switch]$SkipCodexPluginInstall,
@@ -56,6 +56,12 @@ $installRoot = Join-Path $env:LOCALAPPDATA "EasyTravelBriefing"
 $appRoot = Join-Path $installRoot "app"
 $marketplaceRoot = Join-Path $installRoot "marketplace"
 $configPath = Join-Path $installRoot "config.toml"
+if (Test-Path $configPath) {
+    throw (
+        "LIST_RECALIBRATION_REQUIRED: existing 0.1 config must be backed up " +
+        "and replaced with calibrated master/manifest configuration."
+    )
+}
 if (Test-Path $appRoot) {
     throw "EasyTravelBriefing app already exists; preserve it and review before reinstalling."
 }
@@ -72,11 +78,11 @@ if (-not (Test-Path $configPath)) {
     if (-not $OutputRoot) {
         $OutputRoot = Read-Host "Local briefing output root"
     }
-    if (-not $TemplatePath) {
-        $TemplatePath = Read-Host "Private LIST DOC or DOCX path"
+    if (-not $MasterPath) {
+        $MasterPath = Read-Host "Private calibrated LIST-master.docx path"
     }
-    if (-not $TemplateLayoutFingerprint) {
-        $TemplateLayoutFingerprint = Read-Host "Approved LIST layout SHA-256"
+    if (-not $CalibrationManifestPath) {
+        $CalibrationManifestPath = Read-Host "Private calibration-manifest.json path"
     }
     if (-not $PdftoppmPath) {
         $pdftoppm = Get-Command pdftoppm.exe -ErrorAction SilentlyContinue
@@ -92,7 +98,8 @@ if (-not (Test-Path $configPath)) {
 
     foreach ($requiredPath in @(
         @{ Name = "OutputRoot"; Value = $OutputRoot },
-        @{ Name = "TemplatePath"; Value = $TemplatePath },
+        @{ Name = "MasterPath"; Value = $MasterPath },
+        @{ Name = "CalibrationManifestPath"; Value = $CalibrationManifestPath },
         @{ Name = "PdftoppmPath"; Value = $PdftoppmPath }
     )) {
         if ([string]::IsNullOrWhiteSpace($requiredPath.Value)) {
@@ -103,8 +110,11 @@ if (-not (Test-Path $configPath)) {
     $resolvedOutput = [IO.Path]::GetFullPath(
         [Environment]::ExpandEnvironmentVariables($OutputRoot)
     )
-    $resolvedTemplate = [IO.Path]::GetFullPath(
-        [Environment]::ExpandEnvironmentVariables($TemplatePath)
+    $resolvedMaster = [IO.Path]::GetFullPath(
+        [Environment]::ExpandEnvironmentVariables($MasterPath)
+    )
+    $resolvedCalibrationManifest = [IO.Path]::GetFullPath(
+        [Environment]::ExpandEnvironmentVariables($CalibrationManifestPath)
     )
     $resolvedPdftoppm = [IO.Path]::GetFullPath(
         [Environment]::ExpandEnvironmentVariables($PdftoppmPath)
@@ -112,18 +122,62 @@ if (-not (Test-Path $configPath)) {
     if (Test-Path -LiteralPath $resolvedOutput -PathType Leaf) {
         throw "OutputRoot must identify a directory, not a file."
     }
-    if ([IO.Path]::GetExtension($resolvedTemplate) -notin ".doc", ".docx") {
-        throw "TemplatePath must identify a DOC or DOCX file."
+    if ([IO.Path]::GetExtension($resolvedMaster).ToLowerInvariant() -ne ".docx") {
+        throw "MasterPath must identify a DOCX file."
     }
-    if (-not (Test-Path -LiteralPath $resolvedTemplate -PathType Leaf)) {
-        throw "TemplatePath does not exist."
+    if (-not (Test-Path -LiteralPath $resolvedMaster -PathType Leaf)) {
+        throw "MasterPath does not exist."
+    }
+    if (
+        [IO.Path]::GetExtension($resolvedCalibrationManifest).ToLowerInvariant() -ne ".json" -or
+        -not (Test-Path -LiteralPath $resolvedCalibrationManifest -PathType Leaf)
+    ) {
+        throw "CalibrationManifestPath must identify an existing JSON file."
     }
     if (-not (Test-Path -LiteralPath $resolvedPdftoppm -PathType Leaf)) {
         throw "PdftoppmPath does not exist."
     }
-    $fingerprint = $TemplateLayoutFingerprint.Trim().ToLowerInvariant()
-    if ($fingerprint -notmatch "^[0-9a-f]{64}$" -or $fingerprint -match "^0{64}$") {
-        throw "TemplateLayoutFingerprint must be an approved non-placeholder SHA-256."
+    try {
+        $calibration = Get-Content `
+            -LiteralPath $resolvedCalibrationManifest `
+            -Raw `
+            -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        throw "LIST_RECALIBRATION_REQUIRED: calibration manifest is invalid."
+    }
+    if (
+        [int]$calibration.schema_version -ne 2 -or
+        [string]$calibration.generator_version -cne "list-calibration/2" -or
+        [string]$calibration.master_sha256 -notmatch "^[0-9a-f]{64}$" -or
+        [string]$calibration.master_sha256 -match "^0{64}$" -or
+        [string]$calibration.master_structure_fingerprint -notmatch "^[0-9a-f]{64}$"
+    ) {
+        throw "LIST_RECALIBRATION_REQUIRED: unsupported calibration manifest."
+    }
+    $actualMasterHash = (
+        Get-FileHash -Algorithm SHA256 -LiteralPath $resolvedMaster
+    ).Hash.ToLowerInvariant()
+    if ($actualMasterHash -cne [string]$calibration.master_sha256) {
+        throw "LIST_RECALIBRATION_REQUIRED: LIST master hash changed."
+    }
+    if (
+        [IO.Path]::GetDirectoryName($resolvedMaster) -cne
+        [IO.Path]::GetDirectoryName($resolvedCalibrationManifest)
+    ) {
+        throw "LIST master and calibration manifest must share one private directory."
+    }
+    if (
+        $resolvedOutput.StartsWith(
+            [IO.Path]::GetDirectoryName($resolvedMaster),
+            [StringComparison]::OrdinalIgnoreCase
+        ) -or
+        $resolvedMaster.StartsWith(
+            $resolvedOutput,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+    ) {
+        throw "LIST private directory must be outside OutputRoot."
     }
 
     function ConvertTo-TomlPath([string]$Value) {
@@ -135,8 +189,8 @@ if (-not (Test-Path $configPath)) {
         "root = `"$(ConvertTo-TomlPath $resolvedOutput)`"",
         "",
         "[template]",
-        "path = `"$(ConvertTo-TomlPath $resolvedTemplate)`"",
-        "layout_fingerprint = `"$fingerprint`"",
+        "master_path = `"$(ConvertTo-TomlPath $resolvedMaster)`"",
+        "calibration_manifest = `"$(ConvertTo-TomlPath $resolvedCalibrationManifest)`"",
         "",
         "[tools]",
         "pdftoppm = `"$(ConvertTo-TomlPath $resolvedPdftoppm)`""

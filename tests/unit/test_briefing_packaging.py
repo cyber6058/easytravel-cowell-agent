@@ -13,7 +13,7 @@ from travel_briefing import __version__
 REPO = Path(__file__).parents[2]
 PACKAGE = REPO / "packaging" / "easytravel-briefing-materials"
 PLUGIN_NAME = "easytravel-briefing-materials"
-EXPECTED_VERSION = "0.1.0"
+EXPECTED_VERSION = "0.2.0"
 REFERENCE_NAMES = {
     "audio-and-template.md",
     "cli.md",
@@ -186,9 +186,25 @@ def test_briefing_app_and_installer_are_isolated_from_cowell():
     assert "EasyTravelBriefing" in installer
     assert "config.toml" in installer
     assert "if (-not (Test-Path $configPath))" in installer
+    assert "MasterPath" in installer
+    assert "CalibrationManifestPath" in installer
+    assert "TemplatePath" not in installer
+    assert "TemplateLayoutFingerprint" not in installer
+    assert "calibrate-list" not in installer
+    assert "sample" not in installer.casefold()
+    assert "schema_version -ne 2" in installer
+    assert 'generator_version -cne "list-calibration/2"' in installer
+    assert "Get-FileHash" in installer
+    assert "LIST_RECALIBRATION_REQUIRED" in installer
+    assert installer.index("if (Test-Path $configPath)") < installer.index(
+        "if (Test-Path $appRoot)"
+    )
     assert '$pythonPrefix = @("-3")' in installer
     assert '$pythonPrefix = @("-3.12")' not in installer
     assert installer.index("must not be blank") < installer.index(
+        "New-Item -ItemType Directory -Force $installRoot"
+    )
+    assert installer.index("Get-FileHash") < installer.index(
         "New-Item -ItemType Directory -Force $installRoot"
     )
 
@@ -205,6 +221,7 @@ def test_supported_render_surface_exposes_only_yating():
     assert result.returncode == 0, result.stdout + result.stderr
     assert "--tts {yating}" in result.stdout
     assert "hanhan" not in result.stdout.casefold()
+    assert "--template" not in result.stdout
 
 
 def test_project_scope_adds_briefing_without_expanding_cowell_writes():
@@ -249,10 +266,13 @@ def test_briefing_package_build_contains_only_allowlisted_surfaces(tmp_path: Pat
         )
         assert "claude/skills/easytravel-briefing-materials/SKILL.md" in names
         assert "app/src/travel_briefing/__init__.py" in names
+        assert "app/src/travel_briefing/list_calibration.py" in names
         assert "app/src/cowell_cli/__init__.py" not in names
         assert "app/config/briefing.example.toml" in names
         assert "app/config/config.example.toml" not in names
         assert "app/scripts/briefing/synthesize_yating.ps1" in names
+        assert "app/scripts/briefing/patch_list_template.ps1" in names
+        assert "app/scripts/briefing/render_list_template.ps1" in names
         assert "app/scripts/briefing/synthesize_hanhan.ps1" not in names
         assert not any("__pycache__" in name or name.endswith(".pyc") for name in names)
         assert not any(
@@ -260,3 +280,23 @@ def test_briefing_package_build_contains_only_allowlisted_surfaces(tmp_path: Pat
             in {".doc", ".docx", ".pdf", ".png", ".wav", ".mp3", ".srt"}
             for name in names
         )
+        assert not any(
+            "calibration-manifest.json" in name.casefold()
+            or "/private/" in name.casefold()
+            for name in names
+        )
+        packaged_text = b"\n".join(
+            archive.read(name)
+            for name in names
+            if Path(name).suffix.casefold()
+            in {".json", ".md", ".ps1", ".py", ".toml", ".txt"}
+        ).decode("utf-8")
+        for private_marker in (
+            "LIST-26NRT0108JX06A.doc",
+            "LIST-25NRT1107JX07A.doc",
+            "LIST-2026SDJ0722JX5A.doc",
+            "c230eb24397124cbf0fc6940765be14a9e5a07742f64039f0c01d60f05420b76",
+            "84d7db2fa9f01fea2bfb0563a37f78c0aa3993cb972a913506b67496f056420b",
+            "cf62502532344530ec9e0c65161b1fee5624abd6243f32bb6530a1d72cc558bc",
+        ):
+            assert private_marker not in packaged_text

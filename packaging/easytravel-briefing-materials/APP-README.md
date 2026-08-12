@@ -8,13 +8,17 @@ ship a Hanhan execution script or expose Hanhan as a render choice.
 
 Run `briefing doctor`, then use the installed `easytravel-briefing-materials`
 Skill for the guarded `prepare -> check-script -> render -> confirm` workflow.
+One explicit request containing a supplied URL/PDF and a generation intent may
+run one bounded local DRAFT through the calibrated master, Word, per-page QA,
+Yating, and already configured ffmpeg. Confirmation remains separate.
 Every source decision is manifest-bound. Missing data, conflicts, unavailable
-weather, template drift, Word QA failure, speech failure, or missing MP3 remains
+weather, master drift, Word QA failure, speech failure, or missing MP3 remains
 review work and is never guessed or silently replaced.
 
 Configuration is stored at
 `%LOCALAPPDATA%\EasyTravelBriefing\config.toml`. Source PDFs, the private LIST
-template, decision JSON, manifests, scripts, Word/PDF/PNG files, and audio remain
+master/calibration manifest, decision JSON, run manifests, scripts, Word/PDF/PNG
+files, and audio remain
 outside this application and must not be committed or uploaded.
 
 The application never sends LINE messages, uses cloud speech, creates videos,

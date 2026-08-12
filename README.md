@@ -76,7 +76,7 @@ review，不猜值、不使用雲端 TTS，也不自動傳 LINE。
 建列並安全續頁，接著完成逐頁 QA 與 Yating 語音。校準、CONFIRMED、LINE、上傳、
 部署與 Cowell 仍各自需要獨立授權。
 
-建立獨立 `0.1.0` 安裝包：
+建立獨立 `0.2.0` 安裝包：
 
 ~~~powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_easytravel_briefing_package.ps1

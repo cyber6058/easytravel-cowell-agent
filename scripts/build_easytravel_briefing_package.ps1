@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "0.1.0",
+    [string]$Version = "0.2.0",
     [string]$DistRoot = ""
 )
 
@@ -112,6 +112,45 @@ $forbiddenDirectories = @(
 )
 if ($forbiddenFiles.Count -or $forbiddenDirectories.Count) {
     throw "Briefing package contains a forbidden private or generated path."
+}
+
+$requiredRelativeFiles = @(
+    ".agents\plugins\marketplace.json",
+    "plugins\easytravel-briefing-materials\.codex-plugin\plugin.json",
+    "shared\SKILL.md",
+    "claude\skills\easytravel-briefing-materials\SKILL.md",
+    "app\src\travel_briefing\list_calibration.py",
+    "app\config\briefing.example.toml",
+    "app\scripts\briefing\patch_list_template.ps1",
+    "app\scripts\briefing\render_list_template.ps1",
+    "app\scripts\briefing\synthesize_yating.ps1"
+)
+foreach ($relativeFile in $requiredRelativeFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $stage $relativeFile) -PathType Leaf)) {
+        throw "Briefing package allowlist is incomplete: $relativeFile"
+    }
+}
+
+$sensitivePatterns = @(
+    '(?i)azure[_-]?speech[_-]?key\s*[:=]\s*["''][^"'']+["'']',
+    '(?i)(password|cookie|access[_-]?token)\s*[:=]\s*["''][^"'']+["'']',
+    '(?i)-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----',
+    '(?i)C:\\Users\\[^\\]+\\Downloads\\LIST-[^\s"'']+\.docx?',
+    'LIST-(\d{2}|\d{4})[A-Z]{3}\d{4}[A-Z0-9]+\.docx?'
+)
+$textExtensions = @(
+    ".json", ".md", ".ps1", ".py", ".toml", ".txt"
+)
+foreach ($textFile in Get-ChildItem -LiteralPath $stage -File -Recurse -Force) {
+    if ($textFile.Extension.ToLowerInvariant() -notin $textExtensions) {
+        continue
+    }
+    $content = Get-Content -LiteralPath $textFile.FullName -Raw -Encoding UTF8
+    foreach ($pattern in $sensitivePatterns) {
+        if ($content -match $pattern) {
+            throw "Briefing package contains a sensitive-data pattern."
+        }
+    }
 }
 
 $archiveItems = @(

@@ -2,10 +2,10 @@
 
 ## 一句話現況
 
-立益 Cowell 專用功能與說明會產生器 0.1.0 乾淨安裝關卡已通過；使用者已通過
-「三份 LIST 只校準一次、執行期使用單一動態 master、長行程自動續頁」書面規格，
-0.2.0 的 12-Task 實作計畫已完成並待核准。尚未讀取私有範本內容、啟動 Word COM
-或執行視覺 QA；GitHub 遠端維持 public，因此仍禁止 push。
+說明會產生器 0.2.0 的離線 Task 1–8 已完成：三份 LIST 只需一次校準，之後由單一
+canonical master 依任意正整數天數建立每日列，內容太長時安全續頁並逐頁 QA；私人
+範本校準、Word 實機與真實 DRAFT 尚待 Gate C／V／E，GitHub 遠端維持 public，
+因此本輪只在本機 commit、不 push。
 
 ## 這次做了什麼
 
@@ -348,16 +348,32 @@
   fail-closed migration，以及 packaged Agent 的一次 DRAFT 授權。
 - 規劃前重跑完整離線基線：`365 passed, 3 skipped in 12.92s`；三個 skip 仍是需
   opt-in 的 Hanhan、Yating 與私有 LIST／Word integration。本輪沒有啟用任何一項。
+- 2026-08-13 使用者核准 0.2.0 離線 Task 1–8；已依序完成 calibration schema 2、
+  受限 Word adapter、任意天數 patch plan、內容驅動單頁／安全續頁、逐頁 QA 與
+  artifact tracking、單一 master/manifest config、一次要求的一個 bounded DRAFT
+  Skill 契約，以及 0.2.0 allowlist package。
+- Task 1–7 本機 commits 為 `983c29b`、`a665643`、`6e76071`、`70763f3`、
+  `31211e8`、`7998cb6`、`8fcb0a5`。Task 8 提交前的最終完整離線回歸為
+  `437 passed, 3 skipped in 17.28s`；三個 skip 仍是既有 opt-in Hanhan、Yating 與
+  私人 LIST／Word integration，沒有啟動或放寬。
+- compileall、100 字元 production Python 行寬、六份 PowerShell parser、三份 Skill
+  validator、plugin validator、Skill mirror hash、`git diff --check`、stage/ZIP 禁用
+  副檔名與私人 marker scan 全部通過；scan 結果為 0 forbidden stage files、
+  0 forbidden ZIP names、0 private marker/key hits。
+- 0.2.0 套件為 `dist/EasyTravel-Briefing-Materials-0.2.0.zip`，SHA-256：
+  `d0affb3403b0c622a74caf218182f46dd46ab6bb275ee6254710a3a0c7d818fc`；stage 有
+  63 files、ZIP 有 68 entries，不含 `.doc`／`.docx`、來源 PDF、私人 calibration
+  manifest、來源 hash、Cowell 或 Hanhan script。
 
 ## 下一步
 
-先由使用者複核並核准
-`docs/plans/2026-08-13-automatic-briefing-dynamic-list-implementation-plan.md`。通過後
-可連續執行 Task 1–8 的 repo 內離線實作；這項核准不包含安裝、三份私有 LIST、
-Word COM、Yating、live URL／JMA、ffmpeg、CONFIRMED 或 LINE。離線 package 通過後，
-再依序取得 Gate I、C、V、E 的當次明確核准。GitHub visibility 依使用者指示不變，
-目前 public 狀態下仍不得 push。Cowell 部分維持到立益公司電腦 clone、先跑完整
-離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
+下一個可核准關卡是 Gate I：在全新 OS temp root 使用 synthetic master／manifest
+驗證 0.2.0 乾淨安裝與重跑拒絕；它不會讀三份私人 LIST 或啟動 Word／Yating。
+Gate I 實證通過後，再分別取得 Gate C（私人 LIST 一次性校準）、Gate V（4／5／6／
+7／8／12 天 Word 視覺 QA）與 Gate E（真實 URL／PDF 到語音 DRAFT）的當次核准。
+GitHub visibility 依使用者指示不變，目前 public 狀態下仍不得 push。Cowell 部分維持
+到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序驗證
+auth status 與 rooms preview。
 
 ## 阻塞點
 
@@ -367,8 +383,8 @@ apply 必須在公司環境針對最終 preview 另行取得當次明確核准�
 GitHub 遠端截至 2026-08-12 即時驗證為 public；這是目前 push 的首要阻塞。依私有
 產品與「不可把內容複製到公開處」規則，在 repo 重新驗證為 private 前不得 push。
 
-說明會產生器 Task 4／Task 5／Task 6／Task 8／Task 9／Task 10 離線程式沒有
-parser、merge、天氣、Word plan、workflow 或 packaging 技術阻塞；
+說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
+Word plan、workflow 或 packaging 技術阻塞；
 URL-only 正式頁已
 驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
 `product_region`，不能跳過此人工欄位。完整
@@ -382,12 +398,12 @@ PDF 會明確
 
 本機 capability probe 與真實 integration 顯示 Yating 可用且正式管線可合成，
 `pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊，但 `ffmpeg` 尚未找到；
-Word COM 仍須在 Task 8 以最長 20 秒的隱藏 instance 另測。
+Word COM 仍須在 Gate C 以最長 20 秒的隱藏 instance 另測。
 Task 11 隔離安裝已證明新 `briefing.exe` 可啟動，且顯式 config 可載入外部
 `pdftoppm`；私有範本契約及 Word 實機 render 仍未驗證。
-目前 0.1.0 Word 契約仍寫死 5／6／7 天形狀與單頁成功條件，不能當成新需求已完成；
-0.2.0 實作計畫仍待使用者核准，且三份樣本的實際校準另屬 Gate C。若樣本除日數、
-內容及可證明的自適應排版外仍有無法歸一的結構差異，校準必須 fail closed 並請
-使用者決定，不能自行挑一份或平均差異。
+0.2.0 的任意天數與安全續頁邏輯已在 synthetic／mock 離線測試完成，但尚未代表
+私人 LIST master 已建立或 Word 視覺驗收已通過；三份樣本的實際校準另屬 Gate C。
+若樣本除日數、內容及可證明的自適應排版外仍有無法歸一的結構差異，校準必須
+fail closed 並請使用者決定，不能自行挑一份或平均差異。
 安裝 ffmpeg、再次 live 官網 request、首次實際 JMA 預報 request、任何雲端 TTS、LINE、
 影片與部署都不包含在本次剩餘授權內，必須各自另行確認。
