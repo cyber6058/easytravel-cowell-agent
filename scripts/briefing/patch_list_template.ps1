@@ -627,6 +627,68 @@ function Set-DailyRowCount {
     }
 }
 
+function Set-ListLayoutProfile {
+    param(
+        [Parameter(Mandatory = $true)]$DailyTable,
+        [Parameter(Mandatory = $true)]$Profile
+    )
+    for ($row = 2; $row -le $DailyTable.Rows.Count; $row += 1) {
+        $range = $DailyTable.Rows.Item($row).Range
+        $range.Font.Size = [double]$Profile.body_font_points
+        $range.ParagraphFormat.LineSpacing = [double]$Profile.line_spacing_points
+        $range.ParagraphFormat.SpaceAfter = [double]$Profile.paragraph_space_after_points
+    }
+    $DailyTable.TopPadding = [double]$Profile.cell_top_margin_points
+    $DailyTable.BottomPadding = [double]$Profile.cell_bottom_margin_points
+}
+
+function Add-ContinuationGroupHeader {
+    param(
+        [Parameter(Mandatory = $true)]$Document,
+        [Parameter(Mandatory = $true)][string]$GroupText
+    )
+    $header = $Document.Sections.Item(1).Headers.Item(1)
+    $range = $header.Range.Duplicate
+    $range.Collapse(0)
+    if ($range.Start -gt 0) {
+        $range.InsertAfter([string][char]13)
+        $range.Collapse(0)
+    }
+    $range.InsertAfter("IF ")
+    $range.Collapse(0)
+    [void]$Document.Fields.Add($range, 33, "PAGE", $true)
+    $range.Collapse(0)
+    $range.InsertAfter(" > 1 " + [char]34 + $GroupText + [char]34 + " " + [char]34 + [char]34)
+    $conditionRange = $header.Range.Paragraphs.Last.Range
+    [void]$Document.Fields.Add($conditionRange, 7)
+}
+
+function Get-DayPageMap {
+    param(
+        [Parameter(Mandatory = $true)]$DailyTable,
+        [Parameter(Mandatory = $true)][int]$DayCount
+    )
+    $items = @()
+    for ($day = 1; $day -le $DayCount; $day += 1) {
+        $range = $DailyTable.Rows.Item($day + 1).Range
+        $startRange = $range.Duplicate
+        $startRange.Collapse(1)
+        $startPage = [int]$startRange.Information(3)
+        $endRange = $range.Duplicate
+        $endRange.Collapse(0)
+        $endPage = [int]$endRange.Information(3)
+        if ($startPage -ne $endPage) {
+            throw "LIST_DAY_ROW_TOO_TALL"
+        }
+        $items += [ordered]@{
+            day_number = $day
+            start_page = $startPage
+            end_page = $endPage
+        }
+    }
+    return $items
+}
+
 function Invoke-Probe {
     param(
         [Parameter(Mandatory = $true)]$Job,
@@ -672,8 +734,7 @@ function Invoke-Inspect {
             -AnchorChecks $Job.anchor_checks
         Assert-BasicListContract `
             -Inspection $inspection `
-            -RequiredAnchorLabels $requiredLabels `
-            -RequiredDayCount 1
+            -RequiredAnchorLabels $requiredLabels
         $result = [ordered]@{
             schema_version = 1
             action = "inspect"
@@ -899,7 +960,8 @@ function Invoke-Patch {
             -AnchorChecks $Job.plan.anchor_checks
         Assert-BasicListContract `
             -Inspection $sourceInspection `
-            -RequiredAnchorLabels $requiredLabels
+            -RequiredAnchorLabels $requiredLabels `
+            -RequiredDayCount 1
         $dayCount = [int]$Job.plan.target_day_count
         if ($dayCount -le 0) {
             throw "LIST_DAY_COUNT_UNSUPPORTED"
@@ -912,6 +974,17 @@ function Invoke-Patch {
         foreach ($patch in $Job.plan.cells) {
             Set-ListCell -Document $document -Patch $patch
         }
+        $dailyTable = $document.Tables.Item(3)
+        $dailyTable.Rows.Item(1).HeadingFormat = $true
+        for ($row = 2; $row -le $dailyTable.Rows.Count; $row += 1) {
+            $dailyTable.Rows.Item($row).AllowBreakAcrossPages = $false
+        }
+        $groupText = (
+            [string]$Job.plan.header_paragraphs[1].text +
+            " " +
+            [string]$Job.plan.header_paragraphs[2].text
+        )
+        Add-ContinuationGroupHeader -Document $document -GroupText $groupText
         $outputInspection = Get-ListInspection `
             -Document $document `
             -AnchorChecks $Job.plan.anchor_checks
@@ -919,22 +992,48 @@ function Invoke-Patch {
             -Inspection $outputInspection `
             -RequiredAnchorLabels $requiredLabels `
             -RequiredDayCount $dayCount
+        $selectedProfile = "normal"
+        $normalProfile = $Job.plan.layout_profiles[0]
+        Set-ListLayoutProfile -DailyTable $dailyTable -Profile $normalProfile
         $document.Repaginate()
         $pageCount = [int]$document.ComputeStatistics($WdStatisticPages)
-        if ($pageCount -ne 1) {
-            throw "LIST_PAGE_COUNT_BLOCKED"
+        if ($pageCount -gt 1) {
+            for ($profileIndex = 1; $profileIndex -lt $Job.plan.layout_profiles.Count; $profileIndex += 1) {
+                $candidate = $Job.plan.layout_profiles[$profileIndex]
+                Set-ListLayoutProfile -DailyTable $dailyTable -Profile $candidate
+                $document.Repaginate()
+                $candidatePages = [int]$document.ComputeStatistics($WdStatisticPages)
+                if ($candidatePages -eq 1) {
+                    $selectedProfile = [string]$candidate.name
+                    $pageCount = $candidatePages
+                    break
+                }
+            }
+            if ($pageCount -gt 1) {
+                Set-ListLayoutProfile -DailyTable $dailyTable -Profile $normalProfile
+                $selectedProfile = "normal"
+                $document.Repaginate()
+                $pageCount = [int]$document.ComputeStatistics($WdStatisticPages)
+            }
         }
+        if ($pageCount -le 0) { throw "LIST_PAGE_COUNT_INVALID" }
+        $dayPageMap = Get-DayPageMap -DailyTable $dailyTable -DayCount $dayCount
         $document.SaveAs2($outputDocx, $WdFormatDocumentDefault)
         if (-not [IO.File]::Exists($outputDocx)) {
             throw "LIST_DOCX_NOT_CREATED"
         }
         $report = [ordered]@{
-            schema_version = 1
+            schema_version = 2
             action = "patch"
             word_version = [string]$Word.Version
             source_inspection = $sourceInspection
             output_inspection = $outputInspection
+            selected_layout_profile = $selectedProfile
             computed_page_count = $pageCount
+            day_page_map = $dayPageMap
+            continuation_group_header = $true
+            repeated_daily_header = $true
+            qr_policy = "first_page_only"
             output_bytes = [int64](Get-Item -LiteralPath $outputDocx).Length
         }
         Write-JsonExclusive -Value $report -Path ([string]$Job.report_path)

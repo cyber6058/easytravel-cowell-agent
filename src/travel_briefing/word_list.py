@@ -156,6 +156,38 @@ class ListWordBuildResult:
     output_layout_fingerprint: str
     computed_page_count: int
     generator_version: str
+    selected_layout_profile: str
+    day_page_map: tuple[DayPagePlacement, ...]
+    continuation_group_header: bool
+    repeated_daily_header: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DayPagePlacement:
+    day_number: int
+    start_page: int
+    end_page: int
+
+    @classmethod
+    def from_dict(cls, value: object) -> DayPagePlacement:
+        expected = {"day_number", "start_page", "end_page"}
+        if not isinstance(value, dict) or set(value) != expected:
+            raise ValueError("LIST day page map entry is invalid")
+        result = cls(**value)
+        if any(
+            isinstance(item, bool) or not isinstance(item, int) or item <= 0
+            for item in (
+                result.day_number,
+                result.start_page,
+                result.end_page,
+            )
+        ):
+            raise ValueError("LIST day page map entry is invalid")
+        if result.start_page != result.end_page:
+            raise ValueError(
+                f"LIST_DAY_ROW_TOO_TALL: day {result.day_number}"
+            )
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -344,6 +376,7 @@ def build_list_word(
     template_path: Path,
     output_docx: Path,
     expected_layout_fingerprint: str,
+    layout_profiles: tuple[dict[str, Any], ...] | None = None,
     adapter: WordAdapter,
     timeout_seconds: int = 120,
     route_character_limit: int = DEFAULT_ROUTE_CHARACTER_LIMIT,
@@ -365,6 +398,7 @@ def build_list_word(
     plan = build_list_patch_plan(
         draft,
         expected_layout_fingerprint=expected_layout_fingerprint,
+        layout_profiles=layout_profiles,
         route_character_limit=route_character_limit,
     )
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -398,7 +432,13 @@ def build_list_word(
                 report_exists=report_path.is_file(),
             )
             raise
-        report = _read_patch_report(report_path)
+        report = _read_patch_report(
+            report_path,
+            target_day_count=draft.product.day_count,
+            approved_profiles=tuple(
+                item["name"] for item in plan.layout_profiles
+            ),
+        )
         if not temporary_docx.is_file() or temporary_docx.stat().st_size == 0:
             raise WordGenerationError(
                 "Word adapter returned success without a DOCX output"
@@ -433,6 +473,12 @@ def build_list_word(
         output_layout_fingerprint=output_fingerprint,
         computed_page_count=report["computed_page_count"],
         generator_version=LIST_WORD_GENERATOR_VERSION,
+        selected_layout_profile=report["selected_layout_profile"],
+        day_page_map=report["day_page_map"],
+        continuation_group_header=report[
+            "continuation_group_header"
+        ],
+        repeated_daily_header=report["repeated_daily_header"],
     )
 
 
@@ -694,7 +740,12 @@ def _list_anchor_checks() -> tuple[AnchorCheck, ...]:
     )
 
 
-def _read_patch_report(path: Path) -> dict[str, Any]:
+def _read_patch_report(
+    path: Path,
+    *,
+    target_day_count: int,
+    approved_profiles: tuple[str, ...],
+) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -705,31 +756,83 @@ def _read_patch_report(path: Path) -> dict[str, Any]:
         "word_version",
         "source_inspection",
         "output_inspection",
+        "selected_layout_profile",
         "computed_page_count",
+        "day_page_map",
+        "continuation_group_header",
+        "repeated_daily_header",
+        "qr_policy",
         "output_bytes",
     }
     if (
         not isinstance(payload, dict)
         or set(payload) != expected_keys
-        or payload.get("schema_version") != 1
+        or payload.get("schema_version") != 2
         or payload.get("action") != "patch"
         or not isinstance(payload.get("word_version"), str)
         or not payload["word_version"]
-        or payload.get("computed_page_count") != 1
+        or isinstance(payload.get("computed_page_count"), bool)
+        or not isinstance(payload.get("computed_page_count"), int)
+        or payload["computed_page_count"] <= 0
+        or payload.get("selected_layout_profile")
+        not in approved_profiles
+        or payload.get("continuation_group_header") is not True
+        or payload.get("repeated_daily_header") is not True
+        or payload.get("qr_policy") != "first_page_only"
+        or not isinstance(payload.get("day_page_map"), list)
         or isinstance(payload.get("output_bytes"), bool)
         or not isinstance(payload.get("output_bytes"), int)
         or payload["output_bytes"] <= 0
     ):
-        raise WordGenerationError("Word patch report does not match schema version 1")
+        if (
+            isinstance(payload, dict)
+            and payload.get("schema_version") == 2
+        ):
+            if payload.get("computed_page_count") in {0, None}:
+                raise ValueError("LIST page count must be positive")
+            if (
+                payload.get("selected_layout_profile")
+                not in approved_profiles
+            ):
+                raise ValueError("LIST layout profile is not approved")
+            if payload.get("continuation_group_header") is not True:
+                raise ValueError("LIST continuation header is missing")
+            if payload.get("repeated_daily_header") is not True:
+                raise ValueError("LIST repeated daily header is missing")
+        raise WordGenerationError(
+            "Word patch report does not match schema version 2"
+        )
     try:
         source = ListTemplateInspection.from_dict(payload["source_inspection"])
         output = ListTemplateInspection.from_dict(payload["output_inspection"])
     except ValueError as error:
         raise WordGenerationError("Word template inspection report is invalid") from error
+    try:
+        day_page_map = tuple(
+            DayPagePlacement.from_dict(item)
+            for item in payload["day_page_map"]
+        )
+    except ValueError as error:
+        if "LIST_DAY_ROW_TOO_TALL" in str(error):
+            raise
+        raise ValueError("LIST day page map is invalid") from error
+    if (
+        tuple(item.day_number for item in day_page_map)
+        != tuple(range(1, target_day_count + 1))
+        or any(
+            item.start_page > payload["computed_page_count"]
+            for item in day_page_map
+        )
+    ):
+        raise ValueError("LIST day page map is incomplete or non-sequential")
     return {
         **payload,
         "source_inspection": source,
         "output_inspection": output,
+        "selected_layout_profile": payload[
+            "selected_layout_profile"
+        ],
+        "day_page_map": day_page_map,
     }
 
 

@@ -241,9 +241,24 @@ def test_patch_plan_requires_a_sha256_layout_fingerprint():
 
 
 class SyntheticWordAdapter:
-    def __init__(self, source_inspection, output_inspection) -> None:
+    def __init__(
+        self,
+        source_inspection,
+        output_inspection,
+        *,
+        page_count=1,
+        selected_profile="normal",
+        day_page_map=None,
+        continuation_group_header=True,
+        repeated_daily_header=True,
+    ) -> None:
         self.source_inspection = source_inspection
         self.output_inspection = output_inspection
+        self.page_count = page_count
+        self.selected_profile = selected_profile
+        self.day_page_map = day_page_map
+        self.continuation_group_header = continuation_group_header
+        self.repeated_daily_header = repeated_daily_header
         self.jobs = []
 
     def run(self, job_path: Path, *, timeout_seconds: int) -> None:
@@ -251,15 +266,31 @@ class SyntheticWordAdapter:
         job = json.loads(job_path.read_text(encoding="utf-8"))
         output = Path(job["output_docx"])
         output.write_bytes(b"synthetic docx package")
+        target_days = job["plan"]["target_day_count"]
+        day_page_map = self.day_page_map or [
+            {
+                "day_number": number,
+                "start_page": min(number, self.page_count),
+                "end_page": min(number, self.page_count),
+            }
+            for number in range(1, target_days + 1)
+        ]
         Path(job["report_path"]).write_text(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "action": "patch",
                     "word_version": "synthetic",
                     "source_inspection": self.source_inspection.to_dict(),
                     "output_inspection": self.output_inspection.to_dict(),
-                    "computed_page_count": 1,
+                    "selected_layout_profile": self.selected_profile,
+                    "computed_page_count": self.page_count,
+                    "day_page_map": day_page_map,
+                    "continuation_group_header": (
+                        self.continuation_group_header
+                    ),
+                    "repeated_daily_header": self.repeated_daily_header,
+                    "qr_policy": "first_page_only",
                     "output_bytes": output.stat().st_size,
                 },
                 ensure_ascii=False,
@@ -383,6 +414,10 @@ def test_build_list_word_uses_a_temp_job_and_publishes_exclusively(tmp_path):
     assert template.read_bytes() == b"synthetic private template"
     assert result.docx_path == output.resolve()
     assert result.byte_count == len(b"synthetic docx package")
+    assert result.selected_layout_profile == "normal"
+    assert result.day_page_map[-1].day_number == 7
+    assert result.continuation_group_header is True
+    assert result.repeated_daily_header is True
     assert result.source_layout_fingerprint == layout_fingerprint(source_inspection)
     assert result.output_layout_fingerprint == layout_fingerprint(
         template_inspection(7)
@@ -439,6 +474,127 @@ def test_build_list_word_rejects_report_or_qr_drift_without_publishing(tmp_path)
         )
 
     assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    ("day_count", "page_count", "selected_profile"),
+    [(8, 1, "compact"), (7, 2, "normal"), (8, 3, "normal")],
+)
+def test_word_pagination_outcome_depends_on_report_not_day_count(
+    tmp_path,
+    day_count,
+    page_count,
+    selected_profile,
+):
+    template = tmp_path / "list-master.docx"
+    template.write_bytes(b"synthetic master")
+    output = tmp_path / "output.docx"
+    source = template_inspection(1)
+    profiles = (
+        {
+            "name": "normal",
+            "body_font_points": 10.0,
+            "line_spacing_points": 12.0,
+            "paragraph_space_after_points": 1.0,
+            "cell_top_margin_points": 1.4,
+            "cell_bottom_margin_points": 1.4,
+        },
+        {
+            "name": "compact",
+            "body_font_points": 9.0,
+            "line_spacing_points": 10.5,
+            "paragraph_space_after_points": 0.0,
+            "cell_top_margin_points": 1.4,
+            "cell_bottom_margin_points": 1.4,
+        },
+    )
+    adapter = SyntheticWordAdapter(
+        source,
+        template_inspection(day_count),
+        page_count=page_count,
+        selected_profile=selected_profile,
+    )
+
+    result = build_list_word(
+        draft(day_count),
+        template_path=template,
+        output_docx=output,
+        expected_layout_fingerprint=layout_fingerprint(source),
+        layout_profiles=profiles,
+        adapter=adapter,
+    )
+
+    assert result.computed_page_count == page_count
+    assert result.selected_layout_profile == selected_profile
+    received = json.loads(
+        adapter.jobs[0][0].read_text(encoding="utf-8")
+    ) if adapter.jobs[0][0].exists() else None
+    assert received is None
+
+
+@pytest.mark.parametrize(
+    ("adapter_changes", "message"),
+    [
+        (
+            {
+                "day_page_map": [
+                    {"day_number": 1, "start_page": 1, "end_page": 2},
+                    *[
+                        {
+                            "day_number": number,
+                            "start_page": 2,
+                            "end_page": 2,
+                        }
+                        for number in range(2, 8)
+                    ],
+                ],
+                "page_count": 2,
+            },
+            "LIST_DAY_ROW_TOO_TALL",
+        ),
+        (
+            {
+                "day_page_map": [
+                    {
+                        "day_number": number,
+                        "start_page": 1,
+                        "end_page": 1,
+                    }
+                    for number in range(1, 7)
+                ],
+            },
+            "day page map",
+        ),
+        ({"page_count": 0}, "page count"),
+        ({"selected_profile": "unapproved"}, "layout profile"),
+        ({"continuation_group_header": False}, "continuation"),
+        ({"repeated_daily_header": False}, "repeated"),
+    ],
+)
+def test_word_pagination_report_fails_closed(
+    tmp_path,
+    adapter_changes,
+    message,
+):
+    template = tmp_path / "list-master.docx"
+    template.write_bytes(b"synthetic master")
+    source = template_inspection(1)
+    adapter = SyntheticWordAdapter(
+        source,
+        template_inspection(7),
+        **adapter_changes,
+    )
+
+    with pytest.raises((ValueError, Exception), match=message):
+        build_list_word(
+            draft(7),
+            template_path=template,
+            output_docx=tmp_path / "output.docx",
+            expected_layout_fingerprint=layout_fingerprint(source),
+            adapter=adapter,
+        )
+
+    assert not (tmp_path / "output.docx").exists()
 
 
 class SyntheticProbeInspectAdapter:
