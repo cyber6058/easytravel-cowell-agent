@@ -2,10 +2,12 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的離線 Task 1–8 已完成：三份 LIST 只需一次校準，之後由單一
-canonical master 依任意正整數天數建立每日列，內容太長時安全續頁並逐頁 QA；私人
-範本校準、Word 實機與真實 DRAFT 尚待 Gate C／V／E，GitHub 遠端維持 public，
-因此本輪只在本機 commit、不 push。
+說明會產生器 0.2.0 的離線 Task 1–8 已完成；Gate I 無網路 preflight 證實全新 venv
+需要下載 `setuptools>=75`，因此乾淨安裝驗收尚未開始，正等待使用者明確核准該次
+暫存安裝網路。私人範本校準、Word 實機與真實 DRAFT 仍待 Gate C／V／E；GitHub
+遠端仍為 public；使用者在收到私人產品外洩風險警告後，仍明確要求本次例外直接
+push `main`。此例外違反本專案必須 private 才能 push 的規則，依使用者要求執行，
+最終結果須以 GitHub 遠端 SHA 驗證。
 
 ## 這次做了什麼
 
@@ -364,24 +366,43 @@ canonical master 依任意正整數天數建立每日列，內容太長時安全
   `d0affb3403b0c622a74caf218182f46dd46ab6bb275ee6254710a3a0c7d818fc`；stage 有
   63 files、ZIP 有 68 entries，不含 `.doc`／`.docx`、來源 PDF、私人 calibration
   manifest、來源 hash、Cowell 或 Hanhan script。
+- 2026-08-13 使用者另行核准 Gate I；開始前先以 `PIP_NO_INDEX=1` 建立兩個隔離
+  preflight venv。`--no-build-isolation` 路徑回報
+  `BackendUnavailable: Cannot import 'setuptools.build_meta'`；installer 同等的 build
+  isolation 路徑回報 `No matching distribution found for setuptools>=75`。這證明
+  0.2.0 的乾淨安裝需要該次網路下載，原 Gate I 核准沒有明示此權限，所以未自行
+  連線、未開始正式安裝。兩個 probe 各有 869 files／134 directories，均已完整刪除；
+  沒有讀私人 LIST、啟動 Word／Yating、寫入真實 LOCALAPPDATA／USERPROFILE 或 push。
+- 2026-08-13 GitHub 即時重驗仍為 `PUBLIC`／`private: false`；使用者在收到明確警告
+  後仍指示「直接push」。此動作違反私人產品只能推送到 private repo 的規則，依
+  使用者當次明確要求執行；後續是否成功只以遠端 `main` SHA 為準，不以命令意圖
+  冒充完成。push 前由彙整者親自重跑完整離線測試：
+  `437 passed, 3 skipped in 20.65s`；`git diff --check` 通過，分支為
+  `0 behind / 21 ahead`。
 
 ## 下一步
 
-下一個可核准關卡是 Gate I：在全新 OS temp root 使用 synthetic master／manifest
-驗證 0.2.0 乾淨安裝與重跑拒絕；它不會讀三份私人 LIST 或啟動 Word／Yating。
-Gate I 實證通過後，再分別取得 Gate C（私人 LIST 一次性校準）、Gate V（4／5／6／
+先取得 Gate I 本次暫存安裝的明確網路核准，範圍只允許 pip 下載 package 宣告的
+build/runtime dependencies。取得後，在單一全新 temp root 使用 synthetic
+master／manifest 完成 0.2.0 安裝、CLI／doctor／config／重跑拒絕驗證並刪除該 root；
+不讀私人 LIST、不啟動 Word／Yating，也不改正式使用者環境。Gate I 實證通過後，
+再分別取得 Gate C（私人 LIST 一次性校準）、Gate V（4／5／6／
 7／8／12 天 Word 視覺 QA）與 Gate E（真實 URL／PDF 到語音 DRAFT）的當次核准。
-GitHub visibility 依使用者指示不變，目前 public 狀態下仍不得 push。Cowell 部分維持
-到立益公司電腦 clone、先跑完整離線測試，再由 OP 登入受控 Chrome，依序驗證
-auth status 與 rooms preview。
+GitHub visibility 依使用者指示不變；本次 public push 是收到風險警告後的單次明確
+例外，不構成後續 public push 的長期授權。Cowell 部分維持到立益公司電腦 clone、
+先跑完整離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
 
 本機無科威登入，因此真實頁面結構與正式 rooms apply 尚未驗證。正式
 apply 必須在公司環境針對最終 preview 另行取得當次明確核准。
 
-GitHub 遠端截至 2026-08-12 即時驗證為 public；這是目前 push 的首要阻塞。依私有
-產品與「不可把內容複製到公開處」規則，在 repo 重新驗證為 private 前不得 push。
+GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不可把內容複製到
+公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
+衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
+
+Gate I 的目前唯一阻塞是尚未取得本次 pip 下載 build/runtime dependencies 的明確
+網路核准；它不是安裝程式測試通過，也不能用複製既有 venv 套件冒充乾淨安裝。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
