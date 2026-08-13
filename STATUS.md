@@ -2,10 +2,10 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；新 Gate C 唯讀診斷以 Word `16.0` 證實三份
-LIST header paragraph count 為 `5／4／5`，屬 `SAMPLE_CONTRACT_CONFLICT`。來源與舊
-review 均未變、未建立 master／config／QA，完整離線測試為 `444 passed, 3 skipped`。
-契約修訂／校準及 Gate V／E 均待另行核准；public GitHub 後續 push 未獲授權。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C header tail 契約已於本機修訂並通過
+`445 passed, 3 skipped`，但唯一一次新校準在 Word runtime error `5992`
+（`0x800A1768`）失敗。三份來源與兩份舊 review 均未變，未建立 master／manifest／
+config／QA，已在新 private 目錄留下去識別化 blocked review；public GitHub 未 push。
 
 ## 這次做了什麼
 
@@ -467,14 +467,30 @@ review 均未變、未建立 master／config／QA，完整離線測試為 `444 p
   PDF／PNG 或殘留 WINWORD。診斷功能 commit 為本機 `313cbbc`；針對性回歸為
   `33 passed`，完整離線回歸為 `444 passed, 3 skipped in 7.41s`，compileall、
   PowerShell parse 與 `git diff --check` 均通過。
+- 使用者核准修訂 Gate C header paragraph 契約：固定保留第 1–3 段，第 4 段到 cell
+  結尾正規化為一個空白 prototype 段。實作保留舊的 exact-four guard，只有 schema 2
+  校準 inspection 允許來源尾端為 4–32 段；尾端若重現 `group_code`／`group_name`
+  固定 label 或 inline shape 仍 fail closed。修訂 commit 為本機 `a84758b`；
+  PowerShell parse 與 `git diff --check` 通過，針對性測試為 `34 passed in 0.54s`，
+  完整離線回歸為 `445 passed, 3 skipped in 8.36s`。
+- 在全新 exclusive private 目錄執行且只執行一次 `calibrate-list`。結果為
+  `WORD_GENERATION_FAILED`，stage `run-action`、HRESULT `-2146822296`
+  （`0x800A1768`，Word runtime error `5992`）、adapter code `NONE`；依錯誤碼與目前
+  程式路徑，疑似為 schema 2 inspection 存取混合欄寬表格的 `Columns` collection，
+  但未取得第二個 Word 回合驗證，因此只記為 `unverified` 推論。
+- 失敗後沒有重試。三份來源與兩份舊 review 的 SHA-256 再驗均完全相同，WINWORD
+  為 0；沒有 master、manifest 或 config。新 private 目錄只保留
+  `calibration-review.json`，SHA-256 為
+  `99ab632314cb8a40298bb012ecd02be0de57ab16bd93a95f7212a5b8feae988a`；內容只有安全
+  hash、錯誤欄位與未驗證的 candidate field path，不含文件文字。
 
 ## 下一步
 
-唯讀診斷已完成，不能沿用本次授權修改契約或重跑 calibration。下一步由使用者決定
-是否另行核准：把第 1–3 段保留為固定 header，將第 4 段到 cell 結尾視為需清空並
-正規化成一個 prototype 空白段落的動態 tail，保留兩份現有 private review，然後在
-新的 exclusive 目的目錄執行一次校準。若不接受此規則，則需更換三份能共享同一
-paragraph 契約的來源；不得自行挑一份。只有 Gate C 成功建立並驗證 master 後，才
+本次唯一校準額度已消耗且失敗，不能重試。下一步需由使用者另行核准新的 Gate C
+診斷／修正回合：在暫存 working copy 加入不含內容的細粒度 stage 證據，確認
+runtime error `5992` 的確切操作；若證實為混合欄寬 `Columns` collection，改以固定
+prototype row／cell 取得 schema 2 欄寬指紋，離線回歸後再由新的明確授權決定是否於
+另一個 exclusive private 目錄校準一次。只有 Gate C 成功建立並驗證 master 後，才
 分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E（真實 URL／PDF
 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -491,9 +507,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 已完成，沒有剩餘安裝阻塞。Gate C 診斷已證實三份樣本為 `5／4／5` 段；
-現有私人目的目錄包含 blocked review 與診斷證據，不能覆蓋或刪除。修改 paragraph
-契約、再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
+Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail 契約已修訂，但唯一一次校準
+在 Word runtime error `5992` 阻塞；現有兩個私人目的目錄分別保存舊 blocked review／
+唯讀診斷與本次 blocked review，不能覆蓋或刪除。新的 Word 診斷、再次讀取三份 LIST
+或重跑 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
