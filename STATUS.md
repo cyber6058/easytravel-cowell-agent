@@ -2,10 +2,10 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C header tail 契約已於本機修訂並通過
-`445 passed, 3 skipped`，但唯一一次新校準在 Word runtime error `5992`
-（`0x800A1768`）失敗。三份來源與兩份舊 review 均未變，未建立 master／manifest／
-config／QA，已在新 private 目錄留下去識別化 blocked review；public GitHub 未 push。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C `5992` 單次診斷已以 Word `16.0`
+精確定位到第一份來源的 schema-2 inspection：讀取 table 1／column 1 width 時失敗，
+尚未進入 header tail 或 calibration working-copy 階段。來源與既有 reviews 均未變，
+未建立 master／manifest／config／QA；完整離線測試 `450 passed, 3 skipped`，未 push。
 
 ## 這次做了什麼
 
@@ -483,16 +483,36 @@ config／QA，已在新 private 目錄留下去識別化 blocked review；public
   `calibration-review.json`，SHA-256 為
   `99ab632314cb8a40298bb012ecd02be0de57ab16bd93a95f7212a5b8feae988a`；內容只有安全
   hash、錯誤欄位與未驗證的 candidate field path，不含文件文字。
+- 使用者核准一次 Gate C `5992` 細粒度診斷。新增嚴格的 schema 2
+  `diagnose-5992-v2` Word job：一次 job 先逐份執行 source inspection，若全數成功才
+  依正式 median-day／hash 規則選 base sample，並只在暫存 working copy 執行校準
+  mutation。checkpoint 僅允許固定 phase／operation／field ID 與數字座標；report
+  拒絕額外欄位、文件文字、檔名或路徑。來源前後均重算 SHA-256，working copy 不
+  產生 master 並於 finally 清除。功能 commit 為本機 `146f901`。
+- 診斷程式的 PowerShell parser、production Python 100 字元檢查、compileall 與
+  `git diff --check` 通過；針對性回歸為 `39 passed in 0.47s`，完整離線回歸為
+  `450 passed, 3 skipped in 10.91s`。三個 skip 仍是既有 opt-in Hanhan、私人
+  LIST／Word 與 Yating integration，沒有放寬或拿 skip 冒充本次實機診斷。
+- 唯一一次實機 `diagnose-5992-v2` 以 Word `16.0` 完成且沒有 retry。它在
+  `sample-001`、phase `inspect-source`、operation `table-width-column-item`、
+  field path `samples[0].inspection.table_column_widths_points`、table 1／column 1
+  精確重現 HRESULT `0x800A1768`／low-word `5992`；完成的 source inspections 為 0，
+  base sample 尚未選取。這證實失敗發生在讀取來源的 `Columns.Item(1).Width`，早於
+  header tail 正規化及任何 calibration working-copy mutation。
+- 安全診斷另存於 private `5992-diagnostic.json`，SHA-256 為
+  `92a30ee8d28d67be317d571167293f17cb4dc74bc9f9a241b6070760e7f4dcd2`。診斷後三份
+  來源與三份舊 review hash 再驗均完全一致，WINWORD 為 0，仍無 master／manifest／
+  config。Word 在專用 runtime root 留下的兩個 Diagnostics log 未讀取內容並已連同
+  root 刪除；本回合 2,185 files／887 directories 的測試暫存 root 亦已完整刪除。
 
 ## 下一步
 
-本次唯一校準額度已消耗且失敗，不能重試。下一步需由使用者另行核准新的 Gate C
-診斷／修正回合：在暫存 working copy 加入不含內容的細粒度 stage 證據，確認
-runtime error `5992` 的確切操作；若證實為混合欄寬 `Columns` collection，改以固定
-prototype row／cell 取得 schema 2 欄寬指紋，離線回歸後再由新的明確授權決定是否於
-另一個 exclusive private 目錄校準一次。只有 Gate C 成功建立並驗證 master 後，才
-分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E（真實 URL／PDF
-到語音 DRAFT）的當次核准。
+本次 `5992` 診斷額度已消耗且結果明確，不能再啟動 Word。下一步需由使用者另行核准
+Gate C mixed-width 修正回合：以已知 prototype row／cell 建立 schema 2 欄寬指紋，
+移除對非均勻 table `Columns.Item(...).Width` 的依賴，離線回歸後再由新的明確授權
+決定是否於另一個 exclusive private 目錄校準一次。只有 Gate C 成功建立並驗證
+master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
+（真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
 明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
 立益公司電腦 clone、
@@ -507,10 +527,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail 契約已修訂，但唯一一次校準
-在 Word runtime error `5992` 阻塞；現有兩個私人目的目錄分別保存舊 blocked review／
-唯讀診斷與本次 blocked review，不能覆蓋或刪除。新的 Word 診斷、再次讀取三份 LIST
-或重跑 calibration 都需要新的明確核准。
+Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail 契約已修訂；`5992` 已證實由
+schema 2 對非均勻 table 1 的 column-width member 存取觸發，而非 header mutation。
+既有 private reviews 與新 `5992-diagnostic.json` 不能覆蓋或刪除。mixed-width 契約
+修正、新的 Word 回合、再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
