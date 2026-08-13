@@ -6,8 +6,8 @@
 需要下載 `setuptools>=75`，因此乾淨安裝驗收尚未開始，正等待使用者明確核准該次
 暫存安裝網路。私人範本校準、Word 實機與真實 DRAFT 仍待 Gate C／V／E；GitHub
 遠端仍為 public；使用者在收到私人產品外洩風險警告後，仍明確要求本次例外直接
-push `main`。此例外違反本專案必須 private 才能 push 的規則，依使用者要求執行，
-最終結果須以 GitHub 遠端 SHA 驗證。
+push `main`。此例外違反本專案必須 private 才能 push 的規則；已依使用者要求完成
+首次推送並唯讀驗證本機與 GitHub 同為 `39d37d9`，但不構成後續 public push 授權。
 
 ## 這次做了什麼
 
@@ -379,6 +379,10 @@ push `main`。此例外違反本專案必須 private 才能 push 的規則，依
   冒充完成。push 前由彙整者親自重跑完整離線測試：
   `437 passed, 3 skipped in 20.65s`；`git diff --check` 通過，分支為
   `0 behind / 21 ahead`。
+- 首次例外 push 實際輸出為 `c31876f..39d37d9  main -> main`；隨後以
+  `git ls-remote origin refs/heads/main` 驗證遠端完整 SHA 為
+  `39d37d92fa0e2ef1cf32ce195013f902f3b6433f`，與本機 HEAD 相同，分支為
+  `0 behind / 0 ahead`。GitHub visibility 重驗仍為 `PUBLIC`／`private: false`。
 
 ## 下一步
 
