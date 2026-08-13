@@ -578,6 +578,14 @@ Commit：`build(briefing): package dynamic LIST workflow 0.2.0`
 若 pip 需要下載依賴，Gate I 核准畫面要明示該次網路安裝；不允許把現有使用者 app、
 config、Skill 或 plugin 當作測試目標。
 
+2026-08-13 Gate I 已完成。使用者明確核准暫存環境下載宣告依賴；因本機沒有既有
+`pdftoppm`，另經當次安裝核准以 WinGet 安裝 Poppler 25.07.0-0。0.2.0 在唯一全新
+OS temp root 以 synthetic master／schema 2 manifest 安裝成功；`pip check`、版本、
+doctor、config、CLI surface、Cowell 隔離及 installer rerun 拒絕均通過。重跑前後
+1,520 files／227 directories 與 config／app hashes 不變；驗證後已刪除該 temp root
+共 74,354,729 bytes，並清除本次在 repo 產生的 PowerShell／pip cache。此 Gate 未讀
+私人 LIST、未啟動 Word COM 或合成 Yating、未執行 live request，也未安裝 ffmpeg。
+
 Commit：`docs(briefing): record 0.2.0 clean install acceptance`
 
 ## Task 10：三份私有 LIST 校準 Gate C

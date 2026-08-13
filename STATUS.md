@@ -2,11 +2,10 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的離線 Task 1–8 已完成；本機已同步到 `origin/main` `116cb97`，
-接手回歸發現並修正 PyMuPDF 1.28.2 舊 `fitz` API 警告污染 JSON stdout，完整離線
-測試為 `437 passed, 3 skipped`；Gate I 乾淨安裝仍等待當次依賴下載網路核准，私人
-範本校準、Word 實機與真實 DRAFT 仍待 Gate C／V／E。GitHub 遠端仍為 public；
-先前 public push 是使用者收到風險警告後的單次例外，不構成本次修正的 push 授權。
+說明會產生器 0.2.0 的離線 Task 1–8 與 Gate I 乾淨安裝已完成；PyMuPDF JSON stdout
+相容修正 `e0d1b60` 已依使用者單次例外授權推送並回讀驗證，完整離線測試為
+`437 passed, 3 skipped`。Poppler 25.07.0-0 已經當次核准安裝，私人範本校準、Word
+實機與真實 DRAFT 仍待 Gate C／V／E；GitHub 遠端仍為 public，後續 push 未獲授權。
 
 ## 這次做了什麼
 
@@ -394,19 +393,47 @@
   stdout 可直接解析；最終完整離線回歸為 `437 passed, 3 skipped in 7.11s`，
   compileall 與 `git diff --check` 均通過。三個 skip 仍是需顯式 opt-in 的 Hanhan、
   Yating 與私人 LIST／Word integration tests，沒有啟動、放寬或拿 skip 冒充驗收。
-- 本次沒有執行 Gate I 下載、私人 LIST、Word COM、Yating、live 官網／JMA、LINE、
-  Cowell、部署或其他外部發布；相容修正尚未推送到仍為 public 的 GitHub remote。
+- 使用者在再次收到 public repo 範圍提醒後，明確授權只將相容修正 `e0d1b60` push；
+  實際輸出為 `116cb97..e0d1b60  main -> main`，隨後 `git ls-remote` 回讀完整 SHA
+  `e0d1b60a09f6591913b5c65d9b9714c14f2e1938`，與本機一致、`0 behind / 0 ahead`。
+  `gh repo view` 同時重驗為 `PUBLIC`／`isPrivate: false`；此授權不包含 Gate I 紀錄
+  commit 或任何後續 public push。
+- 以 `e0d1b60` 重建 0.2.0 package：stage 為 63 files，ZIP SHA-256 為
+  `faf66fd78e4f4d865668ac16b4c38defbabd5271313baa020c0faa2390881876`。
+- Gate I 開始時 PATH、WinGet 目錄、Program Files、常見工具目錄及全磁碟唯讀搜尋均
+  證實沒有 `pdftoppm.exe`；使用者另行核准 WinGet 安裝
+  `oschwartz10612.Poppler 25.07.0-0`。安裝完成後實跑 `pdftoppm -v` 回傳
+  `pdftoppm version 25.07.0`；這是保留於本機的持久工具安裝，不在 temp cleanup 內。
+- 使用者明確核准 Gate I 透過 pip 下載 package 宣告的 build/runtime dependencies；
+  在唯一全新 OS temp root 解壓 0.2.0，建立純 synthetic master 與完整 schema 2
+  calibration manifest，將 `LOCALAPPDATA`／`USERPROFILE` 指向該 root，並以
+  `-SkipCodexPluginInstall -SkipClaudeSkillInstall` 安裝，沒有修改真實 Agent 設定。
+- 隔離安裝實際下載並安裝 Beautiful Soup 4.15.0、httpx 0.28.1、PyMuPDF 1.28.2
+  與其宣告依賴；`pip check` 原文為 `No broken requirements found.`，已安裝命令回傳
+  `briefing 0.2.0`，且 `cowell_cli` 不可匯入。
+- Gate I JSON doctor 可直接解析；list calibration 與 configured pdftoppm 都為 `ok`，
+  master hash 相符，Yating voice enumeration 與 Word registry probe 為 `ok`；ffmpeg
+  未設定，因此整體狀態正確為 `warning`。這沒有啟動 Word COM 或執行語音合成。
+- config 結構只含 output／template／tools，template 只有 canonical `master_path` 與
+  `calibration_manifest`；`render --help` 沒有 `--template`，且只暴露
+  `--tts {yating}`。
+- 同一 installer 第二次執行以 exit 1／`LIST_RECALIBRATION_REQUIRED` 拒絕覆蓋；
+  重跑前後 1,520 files／227 directories、config hash 與 app pyproject hash 全部不變。
+  最後刪除唯一 temp root：1,520 files、227 directories、74,354,729 bytes，並回讀
+  確認路徑不存在；另刪除本次 sandbox 在 repo 產生的 67 個 pip／PowerShell cache
+  files 與 150 個 cache directories，工作樹未殘留測試安裝或 cache。
+- Gate I 沒有讀取三份私人 LIST、啟動 Word COM／Yating、發出 live 官網／JMA
+  request、安裝 ffmpeg、傳 LINE、存取 Cowell、部署或發布 artifact。
 
 ## 下一步
 
-先取得 Gate I 本次暫存安裝的明確網路核准，範圍只允許 pip 下載 package 宣告的
-build/runtime dependencies。取得後，在單一全新 temp root 使用 synthetic
-master／manifest 完成 0.2.0 安裝、CLI／doctor／config／重跑拒絕驗證並刪除該 root；
-不讀私人 LIST、不啟動 Word／Yating，也不改正式使用者環境。Gate I 實證通過後，
-再分別取得 Gate C（私人 LIST 一次性校準）、Gate V（4／5／6／
+Gate I 已實證通過。下一步先另行取得 Gate C（私人 LIST 一次性校準）當次核准，並
+確認本機三份 LIST 樣本的實際 absolute paths 與既定 SHA-256；Gate C 通過後，再分別
+取得 Gate V（4／5／6／
 7／8／12 天 Word 視覺 QA）與 Gate E（真實 URL／PDF 到語音 DRAFT）的當次核准。
-GitHub visibility 依使用者指示不變；本次 public push 是收到風險警告後的單次明確
-例外，不構成後續 public push 的長期授權。Cowell 部分維持到立益公司電腦 clone、
+GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
+明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
+立益公司電腦 clone、
 先跑完整離線測試，再由 OP 登入受控 Chrome，依序驗證 auth status 與 rooms preview。
 
 ## 阻塞點
@@ -418,8 +445,9 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 的目前唯一阻塞是尚未取得本次 pip 下載 build/runtime dependencies 的明確
-網路核准；它不是安裝程式測試通過，也不能用複製既有 venv 套件冒充乾淨安裝。
+Gate I 已完成，沒有剩餘安裝阻塞。Gate C 尚未獲當次核准，且計畫記載的三份來源
+位於另一個使用者目錄；執行前必須由 OP 確認這台機器上的實際 absolute paths，不能
+自行搜尋、搬移或以其他 LIST 代替。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
