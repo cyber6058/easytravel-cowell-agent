@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -16,6 +17,10 @@ from ..errors import (
 
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 ProcessTerminator = Callable[["OwnedWordProcess"], bool]
+_SAFE_WORD_ERROR = re.compile(
+    r"WORD_ADAPTER_ERROR stage=([a-z][a-z-]{0,31}) "
+    r"hresult=(-?[0-9]{1,12}) code=([A-Z][A-Z0-9_]{1,79}|NONE)"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +100,7 @@ class WindowsWordAdapter:
         if result.returncode != 0:
             raise WordGenerationError(
                 "Word automation failed",
-                {"return_code": result.returncode},
+                _word_failure_details(result),
             )
 
 
@@ -301,3 +306,20 @@ def _read_owned_word_process(
 
 def _is_hex_nonce(value: str) -> bool:
     return len(value) == 32 and all(character in "0123456789abcdef" for character in value)
+
+
+def _word_failure_details(
+    result: subprocess.CompletedProcess[str],
+) -> dict[str, int | str]:
+    details: dict[str, int | str] = {"return_code": result.returncode}
+    for line in result.stderr.splitlines():
+        match = _SAFE_WORD_ERROR.fullmatch(line.strip())
+        if match is None:
+            continue
+        details.update(
+            stage=match.group(1),
+            hresult=int(match.group(2)),
+            adapter_code=match.group(3),
+        )
+        break
+    return details

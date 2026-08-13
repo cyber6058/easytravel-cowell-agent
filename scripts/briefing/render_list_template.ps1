@@ -44,33 +44,71 @@ function Write-JsonExclusive {
 function Write-OwnerRecord {
     param(
         [Parameter(Mandatory = $true)]$Word,
-        [Parameter(Mandatory = $true)]$Job
+        [Parameter(Mandatory = $true)]$Job,
+        [Parameter(Mandatory = $true)][ref]$Stage
     )
-    [uint32]$processId = 0
-    [void][EasyTravelWordRenderNativeMethods]::GetWindowThreadProcessId(
-        [IntPtr]$Word.Hwnd,
-        [ref]$processId
-    )
-    if ($processId -le 0) {
-        throw "WORD_PID_UNAVAILABLE"
+    $ownershipDocument = $null
+    $ownershipWindow = $null
+    try {
+        $Stage.Value = "create-ownership-document"
+        $ownershipDocument = $Word.Documents.Add()
+        $Stage.Value = "read-ownership-window"
+        $ownershipWindow = $ownershipDocument.ActiveWindow
+        $windowHandle = [IntPtr]$ownershipWindow.Hwnd
+        [uint32]$processId = 0
+        $Stage.Value = "resolve-word-pid"
+        [void][EasyTravelWordRenderNativeMethods]::GetWindowThreadProcessId(
+            $windowHandle,
+            [ref]$processId
+        )
+        $Stage.Value = "validate-word-pid"
+        if ($processId -le 0) {
+            throw "WORD_PID_UNAVAILABLE"
+        }
+        $Stage.Value = "lookup-word-process"
+        $process = Get-Process -Id $processId -ErrorAction Stop
+        $Stage.Value = "validate-word-process"
+        if ($process.ProcessName -cne "WINWORD") {
+            throw "WORD_PID_MISMATCH"
+        }
+        $Stage.Value = "read-word-start-time"
+        $owner = [ordered]@{
+            schema_version = 1
+            ownership_nonce = [string]$Job.ownership_nonce
+            pid = [int]$processId
+            process_name = "WINWORD"
+            start_time_utc_ticks = [int64]$process.StartTime.ToUniversalTime().Ticks
+        }
+        $Stage.Value = "write-owner"
+        Write-JsonExclusive -Value $owner -Path ([string]$Job.word_pid_path)
     }
-    $process = Get-Process -Id $processId -ErrorAction Stop
-    if ($process.ProcessName -cne "WINWORD") {
-        throw "WORD_PID_MISMATCH"
+    finally {
+        if ($null -ne $ownershipDocument) {
+            try { $ownershipDocument.Close($false) } catch {}
+        }
+        if ($null -ne $ownershipWindow) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $ownershipWindow
+                )
+            }
+            catch {}
+        }
+        if ($null -ne $ownershipDocument) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $ownershipDocument
+                )
+            }
+            catch {}
+        }
     }
-    $owner = [ordered]@{
-        schema_version = 1
-        ownership_nonce = [string]$Job.ownership_nonce
-        pid = [int]$processId
-        process_name = "WINWORD"
-        start_time_utc_ticks = [int64]$process.StartTime.ToUniversalTime().Ticks
-    }
-    Write-JsonExclusive -Value $owner -Path ([string]$Job.word_pid_path)
 }
 
 $word = $null
 $document = $null
 $wordStarted = $false
+$stage = "load-job"
 try {
     $resolvedJob = [IO.Path]::GetFullPath($JobPath)
     if (-not [IO.File]::Exists($resolvedJob)) {
@@ -85,6 +123,7 @@ try {
     ) {
         throw "WORD_RENDER_JOB_UNSUPPORTED"
     }
+    $stage = "validate-paths"
     $inputDocx = [IO.Path]::GetFullPath([string]$job.input_docx)
     $outputPdf = [IO.Path]::GetFullPath([string]$job.output_pdf)
     if (
@@ -95,12 +134,17 @@ try {
     ) {
         throw "WORD_RENDER_PATH_INVALID"
     }
+    $stage = "start-word"
     $word = New-Object -ComObject Word.Application
     $wordStarted = $true
+    $stage = "configure-word"
     $word.Visible = $false
     $word.DisplayAlerts = $WdAlertsNone
-    Write-OwnerRecord -Word $word -Job $job
+    $stage = "bind-owner"
+    Write-OwnerRecord -Word $word -Job $job -Stage ([ref]$stage)
+    $stage = "open-document"
     $document = $word.Documents.Open($inputDocx, $false, $true)
+    $stage = "render-document"
     $document.Repaginate()
     $pageCount = [int]$document.ComputeStatistics($WdStatisticPages)
     if ($pageCount -le 0) { throw "LIST_PAGE_COUNT_INVALID" }
@@ -115,10 +159,18 @@ try {
         computed_page_count = $pageCount
         output_bytes = [int64](Get-Item -LiteralPath $outputPdf).Length
     }
+    $stage = "write-report"
     Write-JsonExclusive -Value $report -Path ([string]$job.report_path)
 }
 catch {
-    [Console]::Error.WriteLine("WORD_RENDER_ERROR")
+    $adapterCode = "NONE"
+    $exceptionMessage = [string]$_.Exception.Message
+    if ($exceptionMessage -cmatch '^[A-Z][A-Z0-9_]{1,79}$') {
+        $adapterCode = $exceptionMessage
+    }
+    [Console]::Error.WriteLine(
+        "WORD_ADAPTER_ERROR stage=$stage hresult=$([int]$_.Exception.HResult) code=$adapterCode"
+    )
     if (-not $wordStarted) {
         exit 21
     }

@@ -180,6 +180,57 @@ def test_word_adapter_maps_stable_script_failures(tmp_path, return_code, error_t
         word.run(job(tmp_path), timeout_seconds=90)
 
 
+def test_word_adapter_exposes_only_allowlisted_failure_diagnostics(tmp_path):
+    runner = WordRunner(
+        return_code=30,
+        stderr=(
+            "private content must be ignored\n"
+            "WORD_ADAPTER_ERROR stage=bind-owner hresult=-2147352573 "
+            "code=NONE\n"
+        ),
+    )
+    word = adapter(tmp_path, runner)
+
+    with pytest.raises(WordGenerationError) as captured:
+        word.run(job(tmp_path), timeout_seconds=90)
+
+    assert captured.value.details == {
+        "return_code": 30,
+        "stage": "bind-owner",
+        "hresult": -2147352573,
+        "adapter_code": "NONE",
+    }
+
+
+def test_word_adapter_ignores_malformed_failure_diagnostics(tmp_path):
+    word = adapter(
+        tmp_path,
+        WordRunner(
+            return_code=30,
+            stderr="WORD_ADAPTER_ERROR stage=bind-owner secret=private",
+        ),
+    )
+
+    with pytest.raises(WordGenerationError) as captured:
+        word.run(job(tmp_path), timeout_seconds=90)
+
+    assert captured.value.details == {"return_code": 30}
+
+
+def test_word_scripts_bind_owned_pid_through_a_temporary_word_window():
+    project_root = Path(__file__).parents[3]
+    for relative in (
+        Path("scripts/briefing/patch_list_template.ps1"),
+        Path("scripts/briefing/render_list_template.ps1"),
+    ):
+        script = (project_root / relative).read_text(encoding="utf-8")
+        assert "$Word.Hwnd" not in script
+        assert "$Word.Documents.Add()" in script
+        assert "$ownershipDocument.ActiveWindow" in script
+        assert "$ownershipWindow.Hwnd" in script
+        assert "$ownershipDocument.Close($false)" in script
+
+
 def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
     job_path = job(tmp_path)
     (tmp_path / "word-owner.json").write_text(

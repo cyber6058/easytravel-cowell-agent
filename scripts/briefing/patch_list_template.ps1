@@ -174,26 +174,63 @@ function Write-JsonExclusive {
 function Get-WordOwnerRecord {
     param(
         [Parameter(Mandatory = $true)]$Word,
-        [Parameter(Mandatory = $true)][string]$OwnershipNonce
+        [Parameter(Mandatory = $true)][string]$OwnershipNonce,
+        [Parameter(Mandatory = $true)][ref]$Stage
     )
-    [uint32]$processId = 0
-    [void][EasyTravelWordNativeMethods]::GetWindowThreadProcessId(
-        [IntPtr]$Word.Hwnd,
-        [ref]$processId
-    )
-    if ($processId -le 0) {
-        throw "WORD_PID_UNAVAILABLE"
+    $ownershipDocument = $null
+    $ownershipWindow = $null
+    try {
+        $Stage.Value = "create-ownership-document"
+        $ownershipDocument = $Word.Documents.Add()
+        $Stage.Value = "read-ownership-window"
+        $ownershipWindow = $ownershipDocument.ActiveWindow
+        $windowHandle = [IntPtr]$ownershipWindow.Hwnd
+        [uint32]$processId = 0
+        $Stage.Value = "resolve-word-pid"
+        [void][EasyTravelWordNativeMethods]::GetWindowThreadProcessId(
+            $windowHandle,
+            [ref]$processId
+        )
+        $Stage.Value = "validate-word-pid"
+        if ($processId -le 0) {
+            throw "WORD_PID_UNAVAILABLE"
+        }
+        $Stage.Value = "lookup-word-process"
+        $process = Get-Process -Id $processId -ErrorAction Stop
+        $Stage.Value = "validate-word-process"
+        if ($process.ProcessName -cne "WINWORD") {
+            throw "WORD_PID_MISMATCH"
+        }
+        $Stage.Value = "read-word-start-time"
+        $startTimeUtcTicks = [int64]$process.StartTime.ToUniversalTime().Ticks
+        return [ordered]@{
+            schema_version = 1
+            ownership_nonce = $OwnershipNonce
+            pid = [int]$processId
+            process_name = "WINWORD"
+            start_time_utc_ticks = $startTimeUtcTicks
+        }
     }
-    $process = Get-Process -Id $processId -ErrorAction Stop
-    if ($process.ProcessName -cne "WINWORD") {
-        throw "WORD_PID_MISMATCH"
-    }
-    return [ordered]@{
-        schema_version = 1
-        ownership_nonce = $OwnershipNonce
-        pid = [int]$processId
-        process_name = "WINWORD"
-        start_time_utc_ticks = [int64]$process.StartTime.ToUniversalTime().Ticks
+    finally {
+        if ($null -ne $ownershipDocument) {
+            try { $ownershipDocument.Close($false) } catch {}
+        }
+        if ($null -ne $ownershipWindow) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $ownershipWindow
+                )
+            }
+            catch {}
+        }
+        if ($null -ne $ownershipDocument) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $ownershipDocument
+                )
+            }
+            catch {}
+        }
     }
 }
 
@@ -1069,6 +1106,7 @@ function Invoke-Patch {
 
 $word = $null
 $wordStarted = $false
+$stage = "load-job"
 try {
     $resolvedJob = [IO.Path]::GetFullPath($JobPath)
     if (-not [IO.File]::Exists($resolvedJob)) {
@@ -1082,15 +1120,22 @@ try {
     if ([string]$job.ownership_nonce -notmatch '^[0-9a-f]{32}$') {
         throw "WORD_OWNERSHIP_NONCE_INVALID"
     }
+    $stage = "validate-job"
     Assert-WordJobShape -Job $job
+    $stage = "start-word"
     $word = New-Object -ComObject Word.Application
     $wordStarted = $true
+    $stage = "configure-word"
     $word.Visible = $false
     $word.DisplayAlerts = $WdAlertsNone
+    $stage = "bind-owner"
     $owner = Get-WordOwnerRecord `
         -Word $word `
-        -OwnershipNonce ([string]$job.ownership_nonce)
+        -OwnershipNonce ([string]$job.ownership_nonce) `
+        -Stage ([ref]$stage)
+    $stage = "write-owner"
     Write-JsonExclusive -Value $owner -Path ([string]$job.word_pid_path)
+    $stage = "run-action"
     switch ([string]$job.action) {
         "probe" { Invoke-Probe -Job $job -Word $word }
         "inspect" { Invoke-Inspect -Job $job -Word $word }
@@ -1101,7 +1146,14 @@ try {
     }
 }
 catch {
-    [Console]::Error.WriteLine("WORD_ADAPTER_ERROR")
+    $adapterCode = "NONE"
+    $exceptionMessage = [string]$_.Exception.Message
+    if ($exceptionMessage -cmatch '^[A-Z][A-Z0-9_]{1,79}$') {
+        $adapterCode = $exceptionMessage
+    }
+    [Console]::Error.WriteLine(
+        "WORD_ADAPTER_ERROR stage=$stage hresult=$([int]$_.Exception.HResult) code=$adapterCode"
+    )
     if (-not $wordStarted) {
         exit 21
     }
