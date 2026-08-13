@@ -634,6 +634,16 @@ config、PDF／PNG 或殘留 WINWORD；私人目錄只保留 hashes／field path
 Gate C 狀態為 `CALIBRATION_CONTRACT_CONFLICT`，不得沿用本次授權 retry，Gate V
 未開啟。
 
+2026-08-13 新 Gate C 唯讀診斷結果：保留原 blocked review，新增只允許 hashes、
+field path、數字型結構與固定 label ID 的 `diagnose-header-v2` action。Word `16.0`
+實跑顯示三份 sample 的 `list_header_paragraph_count` 為 `5／4／5`，因此分類是
+`SAMPLE_CONTRACT_CONFLICT`，不是共同 expected-value drift。第 1–3 段的抬頭、
+`group_code`、`group_name` 結構一致；差異位於第 4 段到 cell marker 的尾端，該區
+沒有上述固定 label 或 inline shape。來源 hashes 與舊 review hash 均未變，沒有
+master、manifest、config、PDF／PNG 或殘留 WINWORD。下一個 Gate C 必須另行核准
+是否把此尾端正規化成單一 prototype 空白段落；本診斷不構成該契約變更或 calibration
+授權。
+
 ## Task 11：4／5／6／7／8／12 天 Word 視覺驗收 Gate V
 
 Gate C 通過且另行取得 Gate V 核准後，使用同一 private master 與全 synthetic、

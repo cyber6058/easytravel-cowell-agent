@@ -2,10 +2,10 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成，Gate C 的 Word `16.0` capability probe 已實機
-通過，但唯一一次校準因 `list_header_paragraph_count` 契約不符而 fail closed；三份來源
-雜湊未變、未建立 master／config／QA，完整離線測試為 `440 passed, 3 skipped`。
-Gate C 重試及 Gate V／E 均待另行核准；GitHub 遠端仍為 public，後續 push 未獲授權。
+說明會產生器 0.2.0 的 Gate I 已完成；新 Gate C 唯讀診斷以 Word `16.0` 證實三份
+LIST header paragraph count 為 `5／4／5`，屬 `SAMPLE_CONTRACT_CONFLICT`。來源與舊
+review 均未變、未建立 master／config／QA，完整離線測試為 `444 passed, 3 skipped`。
+契約修訂／校準及 Gate V／E 均待另行核准；public GitHub 後續 push 未獲授權。
 
 ## 這次做了什麼
 
@@ -448,15 +448,35 @@ Gate C 重試及 Gate V／E 均待另行核准；GitHub 遠端仍為 public，�
   `git diff --check` 均通過。三個 skip 仍是需 opt-in 的 Hanhan、私人 LIST／Word
   與 Yating integration；因 master 未建立，真實 Word PDF render 及逐頁視覺 QA
   正確標記為未驗證。
+- 使用者另行核准新的 Gate C 唯讀診斷回合，要求保留現有 blocked review 並重查
+  相同三份 LIST 的 header paragraph 契約。新增 schema 2
+  `diagnose-header-v2` Word action：只接受三個唯一 Word paths，報告只含來源 hash、
+  field path、數字型段落結構與固定 label ID；不保存檔名、路徑或實際文字。來源在
+  Word 前後都重算 hash，任何變動都 fail closed；額外／未核准 report 欄位會被拒絕。
+- 真實唯讀診斷以 Word `16.0` 完成一次：三個 hash 對應的
+  `list_header_paragraph_count` 依序為 `5／4／5`，分類為
+  `SAMPLE_CONTRACT_CONFLICT`。三份共同結構是第 1 段抬頭、第 2 段 `group_code`、
+  第 3 段 `group_name`；差異位於第 4 段至 cell marker 的尾端內容，且該區沒有上述
+  固定 label 或 inline shape。此證據只描述結構，不自行判定尾端內容可刪除。
+- 新診斷另存於固定私人目錄的 `header-paragraph-diagnostic.json`，SHA-256 為
+  `c51f8e43af07239049f88bad0dd7ea6b6931c217ae5bf4161e79970674b30982`；舊
+  `calibration-review.json` SHA-256 仍為
+  `ebd166ea8b83a80cd2ef96c5536d676e672921cafc4a5e47f8d0e6eb4ba99c01`。
+  兩檔均不含來源檔名／路徑／實際文字，且不在 Git 工作樹內。
+- 診斷後三份來源 SHA-256 仍與既定值完全相同；沒有 master、manifest、config、
+  PDF／PNG 或殘留 WINWORD。診斷功能 commit 為本機 `313cbbc`；針對性回歸為
+  `33 passed`，完整離線回歸為 `444 passed, 3 skipped in 7.41s`，compileall、
+  PowerShell parse 與 `git diff --check` 均通過。
 
 ## 下一步
 
-Gate C 已 fail closed，不能沿用這次授權重跑。下一步先由使用者決定是否核准新的
-Gate C 診斷／校準回合：保留現有 blocked review、不覆蓋目的目錄，讓 inspect 報告
-只用 sample hash／field path 釐清三份來源的 header paragraph 契約，再決定修訂契約
-或更換來源；不得自行選一份。只有新 Gate C 成功建立並驗證 master 後，才分別取得
-Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E（真實 URL／PDF 到語音
-DRAFT）的當次核准。
+唯讀診斷已完成，不能沿用本次授權修改契約或重跑 calibration。下一步由使用者決定
+是否另行核准：把第 1–3 段保留為固定 header，將第 4 段到 cell 結尾視為需清空並
+正規化成一個 prototype 空白段落的動態 tail，保留兩份現有 private review，然後在
+新的 exclusive 目的目錄執行一次校準。若不接受此規則，則需更換三份能共享同一
+paragraph 契約的來源；不得自行挑一份。只有 Gate C 成功建立並驗證 master 後，才
+分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E（真實 URL／PDF
+到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
 明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
 立益公司電腦 clone、
@@ -471,10 +491,9 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 已完成，沒有剩餘安裝阻塞。Gate C 已獲核准並只執行一次，但因
-`list_header_paragraph_count` 契約不符而阻擋；現有私人目的目錄包含 blocked review，
-不能覆蓋或刪除。再次讀取三份 LIST、移動現有 review 或重跑 calibration 都需要新的
-明確核准。
+Gate I 已完成，沒有剩餘安裝阻塞。Gate C 診斷已證實三份樣本為 `5／4／5` 段；
+現有私人目的目錄包含 blocked review 與診斷證據，不能覆蓋或刪除。修改 paragraph
+契約、再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
