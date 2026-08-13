@@ -316,4 +316,28 @@ def test_calibration_preserves_fixed_header_labels_when_values_are_cleared():
     assert "for ($paragraphNumber = 2; $paragraphNumber -le 3;" in calibrate
     assert "LIST_HEADER_LABEL_MISSING" in calibrate
     assert "$originalText.Substring(0, $labelBreak + 1)" in calibrate
-    assert "$headerCell.Range.Paragraphs.Item(4)" in calibrate
+    assert "Set-NormalizedHeaderDynamicTail -HeaderCell $headerCell" in calibrate
+
+
+def test_calibration_normalizes_only_the_approved_header_tail():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    inspection = script.split("function Get-ListInspectionV2", 1)[1].split(
+        "function Assert-BasicListContract", 1
+    )[0]
+    contract = script.split(
+        "function Assert-NormalizableHeaderParagraphContract", 1
+    )[1].split("function Set-NormalizedHeaderDynamicTail", 1)[0]
+    normalization = script.split(
+        "function Set-NormalizedHeaderDynamicTail", 1
+    )[1].split("function Set-TokenHighlight", 1)[0]
+
+    assert "-AllowVariableHeaderTail" in inspection
+    assert "list_header_paragraph_count = 4" in inspection
+    assert "Paragraphs.Item(2)" in contract
+    assert "Paragraphs.Item(3)" in contract
+    assert "LIST_HEADER_DYNAMIC_TAIL_UNSAFE" in contract
+    assert "$number = 4" in contract
+    assert "Paragraphs.Item(4).Range.Start" in normalization
+    assert "$HeaderCell.Range.End - 1" in normalization
+    assert "$tailRange.Text = [string][char]13" in normalization
+    assert "LIST_HEADER_NORMALIZATION_FAILED" in normalization

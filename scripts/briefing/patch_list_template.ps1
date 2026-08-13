@@ -464,7 +464,13 @@ function Get-ListInspectionV2 {
     $requiredLabels = @(
         $AnchorChecks | ForEach-Object { [string]$_.label }
     )
-    Assert-BasicListContract -Inspection $basic -RequiredAnchorLabels $requiredLabels
+    Assert-BasicListContract `
+        -Inspection $basic `
+        -RequiredAnchorLabels $requiredLabels `
+        -AllowVariableHeaderTail
+    Assert-NormalizableHeaderParagraphContract `
+        -Document $Document `
+        -AnchorChecks $AnchorChecks
     $section = $Document.Sections.Item(1)
     $columnWidths = @()
     $formatParts = @()
@@ -540,7 +546,7 @@ function Get-ListInspectionV2 {
         table_shapes = $basic.table_shapes
         anchor_labels = $basic.anchor_labels
         list_header_accessible_cells = $basic.list_header_accessible_cells
-        list_header_paragraph_count = $basic.list_header_paragraph_count
+        list_header_paragraph_count = 4
         section_count = $basic.section_count
         page_width_points = $basic.page_width_points
         page_height_points = $basic.page_height_points
@@ -599,7 +605,8 @@ function Assert-BasicListContract {
     param(
         [Parameter(Mandatory = $true)]$Inspection,
         [Parameter(Mandatory = $true)]$RequiredAnchorLabels,
-        [int]$RequiredDayCount = 0
+        [int]$RequiredDayCount = 0,
+        [switch]$AllowVariableHeaderTail
     )
     if ($Inspection.table_shapes.Count -ne 4) {
         throw "LIST_TABLE_COUNT_CHANGED"
@@ -633,7 +640,14 @@ function Assert-BasicListContract {
     if ($cellText -ne $ExpectedHeaderCells) {
         throw "LIST_MERGED_CELLS_CHANGED"
     }
-    if ([int]$Inspection.list_header_paragraph_count -ne 4) {
+    $headerParagraphCount = [int]$Inspection.list_header_paragraph_count
+    if (
+        ($AllowVariableHeaderTail -and (
+            $headerParagraphCount -lt 4 -or
+            $headerParagraphCount -gt 32
+        )) -or
+        (-not $AllowVariableHeaderTail -and $headerParagraphCount -ne 4)
+    ) {
         throw "LIST_HEADER_PARAGRAPHS_CHANGED"
     }
     if ([int]$Inspection.header_qr_candidate_count -lt 1) {
@@ -646,6 +660,76 @@ function Assert-BasicListContract {
         [Math]::Abs([double]$Inspection.page_height_points - 841.89) -gt 2
     ) {
         throw "LIST_PAGE_GEOMETRY_CHANGED"
+    }
+}
+
+function Assert-NormalizableHeaderParagraphContract {
+    param(
+        [Parameter(Mandatory = $true)]$Document,
+        [Parameter(Mandatory = $true)]$AnchorChecks
+    )
+    $headerCell = Get-Cell `
+        -Table $Document.Tables.Item(1) `
+        -Row 1 `
+        -Column 1
+    $paragraphCount = [int]$headerCell.Range.Paragraphs.Count
+    if ($paragraphCount -lt 4 -or $paragraphCount -gt 32) {
+        throw "LIST_HEADER_PARAGRAPHS_CHANGED"
+    }
+    $groupCodeLabel = [string]$AnchorChecks[0].label
+    $groupNameLabel = [string]$AnchorChecks[1].label
+    $titleText = [string]$headerCell.Range.Paragraphs.Item(1).Range.Text
+    $groupCodeText = [string]$headerCell.Range.Paragraphs.Item(2).Range.Text
+    $groupNameText = [string]$headerCell.Range.Paragraphs.Item(3).Range.Text
+    if (
+        [string]::IsNullOrWhiteSpace(
+            $titleText.TrimEnd([char]13, [char]7)
+        ) -or
+        -not $groupCodeText.Contains($groupCodeLabel) -or
+        -not $groupNameText.Contains($groupNameLabel)
+    ) {
+        throw "LIST_HEADER_FIXED_PARAGRAPHS_CHANGED"
+    }
+    for ($number = 4; $number -le $paragraphCount; $number += 1) {
+        $range = $headerCell.Range.Paragraphs.Item($number).Range
+        $tailText = [string]$range.Text
+        if (
+            $tailText.Contains($groupCodeLabel) -or
+            $tailText.Contains($groupNameLabel) -or
+            [int]$range.InlineShapes.Count -ne 0
+        ) {
+            throw "LIST_HEADER_DYNAMIC_TAIL_UNSAFE"
+        }
+    }
+}
+
+function Set-NormalizedHeaderDynamicTail {
+    param([Parameter(Mandatory = $true)]$HeaderCell)
+    $paragraphCount = [int]$HeaderCell.Range.Paragraphs.Count
+    if ($paragraphCount -lt 4 -or $paragraphCount -gt 32) {
+        throw "LIST_HEADER_PARAGRAPHS_CHANGED"
+    }
+    $tailRange = $null
+    try {
+        $tailRange = $HeaderCell.Range.Duplicate
+        $tailRange.Start = [int](
+            $HeaderCell.Range.Paragraphs.Item(4).Range.Start
+        )
+        $tailRange.End = [int]$HeaderCell.Range.End - 1
+        $tailRange.Text = [string][char]13
+    }
+    finally {
+        if ($null -ne $tailRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $tailRange
+                )
+            }
+            catch {}
+        }
+    }
+    if ([int]$HeaderCell.Range.Paragraphs.Count -ne 4) {
+        throw "LIST_HEADER_NORMALIZATION_FAILED"
     }
 }
 
@@ -995,7 +1079,7 @@ function Invoke-Calibrate {
                 [string][char]13
             )
         }
-        $headerCell.Range.Paragraphs.Item(4).Range.Text = [string][char]13
+        Set-NormalizedHeaderDynamicTail -HeaderCell $headerCell
         foreach ($coordinate in @(
             @(1, 2, 1), @(1, 2, 2), @(1, 2, 3),
             @(1, 3, 1), @(1, 4, 1), @(1, 4, 2)
