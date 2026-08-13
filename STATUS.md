@@ -3,8 +3,9 @@
 ## 一句話現況
 
 說明會產生器 0.2.0 的 Gate I 已完成；Gate C 的 mixed-width 與 vertically-merged-row
-兩個離線修正均已完成。後者尚未啟動 Word 或重跑真實校準，因此仍未建立
-master／manifest／config；最近完整離線測試為 `452 passed, 3 skipped`，尚未 push。
+離線修正後已執行唯一一次新校準，但在 `run-action` 以 HRESULT `0x80131501`
+fail closed。來源與既有 reviews 均未變，沒有 master／manifest／config／新 review；
+最近完整離線測試仍為 `452 passed, 3 skipped`，尚未 push。
 
 ## 這次做了什麼
 
@@ -552,12 +553,30 @@ master／manifest／config；最近完整離線測試為 `452 passed, 3 skipped`
 - 本回合未讀三份私人 LIST、未啟動 Word、未執行 calibration，也未建立或改動
   master、manifest、config、QA 或 private review；因此 `5991` 的實機排除狀態仍為
   **未驗證**。
+- 使用者另行核准一次新的 Gate C 真實校準；開工的 `git pull --ff-only` 回傳
+  `Already up to date.`。執行前驗證三份來源 SHA-256 全部符合既定值，五份既有
+  private reviews／diagnostics 的 SHA-256 全部符合既定值；既有 master／manifest
+  數量為 0，真實 config 與全新目的目錄均不存在，WINWORD 為 0，`pdftoppm 25.07.0`
+  可用。
+- 兩次 sandbox 內的 probe 在寫入 job 前即被 temp ACL 拒絕，均未啟動 Word、未讀取
+  LIST、未消耗 calibration；改在 sandbox 外執行 bounded hidden owned probe 後成功，
+  原文為 `{"available": true, "word_version": "16.0"}`。
+- 在全新 `list-calibration-v4-cell-format` 私人目錄執行且只執行一次
+  `calibrate-list`，沒有 retry。命令明確回傳 `WORD_GENERATION_FAILED`、stage
+  `run-action`、HRESULT `-2146233087`（`0x80131501`，low word `5377`）、adapter code
+  `NONE`。此錯誤沒有安全 checkpoint，不能推定 row-access 修正是否已越過原 `5991`。
+- 失敗後三份來源 SHA-256 全部不變，WINWORD 為 0；沒有 master、manifest、config、
+  PDF、PNG 或新 calibration review。CLI 將空的全新 private 目錄自動移除；五份既有
+  private reviews／diagnostics 未覆蓋或刪除。兩個失敗 probe 遺留的精確 temp 目錄已
+  清除並回讀確認不存在。本回合沒有程式碼變更，因此未重跑測試，最近完整離線結果
+  維持 `452 passed, 3 skipped in 7.28s`。
 
 ## 下一步
 
-Gate C vertically-merged-row 離線修正已完成。下一步需由使用者另行明確核准，才可
-在新的 exclusive private 目錄讀取三份 LIST 並執行一次真實校準；不得沿用已消耗的
-校準額度或自行 retry。只有 Gate C
+本次 Gate C 真實校準額度已消耗且沒有 retry。下一步應先以離線變更加入
+`0x80131501` 的安全細粒度 checkpoint／diagnostic report；完成離線回歸後，仍需由
+使用者另行明確核准，才可在新的 exclusive private 目錄讀取三份 LIST 並執行一次
+診斷或校準。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -575,11 +594,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail、mixed-width 與 row-access
-契約均已完成離線修正；先前真實校準已越過原 `5992` 欄寬錯誤，但在 Word error
-`5991` fail closed。候選 `Rows.Item(...).Range` 路徑已從 schema-2 inspection 移除，
-但尚未透過新的 Word 回合證實實機排除。既有 private reviews、
-`5992-diagnostic.json` 與新 `calibration-review.json` 不能覆蓋或刪除；新的 Word
-回合、再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
+契約均已完成離線修正；新校準在 Word adapter `run-action` 以 `0x80131501` fail closed，
+且沒有產生可定位 operation／field 的安全 review，因此 row-access 修正的實機狀態仍
+未驗證。既有五份 private reviews／diagnostics 不能覆蓋或刪除；新的 Word 診斷回合、
+再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
