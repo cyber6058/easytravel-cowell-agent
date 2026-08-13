@@ -2,10 +2,10 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C `5992` mixed-width 程式修正已完成離線
-驗證，schema-2 欄寬指紋改讀固定 prototype cells，不再使用
-`Columns.Item(...).Width`。本回合未讀三份 LIST、未啟動 Word 或校準，既有 private
-reviews 均未變；完整離線測試 `451 passed, 3 skipped`，未 push。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C mixed-width 修正後的唯一一次真實校準
+已執行，但 Word 在 `run-action` 以 `0x800A1767`／error `5991` fail closed。來源與
+既有 reviews 均未變，未建立 master／manifest／config；安全 private review 已保留，
+沒有重試或 push。最近完整離線測試仍為 `451 passed, 3 skipped`。
 
 ## 這次做了什麼
 
@@ -519,13 +519,36 @@ reviews 均未變；完整離線測試 `451 passed, 3 skipped`，未 push。
 - 本修正回合未讀三份真實 LIST、未啟動 Word、未校準，也未建立或改動 master、
   manifest、config、QA 或任何 private review；結束檢查 WINWORD 為 0。專用 synthetic
   測試暫存目錄已精確刪除並確認不存在。
+- 使用者另行核准真實 Gate C 校準；開工的 `git pull --ff-only` 回傳
+  `Already up to date.`。執行前重新確認三份來源的 size、mtime 與既定 SHA-256 全部
+  相符，四份既有 private reviews 的 SHA-256 也完全相符；全新 exclusive private
+  目錄、config、master、manifest 與 runtime root 均不存在，WINWORD 為 0，
+  `pdftoppm version 25.07.0` 可用。
+- 在 `list-calibration-v3-mixed-width` 執行且只執行一次 `calibrate-list`，沒有 retry。
+  命令明確回傳 `WORD_GENERATION_FAILED`、stage `run-action`、HRESULT
+  `-2146822297`（`0x800A1767`，Word runtime error `5991`）、adapter code `NONE`。
+- Microsoft 的 Word table 文件指出，非均勻或含垂直合併儲存格的表格不能安全地個別
+  存取 `Rows`；目前 schema-2 inspection 在 prototype cell widths 後的第一個候選為
+  operation `table-format-row`、field path `samples[].inspection.style_digest` 與
+  `table.Rows.Item(...).Range`。本次 coarse calibration report 沒有 checkpoint，因此
+  以上只記為 `unverified` 推論，未擅自修正或再次啟動 Word。
+- 校準後三份來源與四份既有 reviews 的 SHA-256 均完全不變，WINWORD 為 0；沒有
+  master、manifest、config、PDF 或 PNG。新 private 目錄只保留安全的
+  `calibration-review.json`，SHA-256 為
+  `5835e1397a59f7b58d9c734568d658a3d445e2704c00e16b95a58634d27b8e61`；檔案不含
+  LIST 檔名、Downloads 路徑、source path 欄位或文件文字。
+- 專用 runtime root 共有 208 files／39 directories／9,951,797 bytes；兩個 Word
+  Diagnostics logs 未讀取內容，已連同 Python caches 精確刪除並確認 root 不存在。
+  本回合沒有程式碼變更，因此沒有重跑測試；最近完整離線結果維持
+  `451 passed, 3 skipped in 8.72s`。
 
 ## 下一步
 
-Gate C mixed-width 程式修正與離線回歸已完成。下一步仍須由使用者另行明確核准，
-才能再次讀取相同三份 LIST、啟動 Word，並於另一個 exclusive private 目錄校準一次；
-本回合的修正授權不包含該實機驗證。只有 Gate C 成功建立並驗證 master 後，才分別
-取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
+本次真實 Gate C 校準額度已消耗且沒有 retry。下一步需由使用者另行明確核准
+Gate C vertically-merged-row 修正：移除 schema-2 table format fingerprint 對
+`Rows.Item(...).Range` 的依賴，改用已知 prototype cells／ranges，完成離線回歸後，
+再由另一個明確授權決定是否於新的 exclusive private 目錄校準一次。只有 Gate C
+成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
 明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
@@ -541,11 +564,12 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail 契約已修訂；`5992` 已證實由
-schema 2 對非均勻 table 1 的 column-width member 存取觸發，而非 header mutation；
-mixed-width 程式路徑現已完成離線修正，但尚未以三份真實 LIST／Word 重新驗證。
-既有 private reviews 與 `5992-diagnostic.json` 不能覆蓋或刪除；新的 Word 回合、再次
-讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
+Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail 與 mixed-width 契約已修訂；
+真實校準已越過原 `5992` 欄寬錯誤，但現在由 Word error `5991` 阻擋。依官方 Word
+table 契約與目前程式順序，候選是 schema-2 `Rows.Item(...).Range` 對垂直合併表格的
+存取，但尚未取得細粒度 checkpoint。既有 private reviews、`5992-diagnostic.json`
+與新 `calibration-review.json` 不能覆蓋或刪除；row-access 修正、新的 Word 回合、
+再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
