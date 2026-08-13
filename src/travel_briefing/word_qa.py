@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
-import fitz
+import pymupdf as fitz
 
 from .errors import UnknownWordResultError, WordGenerationError
 from .template_contract import A4_HEIGHT_POINTS, A4_WIDTH_POINTS

@@ -2,12 +2,11 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的離線 Task 1–8 已完成；Gate I 無網路 preflight 證實全新 venv
-需要下載 `setuptools>=75`，因此乾淨安裝驗收尚未開始，正等待使用者明確核准該次
-暫存安裝網路。私人範本校準、Word 實機與真實 DRAFT 仍待 Gate C／V／E；GitHub
-遠端仍為 public；使用者在收到私人產品外洩風險警告後，仍明確要求本次例外直接
-push `main`。此例外違反本專案必須 private 才能 push 的規則；已依使用者要求完成
-首次推送並唯讀驗證本機與 GitHub 同為 `39d37d9`，但不構成後續 public push 授權。
+說明會產生器 0.2.0 的離線 Task 1–8 已完成；本機已同步到 `origin/main` `116cb97`，
+接手回歸發現並修正 PyMuPDF 1.28.2 舊 `fitz` API 警告污染 JSON stdout，完整離線
+測試為 `437 passed, 3 skipped`；Gate I 乾淨安裝仍等待當次依賴下載網路核准，私人
+範本校準、Word 實機與真實 DRAFT 仍待 Gate C／V／E。GitHub 遠端仍為 public；
+先前 public push 是使用者收到風險警告後的單次例外，不構成本次修正的 push 授權。
 
 ## 這次做了什麼
 
@@ -383,6 +382,20 @@ push `main`。此例外違反本專案必須 private 才能 push 的規則；已
   `git ls-remote origin refs/heads/main` 驗證遠端完整 SHA 為
   `39d37d92fa0e2ef1cf32ce195013f902f3b6433f`，與本機 HEAD 相同，分支為
   `0 behind / 0 ahead`。GitHub visibility 重驗仍為 `PUBLIC`／`private: false`。
+- 2026-08-13 重新接手時先抓取遠端並確認 `origin/main` 已從 `c31876f` 前進至
+  `116cb97`；舊工作階段未完成且已被遠端正式 JMA 實作取代的草稿，完整保存在
+  本機 `stash@{0}`（`codex-wip-before-116cb97-sync`），沒有套回或覆蓋新版檔案。
+- 同步後由接手者親自跑完整離線回歸，首次結果為
+  `1 failed, 436 passed, 3 skipped in 7.16s`：PyMuPDF 1.28.2 匯入舊 `fitz` API 時
+  把棄用警告寫到 stdout，導致 `briefing doctor --format json` 的 subprocess 輸出
+  不再是純 JSON。已將 PDF itinerary 與 Word QA 的 production／test imports 改為
+  官方 `pymupdf` module（保留區域 alias `fitz`，不改行為或資料契約）。
+- 修正後針對性回歸為 `24 passed in 1.35s`，`briefing doctor --format json` 實際
+  stdout 可直接解析；最終完整離線回歸為 `437 passed, 3 skipped in 7.11s`，
+  compileall 與 `git diff --check` 均通過。三個 skip 仍是需顯式 opt-in 的 Hanhan、
+  Yating 與私人 LIST／Word integration tests，沒有啟動、放寬或拿 skip 冒充驗收。
+- 本次沒有執行 Gate I 下載、私人 LIST、Word COM、Yating、live 官網／JMA、LINE、
+  Cowell、部署或其他外部發布；相容修正尚未推送到仍為 public 的 GitHub remote。
 
 ## 下一步
 

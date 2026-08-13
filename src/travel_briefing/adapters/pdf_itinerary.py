@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 from typing import NoReturn
 
-import fitz
+import pymupdf as fitz
 
 from ..errors import (
     BriefingSourceError,
