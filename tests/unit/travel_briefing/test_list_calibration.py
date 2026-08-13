@@ -16,6 +16,7 @@ from travel_briefing.list_calibration import (
     build_calibration_manifest,
     calibrate_list_templates,
     compare_calibration_samples,
+    diagnose_gate_c_5992,
     diagnose_list_header_contract,
     manifest_sha256,
     normalized_structure_fingerprint,
@@ -538,6 +539,105 @@ def test_header_diagnosis_rejects_any_unapproved_report_field(tmp_path):
 
     with pytest.raises(ValueError, match="schema version 2"):
         diagnose_list_header_contract(samples, adapter=adapter)
+
+
+class Synthetic5992DiagnosticAdapter:
+    def __init__(
+        self,
+        *,
+        mutate_source: bool = False,
+        add_private_field: bool = False,
+    ) -> None:
+        self.mutate_source = mutate_source
+        self.add_private_field = add_private_field
+        self.actions: list[str] = []
+        self.working_copy_paths: list[Path] = []
+
+    def run(self, job_path: Path, *, timeout_seconds: int) -> None:
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        self.actions.append(job["action"])
+        assert job["action"] == "diagnose-5992-v2"
+        assert timeout_seconds == 180
+        assert job["sample_sha256"] == [
+            hashlib.sha256(Path(path).read_bytes()).hexdigest()
+            for path in job["sample_paths"]
+        ]
+        self.working_copy_paths = [
+            Path(path) for path in job["working_copy_paths"]
+        ]
+        assert all(path.parent == job_path.parent for path in self.working_copy_paths)
+        assert all(not path.exists() for path in self.working_copy_paths)
+        if self.mutate_source:
+            Path(job["sample_paths"][0]).write_bytes(b"changed")
+        report = {
+            "schema_version": 2,
+            "action": "diagnose-5992-v2",
+            "word_version": "16.0-synthetic",
+            "classification": "ERROR_OBSERVED",
+            "completed_source_inspections": 3,
+            "selected_base_sample_id": "sample-002",
+            "checkpoint": {
+                "phase": "calibrate-copy",
+                "sample_id": "sample-002",
+                "operation": "table-width-columns-count",
+                "field_id": "table_column_widths_points",
+                "table_number": 3,
+                "row_number": 0,
+                "column_number": 0,
+                "paragraph_number": 0,
+            },
+            "error": {
+                "hresult": -2146822296,
+                "hresult_hex": "0x800A1768",
+                "low_word_error_number": 5992,
+                "adapter_code": "NONE",
+            },
+        }
+        if self.add_private_field:
+            report["private_text"] = "must not be accepted"
+        Path(job["report_path"]).write_text(
+            json.dumps(report),
+            encoding="utf-8",
+        )
+
+
+def test_5992_diagnosis_is_single_run_hash_bound_and_private_safe(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = Synthetic5992DiagnosticAdapter()
+
+    result = diagnose_gate_c_5992(samples, adapter=adapter)
+
+    assert adapter.actions == ["diagnose-5992-v2"]
+    assert result.classification == "ERROR_OBSERVED"
+    assert result.low_word_error_number == 5992
+    payload = result.to_dict()
+    assert payload["source_hashes_unchanged"] is True
+    assert payload["checkpoint"]["field_path"] == (
+        "master_working_copy.table_column_widths_points"
+    )
+    serialized = json.dumps(payload)
+    assert "LIST-" not in serialized
+    assert "private_text" not in serialized
+    assert all(not path.exists() for path in adapter.working_copy_paths)
+
+
+def test_5992_diagnosis_detects_source_mutation(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = Synthetic5992DiagnosticAdapter(mutate_source=True)
+
+    with pytest.raises(ValueError) as captured:
+        diagnose_gate_c_5992(samples, adapter=adapter)
+
+    assert getattr(captured.value, "code", "") == "CALIBRATION_SOURCE_CHANGED"
+    assert adapter.actions == ["diagnose-5992-v2"]
+
+
+def test_5992_diagnosis_rejects_unapproved_report_fields(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = Synthetic5992DiagnosticAdapter(add_private_field=True)
+
+    with pytest.raises(ValueError, match="schema version 2"):
+        diagnose_gate_c_5992(samples, adapter=adapter)
 
 
 def test_calibration_inspects_before_building_and_publishes_private_safe_files(

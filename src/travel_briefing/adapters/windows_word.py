@@ -173,6 +173,7 @@ def _read_job_metadata(path: Path) -> dict[str, str | Path]:
         "render",
         "inspect-v2",
         "diagnose-header-v2",
+        "diagnose-5992-v2",
         "calibrate",
     }:
         raise WordGenerationError("Word automation job action is unsupported")
@@ -223,6 +224,58 @@ def _validate_schema_two_job(
                 not item.is_file()
                 or item.suffix.lower() not in {".doc", ".docx"}
                 for item in sample_paths
+            )
+        ):
+            raise WordGenerationError(
+                "Word automation job does not match schema version 2"
+            )
+    elif action == "diagnose-5992-v2":
+        expected = common | {
+            "sample_paths",
+            "sample_sha256",
+            "working_copy_paths",
+        }
+        samples = payload.get("sample_paths")
+        hashes = payload.get("sample_sha256")
+        working_copies = payload.get("working_copy_paths")
+        if (
+            set(payload) != expected
+            or not isinstance(samples, list)
+            or not isinstance(hashes, list)
+            or not isinstance(working_copies, list)
+            or len(samples) != 3
+            or len(hashes) != 3
+            or len(working_copies) != 3
+            or any(not isinstance(item, str) for item in samples)
+            or any(
+                not isinstance(item, str)
+                or len(item) != 64
+                or any(character not in "0123456789abcdef" for character in item)
+                for item in hashes
+            )
+            or any(not isinstance(item, str) for item in working_copies)
+        ):
+            raise WordGenerationError(
+                "Word automation job does not match schema version 2"
+            )
+        sample_paths = tuple(Path(item).expanduser().resolve() for item in samples)
+        working_paths = tuple(
+            Path(item).expanduser().resolve() for item in working_copies
+        )
+        if (
+            len(set(sample_paths)) != 3
+            or len(set(working_paths)) != 3
+            or set(sample_paths) & set(working_paths)
+            or any(
+                not item.is_file()
+                or item.suffix.lower() not in {".doc", ".docx"}
+                for item in sample_paths
+            )
+            or any(
+                item.parent != job_directory
+                or item.exists()
+                or item.suffix.lower() != sample_paths[index].suffix.lower()
+                for index, item in enumerate(working_paths)
             )
         ):
             raise WordGenerationError(

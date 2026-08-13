@@ -20,6 +20,39 @@ $WdAlertsNone = 0
 $WdFormatDocumentDefault = 16
 $WdStatisticPages = 2
 $WdYellow = 7
+$script:GateC5992Checkpoint = $null
+
+function Set-GateC5992Scope {
+    param(
+        [Parameter(Mandatory = $true)][string]$Phase,
+        [Parameter(Mandatory = $true)][string]$SampleId
+    )
+    if ($null -eq $script:GateC5992Checkpoint) {
+        return
+    }
+    $script:GateC5992Checkpoint.phase = $Phase
+    $script:GateC5992Checkpoint.sample_id = $SampleId
+}
+
+function Set-GateC5992Checkpoint {
+    param(
+        [Parameter(Mandatory = $true)][string]$Operation,
+        [Parameter(Mandatory = $true)][string]$FieldId,
+        [int]$TableNumber = 0,
+        [int]$RowNumber = 0,
+        [int]$ColumnNumber = 0,
+        [int]$ParagraphNumber = 0
+    )
+    if ($null -eq $script:GateC5992Checkpoint) {
+        return
+    }
+    $script:GateC5992Checkpoint.operation = $Operation
+    $script:GateC5992Checkpoint.field_id = $FieldId
+    $script:GateC5992Checkpoint.table_number = $TableNumber
+    $script:GateC5992Checkpoint.row_number = $RowNumber
+    $script:GateC5992Checkpoint.column_number = $ColumnNumber
+    $script:GateC5992Checkpoint.paragraph_number = $ParagraphNumber
+}
 
 function Get-DefaultAnchorChecks {
     $labels = @(
@@ -130,6 +163,70 @@ function Assert-WordJobShape {
             )
             if (@($resolvedSamples | Select-Object -Unique).Count -ne 3) {
                 throw "WORD_JOB_SCHEMA_INVALID"
+            }
+        }
+        "diagnose-5992-v2" {
+            Assert-ExactProperties -Value $Job -Expected (
+                $common + @(
+                    "sample_paths",
+                    "sample_sha256",
+                    "working_copy_paths"
+                )
+            )
+            if (
+                $Job.sample_paths.Count -ne 3 -or
+                $Job.sample_sha256.Count -ne 3 -or
+                $Job.working_copy_paths.Count -ne 3
+            ) {
+                throw "WORD_JOB_SCHEMA_INVALID"
+            }
+            $diagnosticJobDirectory = [IO.Path]::GetDirectoryName(
+                [IO.Path]::GetFullPath($JobPath)
+            )
+            $resolvedSamples = @(
+                $Job.sample_paths | ForEach-Object {
+                    [IO.Path]::GetFullPath([string]$_)
+                }
+            )
+            $resolvedWorkingCopies = @(
+                $Job.working_copy_paths | ForEach-Object {
+                    [IO.Path]::GetFullPath([string]$_)
+                }
+            )
+            if (
+                @($resolvedSamples | Select-Object -Unique).Count -ne 3 -or
+                @($resolvedWorkingCopies | Select-Object -Unique).Count -ne 3
+            ) {
+                throw "WORD_JOB_SCHEMA_INVALID"
+            }
+            for ($index = 0; $index -lt 3; $index += 1) {
+                $sample = $resolvedSamples[$index]
+                $workingCopy = $resolvedWorkingCopies[$index]
+                $sourceHash = [string]$Job.sample_sha256[$index]
+                if (-not [IO.File]::Exists($sample)) {
+                    throw "WORD_JOB_SCHEMA_INVALID"
+                }
+                $observedHash = (
+                    Get-FileHash -LiteralPath $sample -Algorithm SHA256
+                ).Hash.ToLowerInvariant()
+                $sampleExtension = (
+                    [IO.Path]::GetExtension($sample).ToLowerInvariant()
+                )
+                $workingExtension = (
+                    [IO.Path]::GetExtension($workingCopy).ToLowerInvariant()
+                )
+                if (
+                    $sampleExtension -notin @(".doc", ".docx") -or
+                    $sourceHash -cnotmatch '^[0-9a-f]{64}$' -or
+                    $observedHash -cne $sourceHash -or
+                    [IO.File]::Exists($workingCopy) -or
+                    [IO.Path]::GetDirectoryName($workingCopy) -cne
+                        $diagnosticJobDirectory -or
+                    $workingExtension -cne $sampleExtension -or
+                    $resolvedSamples -contains $workingCopy
+                ) {
+                    throw "WORD_JOB_SCHEMA_INVALID"
+                }
             }
         }
         "calibrate" {
@@ -371,20 +468,42 @@ function Get-ListInspection {
     $tableShapes = @()
     for ($index = 1; $index -le $Document.Tables.Count; $index += 1) {
         $table = $Document.Tables.Item($index)
+        Set-GateC5992Checkpoint `
+            -Operation "table-shape-rows-count" `
+            -FieldId "table_shapes" `
+            -TableNumber $index
+        $rowCount = [int]$table.Rows.Count
+        Set-GateC5992Checkpoint `
+            -Operation "table-shape-columns-count" `
+            -FieldId "table_shapes" `
+            -TableNumber $index
+        $columnCount = [int]$table.Columns.Count
         $tableShapes += [ordered]@{
-            rows = [int]$table.Rows.Count
-            columns = [int]$table.Columns.Count
+            rows = $rowCount
+            columns = $columnCount
         }
     }
     if ($Document.Tables.Count -lt 1) {
         throw "LIST_TABLES_MISSING"
     }
     $headerTable = $Document.Tables.Item(1)
+    Set-GateC5992Checkpoint `
+        -Operation "header-cell-access" `
+        -FieldId "list_header_accessible_cells" `
+        -TableNumber 1 `
+        -RowNumber 1 `
+        -ColumnNumber 1
     $headerCell = Get-Cell -Table $headerTable -Row 1 -Column 1
     $accessibleCells = @()
     for ($row = 1; $row -le 4; $row += 1) {
         for ($column = 1; $column -le 3; $column += 1) {
             try {
+                Set-GateC5992Checkpoint `
+                    -Operation "header-cell-access" `
+                    -FieldId "list_header_accessible_cells" `
+                    -TableNumber 1 `
+                    -RowNumber $row `
+                    -ColumnNumber $column
                 [void]$headerTable.Cell($row, $column)
                 $accessibleCells += ,@($row, $column)
             }
@@ -398,6 +517,12 @@ function Get-ListInspection {
         if ([int]$anchor.table -ne 1) {
             throw "LIST_ANCHOR_TABLE_UNSUPPORTED"
         }
+        Set-GateC5992Checkpoint `
+            -Operation "anchor-cell-access" `
+            -FieldId "anchor_labels" `
+            -TableNumber ([int]$anchor.table) `
+            -RowNumber ([int]$anchor.row) `
+            -ColumnNumber ([int]$anchor.column)
         $text = Get-CellText (
             Get-Cell `
                 -Table $headerTable `
@@ -408,6 +533,9 @@ function Get-ListInspection {
             $foundAnchors += [string]$anchor.label
         }
     }
+    Set-GateC5992Checkpoint `
+        -Operation "page-geometry" `
+        -FieldId "page_geometry"
     $section = $Document.Sections.Item(1)
     $orientation = if ([int]$section.PageSetup.Orientation -eq 0) {
         "portrait"
@@ -464,6 +592,12 @@ function Get-ListInspectionV2 {
     $requiredLabels = @(
         $AnchorChecks | ForEach-Object { [string]$_.label }
     )
+    Set-GateC5992Checkpoint `
+        -Operation "header-contract" `
+        -FieldId "list_header_paragraph_count" `
+        -TableNumber 1 `
+        -RowNumber 1 `
+        -ColumnNumber 1
     Assert-BasicListContract `
         -Inspection $basic `
         -RequiredAnchorLabels $requiredLabels `
@@ -478,10 +612,27 @@ function Get-ListInspectionV2 {
     for ($tableIndex = 1; $tableIndex -le 4; $tableIndex += 1) {
         $table = $Document.Tables.Item($tableIndex)
         $widths = @()
-        for ($column = 1; $column -le $table.Columns.Count; $column += 1) {
-            $widths += Get-NormalizedPoint -Value ([double]$table.Columns.Item($column).Width)
+        Set-GateC5992Checkpoint `
+            -Operation "table-width-columns-count" `
+            -FieldId "table_column_widths_points" `
+            -TableNumber $tableIndex
+        $columnCount = [int]$table.Columns.Count
+        for ($column = 1; $column -le $columnCount; $column += 1) {
+            Set-GateC5992Checkpoint `
+                -Operation "table-width-column-item" `
+                -FieldId "table_column_widths_points" `
+                -TableNumber $tableIndex `
+                -ColumnNumber $column
+            $widths += Get-NormalizedPoint -Value (
+                [double]$table.Columns.Item($column).Width
+            )
         }
         $columnWidths += ,$widths
+        Set-GateC5992Checkpoint `
+            -Operation "table-format-row" `
+            -FieldId "style_digest" `
+            -TableNumber $tableIndex `
+            -RowNumber $(if ($tableIndex -eq 3) { 2 } else { 1 })
         $range = if ($tableIndex -eq 3) {
             $table.Rows.Item([Math]::Min(2, $table.Rows.Count)).Range
         }
@@ -491,6 +642,10 @@ function Get-ListInspectionV2 {
         $formatParts += "table-$tableIndex|" + (
             Get-RangeFormatSignature -Range $range
         )
+        Set-GateC5992Checkpoint `
+            -Operation "table-borders" `
+            -FieldId "border_digest" `
+            -TableNumber $tableIndex
         $tableBorders = @()
         foreach ($border in $table.Borders) {
             $tableBorders += @(
@@ -502,11 +657,30 @@ function Get-ListInspectionV2 {
         }
         $borderParts += "table-$tableIndex|" + ($tableBorders -join ",")
     }
+    Set-GateC5992Checkpoint `
+        -Operation "daily-table-access" `
+        -FieldId "daily_table" `
+        -TableNumber 3
     $dailyTable = $Document.Tables.Item(3)
+    Set-GateC5992Checkpoint `
+        -Operation "daily-header-row" `
+        -FieldId "daily_table" `
+        -TableNumber 3 `
+        -RowNumber 1
     $dailyHeaderRange = $dailyTable.Rows.Item(1).Range
+    Set-GateC5992Checkpoint `
+        -Operation "daily-body-row" `
+        -FieldId "daily_table" `
+        -TableNumber 3 `
+        -RowNumber ([Math]::Min(2, $dailyTable.Rows.Count))
     $dailyBodyRange = $dailyTable.Rows.Item(
         [Math]::Min(2, $dailyTable.Rows.Count)
     ).Range
+    Set-GateC5992Checkpoint `
+        -Operation "daily-format" `
+        -FieldId "daily_table" `
+        -TableNumber 3 `
+        -RowNumber ([Math]::Min(2, $dailyTable.Rows.Count))
     $fontSize = [double]$dailyBodyRange.Font.Size
     if ($fontSize -le 0 -or $fontSize -gt 72) { $fontSize = 10.0 }
     $lineSpacing = [double]$dailyBodyRange.ParagraphFormat.LineSpacing
@@ -519,6 +693,9 @@ function Get-ListInspectionV2 {
     $bottomPadding = [Math]::Max(0.01, [double]$dailyTable.BottomPadding)
     $shapeGeometry = @()
     $shapeNumber = 0
+    Set-GateC5992Checkpoint `
+        -Operation "inline-shapes" `
+        -FieldId "shape_geometry_points"
     foreach ($shape in $Document.InlineShapes) {
         $shapeNumber += 1
         $shapeGeometry += ,@(
@@ -529,6 +706,9 @@ function Get-ListInspectionV2 {
             (Get-NormalizedPoint -Value ([double]$shape.Height))
         )
     }
+    Set-GateC5992Checkpoint `
+        -Operation "floating-shapes" `
+        -FieldId "shape_geometry_points"
     foreach ($shape in $Document.Shapes) {
         $shapeNumber += 1
         $shapeGeometry += ,@(
@@ -1041,10 +1221,161 @@ function Invoke-DiagnoseHeaderV2 {
     }) -Path ([string]$Job.report_path)
 }
 
-function Invoke-Calibrate {
+function Invoke-Diagnose5992V2 {
     param(
         [Parameter(Mandatory = $true)]$Job,
         [Parameter(Mandatory = $true)]$Word
+    )
+    if (
+        $Job.sample_paths.Count -ne 3 -or
+        $Job.sample_sha256.Count -ne 3 -or
+        $Job.working_copy_paths.Count -ne 3
+    ) {
+        throw "LIST_CALIBRATION_SAMPLE_COUNT_INVALID"
+    }
+    $checkpoint = [ordered]@{
+        phase = "inspect-source"
+        sample_id = "sample-001"
+        operation = "open-document"
+        field_id = "document"
+        table_number = 0
+        row_number = 0
+        column_number = 0
+        paragraph_number = 0
+    }
+    $script:GateC5992Checkpoint = $checkpoint
+    $classification = "NOT_REPRODUCED"
+    $completedInspections = 0
+    $selectedBaseSampleId = "sample-000"
+    $hresult = 0
+    $adapterCode = "NONE"
+    $checkpointSnapshot = $null
+    $wordVersion = [string]$Word.Version
+    try {
+        $anchorChecks = Get-DefaultAnchorChecks
+        $inspections = @()
+        for ($index = 0; $index -lt 3; $index += 1) {
+            $sampleId = "sample-$('{0:D3}' -f ($index + 1))"
+            Set-GateC5992Scope `
+                -Phase "inspect-source" `
+                -SampleId $sampleId
+            Set-GateC5992Checkpoint `
+                -Operation "open-document" `
+                -FieldId "document"
+            $samplePath = [IO.Path]::GetFullPath(
+                [string]$Job.sample_paths[$index]
+            )
+            $document = $null
+            try {
+                $document = $Word.Documents.Open($samplePath, $false, $true)
+                $inspections += ,(
+                    Get-ListInspectionV2 `
+                        -Document $document `
+                        -AnchorChecks $anchorChecks
+                )
+                $completedInspections += 1
+            }
+            finally {
+                if ($null -ne $document) {
+                    try { $document.Close($false) } catch {}
+                    try {
+                        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                            $document
+                        )
+                    }
+                    catch {}
+                }
+            }
+        }
+        $sortedDayCounts = @(
+            $inspections | ForEach-Object { [int]$_.day_count } | Sort-Object
+        )
+        $medianDayCount = [int]$sortedDayCounts[1]
+        $candidates = @()
+        for ($index = 0; $index -lt 3; $index += 1) {
+            if ([int]$inspections[$index].day_count -eq $medianDayCount) {
+                $candidates += [pscustomobject]@{
+                    index = $index
+                    sha256 = [string]$Job.sample_sha256[$index]
+                }
+            }
+        }
+        $baseIndex = [int](
+            $candidates | Sort-Object -Property sha256 | Select-Object -First 1
+        ).index
+        $selectedBaseSampleId = "sample-$('{0:D3}' -f ($baseIndex + 1))"
+        Set-GateC5992Scope `
+            -Phase "calibrate-copy" `
+            -SampleId $selectedBaseSampleId
+        $diagnosticDirectory = [IO.Path]::GetDirectoryName(
+            [IO.Path]::GetFullPath([string]$Job.report_path)
+        )
+        $diagnosticCalibrationJob = [pscustomobject]@{
+            source_path = [string]$Job.sample_paths[$baseIndex]
+            working_copy_path = [string]$Job.working_copy_paths[$baseIndex]
+            output_docx = [IO.Path]::Combine(
+                $diagnosticDirectory,
+                "diagnostic-master-not-created.docx"
+            )
+        }
+        [void](Invoke-Calibrate `
+            -Job $diagnosticCalibrationJob `
+            -Word $Word `
+            -DiagnosticOnly)
+        Set-GateC5992Scope -Phase "complete" -SampleId "sample-000"
+        Set-GateC5992Checkpoint `
+            -Operation "complete" `
+            -FieldId "diagnostic"
+    }
+    catch {
+        $classification = "ERROR_OBSERVED"
+        $hresult = [int]$_.Exception.HResult
+        $exceptionMessage = [string]$_.Exception.Message
+        if ($exceptionMessage -cmatch '^[A-Z][A-Z0-9_]{1,79}$') {
+            $adapterCode = $exceptionMessage
+        }
+    }
+    finally {
+        $checkpointSnapshot = [ordered]@{
+            phase = [string]$checkpoint.phase
+            sample_id = [string]$checkpoint.sample_id
+            operation = [string]$checkpoint.operation
+            field_id = [string]$checkpoint.field_id
+            table_number = [int]$checkpoint.table_number
+            row_number = [int]$checkpoint.row_number
+            column_number = [int]$checkpoint.column_number
+            paragraph_number = [int]$checkpoint.paragraph_number
+        }
+        $script:GateC5992Checkpoint = $null
+    }
+    $unsignedHresult = if ($hresult -lt 0) {
+        [uint32]([int64]$hresult + 4294967296)
+    }
+    else {
+        [uint32]$hresult
+    }
+    Write-JsonExclusive -Value ([ordered]@{
+        schema_version = 2
+        action = "diagnose-5992-v2"
+        word_version = $wordVersion
+        classification = $classification
+        completed_source_inspections = $completedInspections
+        selected_base_sample_id = $selectedBaseSampleId
+        checkpoint = $checkpointSnapshot
+        error = [ordered]@{
+            hresult = $hresult
+            hresult_hex = "0x$('{0:X8}' -f $unsignedHresult)"
+            low_word_error_number = [int]($hresult -band 0xFFFF)
+            adapter_code = $adapterCode
+        }
+    }) -Path ([string]$Job.report_path)
+}
+
+function Invoke-Calibrate {
+    param(
+        [Parameter(Mandatory = $true)]$Job,
+        [Parameter(Mandatory = $true)]$Word,
+        [switch]$DiagnosticOnly
     )
     $source = [IO.Path]::GetFullPath([string]$Job.source_path)
     $workingCopy = [IO.Path]::GetFullPath([string]$Job.working_copy_path)
@@ -1060,10 +1391,20 @@ function Invoke-Calibrate {
     [IO.File]::Copy($source, $workingCopy, $false)
     $document = $null
     try {
+        Set-GateC5992Checkpoint `
+            -Operation "open-document" `
+            -FieldId "document"
         $document = $Word.Documents.Open($workingCopy, $false, $false)
         $anchorChecks = Get-DefaultAnchorChecks
         $headerCell = Get-Cell -Table $document.Tables.Item(1) -Row 1 -Column 1
         for ($paragraphNumber = 2; $paragraphNumber -le 3; $paragraphNumber += 1) {
+            Set-GateC5992Checkpoint `
+                -Operation "header-fixed-paragraph" `
+                -FieldId "prototype_header" `
+                -TableNumber 1 `
+                -RowNumber 1 `
+                -ColumnNumber 1 `
+                -ParagraphNumber $paragraphNumber
             $paragraph = $headerCell.Range.Paragraphs.Item($paragraphNumber)
             $originalText = ([string]$paragraph.Range.Text).TrimEnd(
                 [char]13, [char]7
@@ -1079,11 +1420,24 @@ function Invoke-Calibrate {
                 [string][char]13
             )
         }
+        Set-GateC5992Checkpoint `
+            -Operation "header-tail-normalize" `
+            -FieldId "prototype_header" `
+            -TableNumber 1 `
+            -RowNumber 1 `
+            -ColumnNumber 1 `
+            -ParagraphNumber 4
         Set-NormalizedHeaderDynamicTail -HeaderCell $headerCell
         foreach ($coordinate in @(
             @(1, 2, 1), @(1, 2, 2), @(1, 2, 3),
             @(1, 3, 1), @(1, 4, 1), @(1, 4, 2)
         )) {
+            Set-GateC5992Checkpoint `
+                -Operation "header-cell-clear" `
+                -FieldId "prototype_header_cells" `
+                -TableNumber ([int]$coordinate[0]) `
+                -RowNumber ([int]$coordinate[1]) `
+                -ColumnNumber ([int]$coordinate[2])
             $cell = Get-Cell -Table $document.Tables.Item($coordinate[0]) -Row $coordinate[1] -Column $coordinate[2]
             $originalText = Get-CellText -Cell $cell
             $labelBreak = $originalText.IndexOf(
@@ -1099,16 +1453,41 @@ function Invoke-Calibrate {
         }
         for ($row = 2; $row -le 3; $row += 1) {
             for ($column = 1; $column -le 6; $column += 1) {
+                Set-GateC5992Checkpoint `
+                    -Operation "flight-cell-clear" `
+                    -FieldId "prototype_flight_rows" `
+                    -TableNumber 2 `
+                    -RowNumber $row `
+                    -ColumnNumber $column
                 $document.Tables.Item(2).Cell($row, $column).Range.Text = ([string][char]13) + [char]7
             }
         }
+        Set-GateC5992Checkpoint `
+            -Operation "daily-row-normalize" `
+            -FieldId "prototype_daily_rows" `
+            -TableNumber 3
         Set-DailyRowCount -Table $document.Tables.Item(3) -DayCount 1
         for ($column = 1; $column -le 7; $column += 1) {
+            Set-GateC5992Checkpoint `
+                -Operation "daily-cell-clear" `
+                -FieldId "prototype_daily_rows" `
+                -TableNumber 3 `
+                -RowNumber 2 `
+                -ColumnNumber $column
             $document.Tables.Item(3).Cell(2, $column).Range.Text = ([string][char]13) + [char]7
         }
         for ($column = 2; $column -le 3; $column += 1) {
+            Set-GateC5992Checkpoint `
+                -Operation "footer-cell-clear" `
+                -FieldId "prototype_footer" `
+                -TableNumber 4 `
+                -RowNumber 1 `
+                -ColumnNumber $column
             $document.Tables.Item(4).Cell(1, $column).Range.Text = ([string][char]13) + [char]7
         }
+        Set-GateC5992Checkpoint `
+            -Operation "final-inspection" `
+            -FieldId "master_inspection"
         $inspection = Get-ListInspectionV2 -Document $document -AnchorChecks $anchorChecks
         $plainText = [string]$document.Content.Text
         $forbidden = @()
@@ -1123,6 +1502,12 @@ function Invoke-Calibrate {
         }
         if ($plainText -match '\b0\d{1,3}[- ]?\d{6,8}\b') {
             $forbidden += "phone"
+        }
+        if ($DiagnosticOnly) {
+            return [ordered]@{
+                master_inspection = $inspection
+                forbidden_dynamic_token_types = $forbidden
+            }
         }
         $document.SaveAs2($outputDocx, $WdFormatDocumentDefault)
         if (-not [IO.File]::Exists($outputDocx)) {
@@ -1341,6 +1726,9 @@ try {
         "inspect-v2" { Invoke-InspectV2 -Job $job -Word $word }
         "diagnose-header-v2" {
             Invoke-DiagnoseHeaderV2 -Job $job -Word $word
+        }
+        "diagnose-5992-v2" {
+            Invoke-Diagnose5992V2 -Job $job -Word $word
         }
         "calibrate" { Invoke-Calibrate -Job $job -Word $word }
         "patch" { Invoke-Patch -Job $job -Word $word }

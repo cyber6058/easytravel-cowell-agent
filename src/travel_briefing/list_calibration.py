@@ -25,6 +25,55 @@ CALIBRATION_GENERATOR_VERSION = "list-calibration/2"
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _PROFILE_NAME_PATTERN = re.compile(r"[a-z][a-z0-9-]*")
 _A4_TOLERANCE_POINTS = 2.0
+_GATE_C_5992_PHASES = {"inspect-source", "calibrate-copy", "complete"}
+_GATE_C_5992_OPERATIONS = {
+    "open-document",
+    "table-shape-rows-count",
+    "table-shape-columns-count",
+    "header-cell-access",
+    "anchor-cell-access",
+    "page-geometry",
+    "header-contract",
+    "table-width-columns-count",
+    "table-width-column-item",
+    "table-format-row",
+    "table-borders",
+    "daily-table-access",
+    "daily-header-row",
+    "daily-body-row",
+    "daily-format",
+    "inline-shapes",
+    "floating-shapes",
+    "header-fixed-paragraph",
+    "header-tail-normalize",
+    "header-cell-clear",
+    "flight-cell-clear",
+    "daily-row-normalize",
+    "daily-cell-clear",
+    "footer-cell-clear",
+    "final-inspection",
+    "complete",
+}
+_GATE_C_5992_FIELDS = {
+    "document",
+    "table_shapes",
+    "list_header_accessible_cells",
+    "anchor_labels",
+    "page_geometry",
+    "list_header_paragraph_count",
+    "table_column_widths_points",
+    "style_digest",
+    "border_digest",
+    "daily_table",
+    "shape_geometry_points",
+    "prototype_header",
+    "prototype_header_cells",
+    "prototype_flight_rows",
+    "prototype_daily_rows",
+    "prototype_footer",
+    "master_inspection",
+    "diagnostic",
+}
 
 
 class CalibrationContractError(ValueError):
@@ -565,6 +614,153 @@ class ListHeaderDiagnosticResult:
 
 
 @dataclass(frozen=True, slots=True)
+class GateC5992Checkpoint:
+    phase: str
+    sample_id: str
+    operation: str
+    field_id: str
+    table_number: int
+    row_number: int
+    column_number: int
+    paragraph_number: int
+
+    def __post_init__(self) -> None:
+        if self.phase not in _GATE_C_5992_PHASES:
+            raise ValueError("Gate C 5992 checkpoint phase is invalid")
+        if self.sample_id not in {
+            "sample-000",
+            "sample-001",
+            "sample-002",
+            "sample-003",
+        }:
+            raise ValueError("Gate C 5992 checkpoint sample ID is invalid")
+        if self.operation not in _GATE_C_5992_OPERATIONS:
+            raise ValueError("Gate C 5992 checkpoint operation is invalid")
+        if self.field_id not in _GATE_C_5992_FIELDS:
+            raise ValueError("Gate C 5992 checkpoint field ID is invalid")
+        for name in (
+            "table_number",
+            "row_number",
+            "column_number",
+            "paragraph_number",
+        ):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not 0 <= value <= 32
+            ):
+                raise ValueError(f"Gate C 5992 checkpoint {name} is invalid")
+        if self.phase == "inspect-source" and self.sample_id == "sample-000":
+            raise ValueError("source inspection checkpoint requires a sample ID")
+        if self.phase == "complete" and (
+            self.sample_id != "sample-000" or self.operation != "complete"
+        ):
+            raise ValueError("completed Gate C 5992 checkpoint is invalid")
+
+    @property
+    def field_path(self) -> str:
+        if self.phase == "inspect-source":
+            sample_index = int(self.sample_id[-3:]) - 1
+            return f"samples[{sample_index}].inspection.{self.field_id}"
+        if self.phase == "calibrate-copy":
+            return f"master_working_copy.{self.field_id}"
+        return "diagnostic"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "phase": self.phase,
+            "sample_id": self.sample_id,
+            "operation": self.operation,
+            "field_path": self.field_path,
+            "table_number": self.table_number,
+            "row_number": self.row_number,
+            "column_number": self.column_number,
+            "paragraph_number": self.paragraph_number,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class GateC5992DiagnosticResult:
+    word_version: str
+    source_sha256: tuple[str, str, str]
+    classification: str
+    completed_source_inspections: int
+    selected_base_sample_id: str
+    checkpoint: GateC5992Checkpoint
+    hresult: int
+    hresult_hex: str
+    low_word_error_number: int
+    adapter_code: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.word_version, str) or not self.word_version:
+            raise ValueError("Word version is required")
+        if len(self.source_sha256) != 3 or len(set(self.source_sha256)) != 3:
+            raise ValueError("Gate C 5992 diagnosis requires three unique samples")
+        for item in self.source_sha256:
+            _validate_nonzero_sha256(item, "sample source SHA-256")
+        if self.classification not in {"ERROR_OBSERVED", "NOT_REPRODUCED"}:
+            raise ValueError("Gate C 5992 classification is invalid")
+        if (
+            isinstance(self.completed_source_inspections, bool)
+            or not isinstance(self.completed_source_inspections, int)
+            or not 0 <= self.completed_source_inspections <= 3
+        ):
+            raise ValueError("completed source inspection count is invalid")
+        if self.selected_base_sample_id not in {
+            "sample-000",
+            "sample-001",
+            "sample-002",
+            "sample-003",
+        }:
+            raise ValueError("selected base sample ID is invalid")
+        if (
+            isinstance(self.hresult, bool)
+            or not isinstance(self.hresult, int)
+            or not -(2**31) <= self.hresult < 2**31
+        ):
+            raise ValueError("Gate C 5992 HRESULT is invalid")
+        if self.hresult_hex != f"0x{self.hresult & 0xFFFFFFFF:08X}":
+            raise ValueError("Gate C 5992 hexadecimal HRESULT is invalid")
+        if self.low_word_error_number != (self.hresult & 0xFFFF):
+            raise ValueError("Gate C 5992 low-word error number is invalid")
+        if (
+            not isinstance(self.adapter_code, str)
+            or re.fullmatch(r"NONE|[A-Z][A-Z0-9_]{1,79}", self.adapter_code)
+            is None
+        ):
+            raise ValueError("Gate C 5992 adapter code is invalid")
+        if self.classification == "NOT_REPRODUCED" and (
+            self.completed_source_inspections != 3
+            or self.selected_base_sample_id == "sample-000"
+            or self.hresult != 0
+            or self.adapter_code != "NONE"
+            or self.checkpoint.phase != "complete"
+        ):
+            raise ValueError("non-reproduced Gate C 5992 result is invalid")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "status": "DIAGNOSED",
+            "classification": self.classification,
+            "word_version": self.word_version,
+            "source_hashes_unchanged": True,
+            "source_sha256": list(self.source_sha256),
+            "completed_source_inspections": self.completed_source_inspections,
+            "selected_base_sample_id": self.selected_base_sample_id,
+            "checkpoint": self.checkpoint.to_dict(),
+            "error": {
+                "hresult": self.hresult,
+                "hresult_hex": self.hresult_hex,
+                "low_word_error_number": self.low_word_error_number,
+                "adapter_code": self.adapter_code,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ListCalibrationManifest:
     schema_version: int
     generator_version: str
@@ -810,6 +1006,58 @@ def diagnose_list_header_contract(
                 before, report["samples"], strict=True
             )
         ),
+    )
+
+
+def diagnose_gate_c_5992(
+    sample_paths: tuple[Path, ...],
+    *,
+    adapter: WordCalibrationAdapter,
+    timeout_seconds: int = 180,
+) -> GateC5992DiagnosticResult:
+    samples = _resolve_sample_paths(sample_paths)
+    if timeout_seconds <= 0:
+        raise ValueError("Gate C 5992 diagnosis timeout must be positive")
+    before = tuple(_sha256_file(path) for path in samples)
+    with tempfile.TemporaryDirectory(
+        prefix="easytravel-list-diagnose-5992-"
+    ) as temp:
+        work_dir = Path(temp)
+        job_path = work_dir / "word-job.json"
+        report_path = work_dir / "diagnostic-report.json"
+        working_copies = tuple(
+            work_dir / f"working-{index:03d}{sample.suffix.lower()}"
+            for index, sample in enumerate(samples, start=1)
+        )
+        job = {
+            "schema_version": 2,
+            "action": "diagnose-5992-v2",
+            "ownership_nonce": secrets.token_hex(16),
+            "word_pid_path": str(work_dir / "word-owner.json"),
+            "report_path": str(report_path),
+            "sample_paths": [str(path) for path in samples],
+            "sample_sha256": list(before),
+            "working_copy_paths": [str(path) for path in working_copies],
+        }
+        _write_json_exclusive(job_path, job)
+        adapter.run(job_path, timeout_seconds=timeout_seconds)
+        report = _read_gate_c_5992_report(report_path)
+    after = tuple(_sha256_file(path) for path in samples)
+    if after != before:
+        raise CalibrationSourceChangedError()
+    return GateC5992DiagnosticResult(
+        word_version=report["word_version"],
+        source_sha256=before,
+        classification=report["classification"],
+        completed_source_inspections=report[
+            "completed_source_inspections"
+        ],
+        selected_base_sample_id=report["selected_base_sample_id"],
+        checkpoint=GateC5992Checkpoint(**report["checkpoint"]),
+        hresult=report["error"]["hresult"],
+        hresult_hex=report["error"]["hresult_hex"],
+        low_word_error_number=report["error"]["low_word_error_number"],
+        adapter_code=report["error"]["adapter_code"],
     )
 
 
@@ -1293,6 +1541,119 @@ def _read_header_diagnostic_report(path: Path) -> dict[str, Any]:
         "word_version": payload["word_version"],
         "samples": tuple(parsed),
     }
+
+
+def _read_gate_c_5992_report(path: Path) -> dict[str, Any]:
+    payload = _read_json_object(path, "Gate C 5992 diagnostic")
+    expected = {
+        "schema_version",
+        "action",
+        "word_version",
+        "classification",
+        "completed_source_inspections",
+        "selected_base_sample_id",
+        "checkpoint",
+        "error",
+    }
+    if (
+        set(payload) != expected
+        or payload.get("schema_version") != 2
+        or payload.get("action") != "diagnose-5992-v2"
+        or not isinstance(payload.get("word_version"), str)
+        or not payload["word_version"]
+        or payload.get("classification")
+        not in {"ERROR_OBSERVED", "NOT_REPRODUCED"}
+    ):
+        raise ValueError(
+            "Word Gate C 5992 report does not match schema version 2"
+        )
+    checkpoint = payload.get("checkpoint")
+    error = payload.get("error")
+    checkpoint_keys = {
+        "phase",
+        "sample_id",
+        "operation",
+        "field_id",
+        "table_number",
+        "row_number",
+        "column_number",
+        "paragraph_number",
+    }
+    error_keys = {
+        "hresult",
+        "hresult_hex",
+        "low_word_error_number",
+        "adapter_code",
+    }
+    if (
+        not isinstance(checkpoint, dict)
+        or set(checkpoint) != checkpoint_keys
+        or not isinstance(error, dict)
+        or set(error) != error_keys
+    ):
+        raise ValueError(
+            "Word Gate C 5992 report does not match schema version 2"
+        )
+    count = payload["completed_source_inspections"]
+    selected = payload["selected_base_sample_id"]
+    hresult = error["hresult"]
+    low_word = error["low_word_error_number"]
+    if (
+        isinstance(count, bool)
+        or not isinstance(count, int)
+        or not 0 <= count <= 3
+        or selected
+        not in {"sample-000", "sample-001", "sample-002", "sample-003"}
+        or isinstance(hresult, bool)
+        or not isinstance(hresult, int)
+        or not -(2**31) <= hresult < 2**31
+        or not isinstance(low_word, int)
+        or isinstance(low_word, bool)
+        or not 0 <= low_word <= 65535
+        or error["hresult_hex"] != f"0x{hresult & 0xFFFFFFFF:08X}"
+        or low_word != (hresult & 0xFFFF)
+        or not isinstance(error["adapter_code"], str)
+        or re.fullmatch(
+            r"NONE|[A-Z][A-Z0-9_]{1,79}", error["adapter_code"]
+        )
+        is None
+    ):
+        raise ValueError(
+            "Word Gate C 5992 report does not match schema version 2"
+        )
+    normalized_checkpoint = GateC5992Checkpoint(**checkpoint)
+    result = {
+        "word_version": payload["word_version"],
+        "classification": payload["classification"],
+        "completed_source_inspections": count,
+        "selected_base_sample_id": selected,
+        "checkpoint": {
+            "phase": normalized_checkpoint.phase,
+            "sample_id": normalized_checkpoint.sample_id,
+            "operation": normalized_checkpoint.operation,
+            "field_id": normalized_checkpoint.field_id,
+            "table_number": normalized_checkpoint.table_number,
+            "row_number": normalized_checkpoint.row_number,
+            "column_number": normalized_checkpoint.column_number,
+            "paragraph_number": normalized_checkpoint.paragraph_number,
+        },
+        "error": dict(error),
+    }
+    GateC5992DiagnosticResult(
+        word_version=result["word_version"],
+        source_sha256=("1" * 64, "2" * 64, "3" * 64),
+        classification=result["classification"],
+        completed_source_inspections=result[
+            "completed_source_inspections"
+        ],
+        selected_base_sample_id=result["selected_base_sample_id"],
+        checkpoint=normalized_checkpoint,
+        hresult=result["error"]["hresult"],
+        hresult_hex=result["error"]["hresult_hex"],
+        low_word_error_number=result["error"]["low_word_error_number"],
+        adapter_code=result["error"]["adapter_code"],
+    )
+    return result
 
 
 def _read_inspection_batch_report(path: Path) -> dict[str, Any]:

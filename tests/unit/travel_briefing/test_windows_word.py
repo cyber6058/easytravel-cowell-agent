@@ -73,13 +73,23 @@ def schema_two_job(tmp_path, *, action="inspect-v2", extra=None):
         "word_pid_path": str((tmp_path / "word-owner.json").resolve()),
         "report_path": str((tmp_path / "report.json").resolve()),
     }
-    if action in {"inspect-v2", "diagnose-header-v2"}:
+    if action in {
+        "inspect-v2",
+        "diagnose-header-v2",
+        "diagnose-5992-v2",
+    }:
         payload["sample_paths"] = [
             str((tmp_path / f"sample-{index}.doc").resolve())
             for index in range(1, 4)
         ]
         for item in payload["sample_paths"]:
             Path(item).write_bytes(b"synthetic")
+        if action == "diagnose-5992-v2":
+            payload["sample_sha256"] = [str(index) * 64 for index in range(1, 4)]
+            payload["working_copy_paths"] = [
+                str((tmp_path / f"working-{index}.doc").resolve())
+                for index in range(1, 4)
+            ]
     else:
         source = tmp_path / "sample.doc"
         source.write_bytes(b"synthetic")
@@ -263,7 +273,13 @@ def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "action", ["inspect-v2", "diagnose-header-v2", "calibrate"]
+    "action",
+    [
+        "inspect-v2",
+        "diagnose-header-v2",
+        "diagnose-5992-v2",
+        "calibrate",
+    ],
 )
 def test_schema_two_word_jobs_accept_only_the_exact_bounded_shape(
     tmp_path, action
@@ -341,3 +357,21 @@ def test_calibration_normalizes_only_the_approved_header_tail():
     assert "$HeaderCell.Range.End - 1" in normalization
     assert "$tailRange.Text = [string][char]13" in normalization
     assert "LIST_HEADER_NORMALIZATION_FAILED" in normalization
+
+
+def test_5992_diagnosis_is_one_reported_job_without_master_output():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    diagnosis = script.split("function Invoke-Diagnose5992V2", 1)[1].split(
+        "function Invoke-Calibrate", 1
+    )[0]
+    calibration = script.split("function Invoke-Calibrate", 1)[1].split(
+        "function Invoke-Patch", 1
+    )[0]
+
+    assert 'action = "diagnose-5992-v2"' in diagnosis
+    assert "Invoke-Calibrate" in diagnosis
+    assert "-DiagnosticOnly" in diagnosis
+    assert "Write-JsonExclusive" in diagnosis
+    assert "source_path" not in diagnosis.split("Write-JsonExclusive", 1)[1]
+    assert "if ($DiagnosticOnly)" in calibration
+    assert "$document.SaveAs2" in calibration.split("if ($DiagnosticOnly)", 1)[1]
