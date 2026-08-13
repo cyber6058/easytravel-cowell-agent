@@ -1019,13 +1019,43 @@ def diagnose_gate_c_5992(
     adapter: WordCalibrationAdapter,
     timeout_seconds: int = 180,
 ) -> GateC5992DiagnosticResult:
+    return _diagnose_gate_c(
+        sample_paths,
+        adapter=adapter,
+        timeout_seconds=timeout_seconds,
+        action="diagnose-5992-v2",
+        temp_prefix="easytravel-list-diagnose-5992-",
+    )
+
+
+def diagnose_gate_c_v3(
+    sample_paths: tuple[Path, ...],
+    *,
+    adapter: WordCalibrationAdapter,
+    timeout_seconds: int = 180,
+) -> GateC5992DiagnosticResult:
+    return _diagnose_gate_c(
+        sample_paths,
+        adapter=adapter,
+        timeout_seconds=timeout_seconds,
+        action="diagnose-gate-c-v3",
+        temp_prefix="easytravel-list-diagnose-gate-c-v3-",
+    )
+
+
+def _diagnose_gate_c(
+    sample_paths: tuple[Path, ...],
+    *,
+    adapter: WordCalibrationAdapter,
+    timeout_seconds: int,
+    action: str,
+    temp_prefix: str,
+) -> GateC5992DiagnosticResult:
     samples = _resolve_sample_paths(sample_paths)
     if timeout_seconds <= 0:
-        raise ValueError("Gate C 5992 diagnosis timeout must be positive")
+        raise ValueError("Gate C diagnosis timeout must be positive")
     before = tuple(_sha256_file(path) for path in samples)
-    with tempfile.TemporaryDirectory(
-        prefix="easytravel-list-diagnose-5992-"
-    ) as temp:
+    with tempfile.TemporaryDirectory(prefix=temp_prefix) as temp:
         work_dir = Path(temp)
         job_path = work_dir / "word-job.json"
         report_path = work_dir / "diagnostic-report.json"
@@ -1035,7 +1065,7 @@ def diagnose_gate_c_5992(
         )
         job = {
             "schema_version": 2,
-            "action": "diagnose-5992-v2",
+            "action": action,
             "ownership_nonce": secrets.token_hex(16),
             "word_pid_path": str(work_dir / "word-owner.json"),
             "report_path": str(report_path),
@@ -1045,7 +1075,10 @@ def diagnose_gate_c_5992(
         }
         _write_json_exclusive(job_path, job)
         adapter.run(job_path, timeout_seconds=timeout_seconds)
-        report = _read_gate_c_5992_report(report_path)
+        report = _read_gate_c_diagnostic_report(
+            report_path,
+            expected_action=action,
+        )
     after = tuple(_sha256_file(path) for path in samples)
     if after != before:
         raise CalibrationSourceChangedError()
@@ -1547,8 +1580,12 @@ def _read_header_diagnostic_report(path: Path) -> dict[str, Any]:
     }
 
 
-def _read_gate_c_5992_report(path: Path) -> dict[str, Any]:
-    payload = _read_json_object(path, "Gate C 5992 diagnostic")
+def _read_gate_c_diagnostic_report(
+    path: Path,
+    *,
+    expected_action: str,
+) -> dict[str, Any]:
+    payload = _read_json_object(path, "Gate C diagnostic")
     expected = {
         "schema_version",
         "action",
@@ -1562,14 +1599,14 @@ def _read_gate_c_5992_report(path: Path) -> dict[str, Any]:
     if (
         set(payload) != expected
         or payload.get("schema_version") != 2
-        or payload.get("action") != "diagnose-5992-v2"
+        or payload.get("action") != expected_action
         or not isinstance(payload.get("word_version"), str)
         or not payload["word_version"]
         or payload.get("classification")
         not in {"ERROR_OBSERVED", "NOT_REPRODUCED"}
     ):
         raise ValueError(
-            "Word Gate C 5992 report does not match schema version 2"
+            "Word Gate C report does not match schema version 2"
         )
     checkpoint = payload.get("checkpoint")
     error = payload.get("error")
@@ -1596,7 +1633,7 @@ def _read_gate_c_5992_report(path: Path) -> dict[str, Any]:
         or set(error) != error_keys
     ):
         raise ValueError(
-            "Word Gate C 5992 report does not match schema version 2"
+            "Word Gate C report does not match schema version 2"
         )
     count = payload["completed_source_inspections"]
     selected = payload["selected_base_sample_id"]
@@ -1623,7 +1660,7 @@ def _read_gate_c_5992_report(path: Path) -> dict[str, Any]:
         is None
     ):
         raise ValueError(
-            "Word Gate C 5992 report does not match schema version 2"
+            "Word Gate C report does not match schema version 2"
         )
     normalized_checkpoint = GateC5992Checkpoint(**checkpoint)
     result = {

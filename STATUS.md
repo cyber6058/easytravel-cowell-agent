@@ -2,10 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C 的 mixed-width 與 vertically-merged-row
-離線修正後已執行唯一一次新校準，但在 `run-action` 以 HRESULT `0x80131501`
-fail closed。來源與既有 reviews 均未變，沒有 master／manifest／config／新 review；
-最近完整離線測試仍為 `452 passed, 3 skipped`，尚未 push。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C `0x80131501` 的通用 v3 安全診斷已完成
+離線實作，但尚未讀取私人 LIST 或啟動 Word 實跑。沒有 master／manifest／config／
+新 review；最近完整離線測試為 `455 passed, 3 skipped`，尚未 push。
 
 ## 這次做了什麼
 
@@ -570,13 +569,25 @@ fail closed。來源與既有 reviews 均未變，沒有 master／manifest／con
   private reviews／diagnostics 未覆蓋或刪除。兩個失敗 probe 遺留的精確 temp 目錄已
   清除並回讀確認不存在。本回合沒有程式碼變更，因此未重跑測試，最近完整離線結果
   維持 `452 passed, 3 skipped in 7.28s`。
+- 2026-08-13 依「進行下一步」授權完成 Gate C `0x80131501` 細粒度診斷的離線實作；
+  開工的 `git pull --ff-only` 回傳 `Already up to date.`。保留既有
+  `diagnose-5992-v2` 相容性，新增通用 `diagnose-gate-c-v3` action，兩者共用同一個
+  bounded Word job、三份來源 hash 綁定、job-local working copies、來源前後 hash
+  驗證、checkpoint allowlist 與 exclusive report boundary。
+- v3 report 只允許 Word version、分類、完成 inspection 數、base sample ID、固定
+  phase／operation／field ID、數字座標、HRESULT 與 adapter code；拒絕額外欄位，
+  不保存來源路徑、檔名、文件文字或 master。回歸測試另固定 `0x80131501`／low word
+  `5377` 的 round trip，並驗證輸出不含 `LIST-` 或 `source_path`。
+- 針對性測試為 `44 passed`；完整離線回歸為 `455 passed, 3 skipped in 7.34s`，
+  PowerShell parser、compileall 與 `git diff --check` 均通過。三個 skip 維持既有
+  opt-in integrations。本回合未讀私人 LIST、未啟動 Word、未建立或改動任何 private
+  artifact，因此 v3 診斷的實機結果仍為**未驗證**。
 
 ## 下一步
 
-本次 Gate C 真實校準額度已消耗且沒有 retry。下一步應先以離線變更加入
-`0x80131501` 的安全細粒度 checkpoint／diagnostic report；完成離線回歸後，仍需由
-使用者另行明確核准，才可在新的 exclusive private 目錄讀取三份 LIST 並執行一次
-診斷或校準。只有 Gate C
+Gate C `diagnose-gate-c-v3` 已完成離線實作與回歸。下一步仍需由使用者另行明確核准，
+才可在新的 exclusive private 目錄讀取三份 LIST 並執行一次 v3 真實診斷；該授權不
+包含校準 retry。取得 checkpoint 後先離線修正，再另行決定是否核准一次新校準。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -594,10 +605,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail、mixed-width 與 row-access
-契約均已完成離線修正；新校準在 Word adapter `run-action` 以 `0x80131501` fail closed，
-且沒有產生可定位 operation／field 的安全 review，因此 row-access 修正的實機狀態仍
-未驗證。既有五份 private reviews／diagnostics 不能覆蓋或刪除；新的 Word 診斷回合、
-再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
+契約均已完成離線修正；新校準在 Word adapter `run-action` 以 `0x80131501` fail closed。
+通用 v3 安全診斷已完成離線實作，但尚未實跑，因此仍沒有可定位 operation／field 的
+真實 checkpoint。既有五份 private reviews／diagnostics 不能覆蓋或刪除；新的 Word
+診斷回合、再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；

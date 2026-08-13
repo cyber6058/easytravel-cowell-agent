@@ -17,6 +17,7 @@ from travel_briefing.list_calibration import (
     calibrate_list_templates,
     compare_calibration_samples,
     diagnose_gate_c_5992,
+    diagnose_gate_c_v3,
     diagnose_list_header_contract,
     manifest_sha256,
     normalized_structure_fingerprint,
@@ -547,16 +548,20 @@ class Synthetic5992DiagnosticAdapter:
         *,
         mutate_source: bool = False,
         add_private_field: bool = False,
+        action: str = "diagnose-5992-v2",
+        hresult: int = -2146822296,
     ) -> None:
         self.mutate_source = mutate_source
         self.add_private_field = add_private_field
+        self.action = action
+        self.hresult = hresult
         self.actions: list[str] = []
         self.working_copy_paths: list[Path] = []
 
     def run(self, job_path: Path, *, timeout_seconds: int) -> None:
         job = json.loads(job_path.read_text(encoding="utf-8"))
         self.actions.append(job["action"])
-        assert job["action"] == "diagnose-5992-v2"
+        assert job["action"] == self.action
         assert timeout_seconds == 180
         assert job["sample_sha256"] == [
             hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -569,9 +574,19 @@ class Synthetic5992DiagnosticAdapter:
         assert all(not path.exists() for path in self.working_copy_paths)
         if self.mutate_source:
             Path(job["sample_paths"][0]).write_bytes(b"changed")
+        operation = (
+            "table-width-prototype-cell"
+            if self.action == "diagnose-5992-v2"
+            else "table-format-prototype-cell"
+        )
+        field_id = (
+            "table_column_widths_points"
+            if self.action == "diagnose-5992-v2"
+            else "style_digest"
+        )
         report = {
             "schema_version": 2,
-            "action": "diagnose-5992-v2",
+            "action": self.action,
             "word_version": "16.0-synthetic",
             "classification": "ERROR_OBSERVED",
             "completed_source_inspections": 3,
@@ -579,17 +594,17 @@ class Synthetic5992DiagnosticAdapter:
             "checkpoint": {
                 "phase": "calibrate-copy",
                 "sample_id": "sample-002",
-                "operation": "table-width-prototype-cell",
-                "field_id": "table_column_widths_points",
+                "operation": operation,
+                "field_id": field_id,
                 "table_number": 3,
                 "row_number": 2,
                 "column_number": 1,
                 "paragraph_number": 0,
             },
             "error": {
-                "hresult": -2146822296,
-                "hresult_hex": "0x800A1768",
-                "low_word_error_number": 5992,
+                "hresult": self.hresult,
+                "hresult_hex": f"0x{self.hresult & 0xFFFFFFFF:08X}",
+                "low_word_error_number": self.hresult & 0xFFFF,
                 "adapter_code": "NONE",
             },
         }
@@ -638,6 +653,29 @@ def test_5992_diagnosis_rejects_unapproved_report_fields(tmp_path):
 
     with pytest.raises(ValueError, match="schema version 2"):
         diagnose_gate_c_5992(samples, adapter=adapter)
+
+
+def test_gate_c_v3_diagnosis_is_generic_hash_bound_and_private_safe(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = Synthetic5992DiagnosticAdapter(
+        action="diagnose-gate-c-v3",
+        hresult=-2146233087,
+    )
+
+    result = diagnose_gate_c_v3(samples, adapter=adapter)
+
+    assert adapter.actions == ["diagnose-gate-c-v3"]
+    assert result.hresult_hex == "0x80131501"
+    assert result.low_word_error_number == 5377
+    payload = result.to_dict()
+    assert payload["source_hashes_unchanged"] is True
+    assert payload["checkpoint"]["operation"] == (
+        "table-format-prototype-cell"
+    )
+    serialized = json.dumps(payload)
+    assert "LIST-" not in serialized
+    assert "source_path" not in serialized
+    assert all(not path.exists() for path in adapter.working_copy_paths)
 
 
 def test_calibration_inspects_before_building_and_publishes_private_safe_files(

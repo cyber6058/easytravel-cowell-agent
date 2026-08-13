@@ -174,6 +174,7 @@ def _read_job_metadata(path: Path) -> dict[str, str | Path]:
         "inspect-v2",
         "diagnose-header-v2",
         "diagnose-5992-v2",
+        "diagnose-gate-c-v3",
         "calibrate",
     }:
         raise WordGenerationError("Word automation job action is unsupported")
@@ -229,7 +230,7 @@ def _validate_schema_two_job(
             raise WordGenerationError(
                 "Word automation job does not match schema version 2"
             )
-    elif action == "diagnose-5992-v2":
+    elif action in {"diagnose-5992-v2", "diagnose-gate-c-v3"}:
         expected = common | {
             "sample_paths",
             "sample_sha256",

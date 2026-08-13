@@ -77,6 +77,7 @@ def schema_two_job(tmp_path, *, action="inspect-v2", extra=None):
         "inspect-v2",
         "diagnose-header-v2",
         "diagnose-5992-v2",
+        "diagnose-gate-c-v3",
     }:
         payload["sample_paths"] = [
             str((tmp_path / f"sample-{index}.doc").resolve())
@@ -84,7 +85,7 @@ def schema_two_job(tmp_path, *, action="inspect-v2", extra=None):
         ]
         for item in payload["sample_paths"]:
             Path(item).write_bytes(b"synthetic")
-        if action == "diagnose-5992-v2":
+        if action in {"diagnose-5992-v2", "diagnose-gate-c-v3"}:
             payload["sample_sha256"] = [str(index) * 64 for index in range(1, 4)]
             payload["working_copy_paths"] = [
                 str((tmp_path / f"working-{index}.doc").resolve())
@@ -278,6 +279,7 @@ def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
         "inspect-v2",
         "diagnose-header-v2",
         "diagnose-5992-v2",
+        "diagnose-gate-c-v3",
         "calibrate",
     ],
 )
@@ -401,17 +403,31 @@ def test_schema_two_format_fingerprint_uses_fixed_prototype_cells():
 
 def test_5992_diagnosis_is_one_reported_job_without_master_output():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
-    diagnosis = script.split("function Invoke-Diagnose5992V2", 1)[1].split(
+    diagnosis = script.split("function Invoke-DiagnoseGateC", 1)[1].split(
         "function Invoke-Calibrate", 1
     )[0]
     calibration = script.split("function Invoke-Calibrate", 1)[1].split(
         "function Invoke-Patch", 1
     )[0]
 
-    assert 'action = "diagnose-5992-v2"' in diagnosis
+    assert "action = [string]$Job.action" in diagnosis
+    assert '"diagnose-5992-v2"' in script.split('$stage = "run-action"', 1)[1]
     assert "Invoke-Calibrate" in diagnosis
     assert "-DiagnosticOnly" in diagnosis
     assert "Write-JsonExclusive" in diagnosis
     assert "source_path" not in diagnosis.split("Write-JsonExclusive", 1)[1]
     assert "if ($DiagnosticOnly)" in calibration
     assert "$document.SaveAs2" in calibration.split("if ($DiagnosticOnly)", 1)[1]
+
+
+def test_gate_c_v3_diagnosis_reuses_safe_checkpoint_report_boundary():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    diagnosis = script.split("function Invoke-DiagnoseGateC", 1)[1].split(
+        "function Invoke-Calibrate", 1
+    )[0]
+    dispatch = script.split('$stage = "run-action"', 1)[1]
+
+    assert '"diagnose-gate-c-v3"' in dispatch
+    assert "Invoke-DiagnoseGateC" in dispatch
+    assert "checkpoint = $checkpointSnapshot" in diagnosis
+    assert "source_path" not in diagnosis.split("Write-JsonExclusive", 1)[1]

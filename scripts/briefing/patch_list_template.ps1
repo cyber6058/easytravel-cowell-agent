@@ -165,7 +165,7 @@ function Assert-WordJobShape {
                 throw "WORD_JOB_SCHEMA_INVALID"
             }
         }
-        "diagnose-5992-v2" {
+        { $_ -in @("diagnose-5992-v2", "diagnose-gate-c-v3") } {
             Assert-ExactProperties -Value $Job -Expected (
                 $common + @(
                     "sample_paths",
@@ -1278,7 +1278,7 @@ function Invoke-DiagnoseHeaderV2 {
     }) -Path ([string]$Job.report_path)
 }
 
-function Invoke-Diagnose5992V2 {
+function Invoke-DiagnoseGateC {
     param(
         [Parameter(Mandatory = $true)]$Job,
         [Parameter(Mandatory = $true)]$Word
@@ -1413,7 +1413,7 @@ function Invoke-Diagnose5992V2 {
     }
     Write-JsonExclusive -Value ([ordered]@{
         schema_version = 2
-        action = "diagnose-5992-v2"
+        action = [string]$Job.action
         word_version = $wordVersion
         classification = $classification
         completed_source_inspections = $completedInspections
@@ -1785,7 +1785,10 @@ try {
             Invoke-DiagnoseHeaderV2 -Job $job -Word $word
         }
         "diagnose-5992-v2" {
-            Invoke-Diagnose5992V2 -Job $job -Word $word
+            Invoke-DiagnoseGateC -Job $job -Word $word
+        }
+        "diagnose-gate-c-v3" {
+            Invoke-DiagnoseGateC -Job $job -Word $word
         }
         "calibrate" { Invoke-Calibrate -Job $job -Word $word }
         "patch" { Invoke-Patch -Job $job -Word $word }
