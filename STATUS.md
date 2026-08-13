@@ -2,10 +2,10 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的離線 Task 1–8 與 Gate I 乾淨安裝已完成；PyMuPDF JSON stdout
-相容修正 `e0d1b60` 已依使用者單次例外授權推送並回讀驗證，完整離線測試為
-`437 passed, 3 skipped`。Poppler 25.07.0-0 已經當次核准安裝，私人範本校準、Word
-實機與真實 DRAFT 仍待 Gate C／V／E；GitHub 遠端仍為 public，後續 push 未獲授權。
+說明會產生器 0.2.0 的 Gate I 已完成，Gate C 的 Word `16.0` capability probe 已實機
+通過，但唯一一次校準因 `list_header_paragraph_count` 契約不符而 fail closed；三份來源
+雜湊未變、未建立 master／config／QA，完整離線測試為 `440 passed, 3 skipped`。
+Gate C 重試及 Gate V／E 均待另行核准；GitHub 遠端仍為 public，後續 push 未獲授權。
 
 ## 這次做了什麼
 
@@ -424,13 +424,39 @@
   files 與 150 個 cache directories，工作樹未殘留測試安裝或 cache。
 - Gate I 沒有讀取三份私人 LIST、啟動 Word COM／Yating、發出 live 官網／JMA
   request、安裝 ffmpeg、傳 LINE、存取 Cowell、部署或發布 artifact。
+- 2026-08-13 使用者以這台機器的三個精確 absolute paths 核准 Gate C；執行前驗證
+  size、mtime 與既定 SHA-256 均相符，且真實 `config.toml` 與固定私人目的目錄均
+  不存在，沒有覆蓋既有設定或產物。
+- 首次 bounded probe 明確失敗於 Word owner 綁定。診斷證實 Word COM 已啟動，但
+  原 PowerShell 錯用 Word 不提供的 `Application.Hwnd`；改為建立不存檔的 hidden
+  空白文件視窗，以 `Window.Hwnd` 綁定精確 WINWORD PID／start time，並只回傳
+  allowlisted stage、HRESULT 與穩定 error code。修正後 20 秒 probe 實跑成功，回傳
+  `{"available": true, "word_version": "16.0"}`；修正 commit 為本機 `6f7cd6f`。
+- Gate C 隨後只執行一次 `calibrate-list`，沒有 retry；命令在第一階段 inspect 以
+  `WORD_GENERATION_FAILED`／`LIST_HEADER_PARAGRAPHS_CHANGED` 明確停止，對應私人
+  review 的 `CALIBRATION_CONTRACT_CONFLICT` 欄位路徑
+  `list_header_paragraph_count`。未建立 `LIST-master.docx`、calibration manifest、
+  config、PDF 或 PNG，也沒有殘留 WINWORD process。
+- 三份來源在校準命令後重算 SHA-256，依序仍為
+  `c230eb24397124cbf0fc6940765be14a9e5a07742f64039f0c01d60f05420b76`、
+  `84d7db2fa9f01fea2bfb0563a37f78c0aa3993cb972a913506b67496f056420b`、
+  `cf62502532344530ec9e0c65161b1fee5624abd6243f32bb6530a1d72cc558bc`。
+  固定私人目錄只保留不含文件內容／檔名／路徑的 review JSON；其 SHA-256 為
+  `ebd166ea8b83a80cd2ef96c5536d676e672921cafc4a5e47f8d0e6eb4ba99c01`。
+- Word ownership 修正的針對性測試為 `15 passed`；最終完整離線回歸為
+  `440 passed, 3 skipped in 7.32s`，compileall、兩支 PowerShell parse 與
+  `git diff --check` 均通過。三個 skip 仍是需 opt-in 的 Hanhan、私人 LIST／Word
+  與 Yating integration；因 master 未建立，真實 Word PDF render 及逐頁視覺 QA
+  正確標記為未驗證。
 
 ## 下一步
 
-Gate I 已實證通過。下一步先另行取得 Gate C（私人 LIST 一次性校準）當次核准，並
-確認本機三份 LIST 樣本的實際 absolute paths 與既定 SHA-256；Gate C 通過後，再分別
-取得 Gate V（4／5／6／
-7／8／12 天 Word 視覺 QA）與 Gate E（真實 URL／PDF 到語音 DRAFT）的當次核准。
+Gate C 已 fail closed，不能沿用這次授權重跑。下一步先由使用者決定是否核准新的
+Gate C 診斷／校準回合：保留現有 blocked review、不覆蓋目的目錄，讓 inspect 報告
+只用 sample hash／field path 釐清三份來源的 header paragraph 契約，再決定修訂契約
+或更換來源；不得自行選一份。只有新 Gate C 成功建立並驗證 master 後，才分別取得
+Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E（真實 URL／PDF 到語音
+DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
 明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
 立益公司電腦 clone、
@@ -445,9 +471,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 已完成，沒有剩餘安裝阻塞。Gate C 尚未獲當次核准，且計畫記載的三份來源
-位於另一個使用者目錄；執行前必須由 OP 確認這台機器上的實際 absolute paths，不能
-自行搜尋、搬移或以其他 LIST 代替。
+Gate I 已完成，沒有剩餘安裝阻塞。Gate C 已獲核准並只執行一次，但因
+`list_header_paragraph_count` 契約不符而阻擋；現有私人目的目錄包含 blocked review，
+不能覆蓋或刪除。再次讀取三份 LIST、移動現有 review 或重跑 calibration 都需要新的
+明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
@@ -463,8 +490,9 @@ PDF 會明確
 自動 LINE 傳送仍是獨立核准關卡。
 
 本機 capability probe 與真實 integration 顯示 Yating 可用且正式管線可合成，
-`pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊，但 `ffmpeg` 尚未找到；
-Word COM 仍須在 Gate C 以最長 20 秒的隱藏 instance 另測。
+`pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊且 Gate C hidden owned probe
+已以 Word `16.0` 實跑通過，但 `ffmpeg` 尚未找到；私人 master、PDF render 與逐頁
+視覺 QA 因校準契約阻擋仍未驗證。
 Task 11 隔離安裝已證明新 `briefing.exe` 可啟動，且顯式 config 可載入外部
 `pdftoppm`；私有範本契約及 Word 實機 render 仍未驗證。
 0.2.0 的任意天數與安全續頁邏輯已在 synthetic／mock 離線測試完成，但尚未代表

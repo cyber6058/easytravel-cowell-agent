@@ -624,6 +624,16 @@ Commit：`docs(briefing): record 0.2.0 clean install acceptance`
 
 Commit：`docs(briefing): record private LIST calibration result`
 
+2026-08-13 Gate C 執行結果：三份來源的 absolute path、size、mtime 與既定 SHA-256
+均先驗證相符。Word owner probe 揭露並修正 `Application.Hwnd` 不存在的實機缺陷，
+改以不存檔的 hidden document `Window.Hwnd` 綁定 PID／start time 後，20 秒 probe
+回傳 Word `16.0`。唯一一次 `calibrate-list` 隨後以
+`LIST_HEADER_PARAGRAPHS_CHANGED` fail closed；對應 field path 為
+`list_header_paragraph_count`。三份來源事後 hash 全部未變，沒有 master、manifest、
+config、PDF／PNG 或殘留 WINWORD；私人目錄只保留 hashes／field path review。
+Gate C 狀態為 `CALIBRATION_CONTRACT_CONFLICT`，不得沿用本次授權 retry，Gate V
+未開啟。
+
 ## Task 11：4／5／6／7／8／12 天 Word 視覺驗收 Gate V
 
 Gate C 通過且另行取得 Gate V 核准後，使用同一 private master 與全 synthetic、
