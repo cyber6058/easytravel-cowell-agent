@@ -2,10 +2,10 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C `5992` 單次診斷已以 Word `16.0`
-精確定位到第一份來源的 schema-2 inspection：讀取 table 1／column 1 width 時失敗，
-尚未進入 header tail 或 calibration working-copy 階段。來源與既有 reviews 均未變，
-未建立 master／manifest／config／QA；完整離線測試 `450 passed, 3 skipped`，未 push。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C `5992` mixed-width 程式修正已完成離線
+驗證，schema-2 欄寬指紋改讀固定 prototype cells，不再使用
+`Columns.Item(...).Width`。本回合未讀三份 LIST、未啟動 Word 或校準，既有 private
+reviews 均未變；完整離線測試 `451 passed, 3 skipped`，未 push。
 
 ## 這次做了什麼
 
@@ -504,14 +504,28 @@
   來源與三份舊 review hash 再驗均完全一致，WINWORD 為 0，仍無 master／manifest／
   config。Word 在專用 runtime root 留下的兩個 Diagnostics log 未讀取內容並已連同
   root 刪除；本回合 2,185 files／887 directories 的測試暫存 root 亦已完整刪除。
+- 使用者另行核准 Gate C mixed-width 修正；開工的 `git pull --ff-only` 回傳
+  `Already up to date.`。schema-2 欄寬指紋現在固定使用四張表的 prototype rows
+  `2／2／2／1` 與 column counts `3／6／7／3`，透過 `Table.Cell(row, column)` 取得
+  cell 並讀取 `Cell.Width`，移除已證實會在非均勻表格觸發 `5992` 的
+  `Columns.Item(...).Width` 路徑。
+- 新增 `table-width-prototype-cell` checkpoint 並保留舊的 width checkpoint operation，
+  讓既有診斷 review 維持相容；回歸測試固定上述 prototype mapping，且禁止 schema-2
+  inspection 再出現 `Columns.Item` 欄寬存取。
+- 修正的針對性回歸為 `40 passed in 0.47s`，完整離線回歸為
+  `451 passed, 3 skipped in 8.72s`；PowerShell parser、compileall、production Python
+  100 字元行寬檢查與 `git diff --check` 均通過。三個 skip 維持既有 opt-in
+  integrations，沒有放寬測試。
+- 本修正回合未讀三份真實 LIST、未啟動 Word、未校準，也未建立或改動 master、
+  manifest、config、QA 或任何 private review；結束檢查 WINWORD 為 0。專用 synthetic
+  測試暫存目錄已精確刪除並確認不存在。
 
 ## 下一步
 
-本次 `5992` 診斷額度已消耗且結果明確，不能再啟動 Word。下一步需由使用者另行核准
-Gate C mixed-width 修正回合：以已知 prototype row／cell 建立 schema 2 欄寬指紋，
-移除對非均勻 table `Columns.Item(...).Width` 的依賴，離線回歸後再由新的明確授權
-決定是否於另一個 exclusive private 目錄校準一次。只有 Gate C 成功建立並驗證
-master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
+Gate C mixed-width 程式修正與離線回歸已完成。下一步仍須由使用者另行明確核准，
+才能再次讀取相同三份 LIST、啟動 Word，並於另一個 exclusive private 目錄校準一次；
+本回合的修正授權不包含該實機驗證。只有 Gate C 成功建立並驗證 master 後，才分別
+取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
 明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
@@ -528,9 +542,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail 契約已修訂；`5992` 已證實由
-schema 2 對非均勻 table 1 的 column-width member 存取觸發，而非 header mutation。
-既有 private reviews 與新 `5992-diagnostic.json` 不能覆蓋或刪除。mixed-width 契約
-修正、新的 Word 回合、再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
+schema 2 對非均勻 table 1 的 column-width member 存取觸發，而非 header mutation；
+mixed-width 程式路徑現已完成離線修正，但尚未以三份真實 LIST／Word 重新驗證。
+既有 private reviews 與 `5992-diagnostic.json` 不能覆蓋或刪除；新的 Word 回合、再次
+讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；

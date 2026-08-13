@@ -36,6 +36,7 @@ _GATE_C_5992_OPERATIONS = {
     "header-contract",
     "table-width-columns-count",
     "table-width-column-item",
+    "table-width-prototype-cell",
     "table-format-row",
     "table-borders",
     "daily-table-access",

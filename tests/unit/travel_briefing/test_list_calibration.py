@@ -579,11 +579,11 @@ class Synthetic5992DiagnosticAdapter:
             "checkpoint": {
                 "phase": "calibrate-copy",
                 "sample_id": "sample-002",
-                "operation": "table-width-columns-count",
+                "operation": "table-width-prototype-cell",
                 "field_id": "table_column_widths_points",
                 "table_number": 3,
-                "row_number": 0,
-                "column_number": 0,
+                "row_number": 2,
+                "column_number": 1,
                 "paragraph_number": 0,
             },
             "error": {

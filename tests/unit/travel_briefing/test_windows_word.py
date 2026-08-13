@@ -359,6 +359,25 @@ def test_calibration_normalizes_only_the_approved_header_tail():
     assert "LIST_HEADER_NORMALIZATION_FAILED" in normalization
 
 
+def test_schema_two_width_fingerprint_uses_fixed_prototype_cells():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    helper = script.split("function Get-PrototypeColumnWidths", 1)[1].split(
+        "function Get-ListInspectionV2", 1
+    )[0]
+    inspection = script.split("function Get-ListInspectionV2", 1)[1].split(
+        "function Assert-BasicListContract", 1
+    )[0]
+
+    assert "$prototypeRows = @(2, 2, 2, 1)" in helper
+    assert "$prototypeColumnCounts = @(3, 6, 7, 3)" in helper
+    assert '-Operation "table-width-prototype-cell"' in helper
+    assert "Get-Cell" in helper
+    assert "$cell.Width" in helper
+    assert ".Columns.Item(" not in helper
+    assert ".Columns.Item(" not in inspection
+    assert "Get-PrototypeColumnWidths" in inspection
+
+
 def test_5992_diagnosis_is_one_reported_job_without_master_output():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
     diagnosis = script.split("function Invoke-Diagnose5992V2", 1)[1].split(

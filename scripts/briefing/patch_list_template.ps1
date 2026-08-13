@@ -583,6 +583,35 @@ function Get-RangeFormatSignature {
     ) -join "|"
 }
 
+function Get-PrototypeColumnWidths {
+    param(
+        [Parameter(Mandatory = $true)]$Table,
+        [Parameter(Mandatory = $true)][int]$TableNumber
+    )
+    $prototypeRows = @(2, 2, 2, 1)
+    $prototypeColumnCounts = @(3, 6, 7, 3)
+    if ($TableNumber -lt 1 -or $TableNumber -gt $prototypeRows.Count) {
+        throw "LIST_TABLE_UNSUPPORTED"
+    }
+    $prototypeRow = [int]$prototypeRows[$TableNumber - 1]
+    $prototypeColumnCount = [int]$prototypeColumnCounts[$TableNumber - 1]
+    $widths = @()
+    for ($column = 1; $column -le $prototypeColumnCount; $column += 1) {
+        Set-GateC5992Checkpoint `
+            -Operation "table-width-prototype-cell" `
+            -FieldId "table_column_widths_points" `
+            -TableNumber $TableNumber `
+            -RowNumber $prototypeRow `
+            -ColumnNumber $column
+        $cell = Get-Cell `
+            -Table $Table `
+            -Row $prototypeRow `
+            -Column $column
+        $widths += Get-NormalizedPoint -Value ([double]$cell.Width)
+    }
+    return $widths
+}
+
 function Get-ListInspectionV2 {
     param(
         [Parameter(Mandatory = $true)]$Document,
@@ -611,22 +640,11 @@ function Get-ListInspectionV2 {
     $borderParts = @()
     for ($tableIndex = 1; $tableIndex -le 4; $tableIndex += 1) {
         $table = $Document.Tables.Item($tableIndex)
-        $widths = @()
-        Set-GateC5992Checkpoint `
-            -Operation "table-width-columns-count" `
-            -FieldId "table_column_widths_points" `
-            -TableNumber $tableIndex
-        $columnCount = [int]$table.Columns.Count
-        for ($column = 1; $column -le $columnCount; $column += 1) {
-            Set-GateC5992Checkpoint `
-                -Operation "table-width-column-item" `
-                -FieldId "table_column_widths_points" `
-                -TableNumber $tableIndex `
-                -ColumnNumber $column
-            $widths += Get-NormalizedPoint -Value (
-                [double]$table.Columns.Item($column).Width
-            )
-        }
+        $widths = @(
+            Get-PrototypeColumnWidths `
+                -Table $table `
+                -TableNumber $tableIndex
+        )
         $columnWidths += ,$widths
         Set-GateC5992Checkpoint `
             -Operation "table-format-row" `
