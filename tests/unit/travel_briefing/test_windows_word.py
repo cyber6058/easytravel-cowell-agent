@@ -378,6 +378,27 @@ def test_schema_two_width_fingerprint_uses_fixed_prototype_cells():
     assert "Get-PrototypeColumnWidths" in inspection
 
 
+def test_schema_two_format_fingerprint_uses_fixed_prototype_cells():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    helper = script.split("function Get-PrototypeCellFormatEvidence", 1)[1].split(
+        "function Get-ListInspectionV2", 1
+    )[0]
+    inspection = script.split("function Get-ListInspectionV2", 1)[1].split(
+        "function Assert-BasicListContract", 1
+    )[0]
+
+    assert "Get-Cell" in helper
+    assert "$cell.Range" in helper
+    assert ".Rows.Item(" not in helper
+    assert "$prototypeRows = @(2, 2, 2, 1)" in inspection
+    assert "$prototypeColumnCounts = @(3, 6, 7, 3)" in inspection
+    assert '-Operation "table-format-prototype-cell"' in inspection
+    assert '-Operation "daily-header-prototype-cell"' in inspection
+    assert '-Operation "daily-body-prototype-cell"' in inspection
+    assert "Get-PrototypeCellFormatEvidence" in inspection
+    assert ".Rows.Item(" not in inspection
+
+
 def test_5992_diagnosis_is_one_reported_job_without_master_output():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
     diagnosis = script.split("function Invoke-Diagnose5992V2", 1)[1].split(

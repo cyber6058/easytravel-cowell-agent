@@ -2,10 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C mixed-width 修正後的唯一一次真實校準
-已執行，但 Word 在 `run-action` 以 `0x800A1767`／error `5991` fail closed。來源與
-既有 reviews 均未變，未建立 master／manifest／config；安全 private review 已保留，
-沒有重試或 push。最近完整離線測試仍為 `451 passed, 3 skipped`。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C 的 mixed-width 與 vertically-merged-row
+兩個離線修正均已完成。後者尚未啟動 Word 或重跑真實校準，因此仍未建立
+master／manifest／config；最近完整離線測試為 `452 passed, 3 skipped`，尚未 push。
 
 ## 這次做了什麼
 
@@ -541,13 +540,24 @@
   Diagnostics logs 未讀取內容，已連同 Python caches 精確刪除並確認 root 不存在。
   本回合沒有程式碼變更，因此沒有重跑測試；最近完整離線結果維持
   `451 passed, 3 skipped in 8.72s`。
+- 2026-08-13 依「繼續開發」授權完成 Gate C vertically-merged-row 離線修正；開工的
+  `git pull --ff-only` 回傳 `Already up to date.`。schema-2 inspection 的四表格式、
+  daily header 與 daily body prototype 指紋全部改由固定 cell 座標取得，移除該函式及
+  新 helper 對 `Rows.Item(...).Range` 的依賴；舊 checkpoint operation 仍保留相容性，
+  新 cell checkpoint 已加入嚴格 allowlist。
+- 新增防回歸測試，固定 prototype rows `2／2／2／1`、column counts `3／6／7／3`，
+  並禁止 schema-2 inspection 與格式 helper 出現 `Rows.Item`。針對性測試為
+  `41 passed`；完整離線回歸為 `452 passed, 3 skipped in 7.28s`，PowerShell parser、
+  compileall 與 `git diff --check` 均通過。三個 skip 維持既有 opt-in integrations。
+- 本回合未讀三份私人 LIST、未啟動 Word、未執行 calibration，也未建立或改動
+  master、manifest、config、QA 或 private review；因此 `5991` 的實機排除狀態仍為
+  **未驗證**。
 
 ## 下一步
 
-本次真實 Gate C 校準額度已消耗且沒有 retry。下一步需由使用者另行明確核准
-Gate C vertically-merged-row 修正：移除 schema-2 table format fingerprint 對
-`Rows.Item(...).Range` 的依賴，改用已知 prototype cells／ranges，完成離線回歸後，
-再由另一個明確授權決定是否於新的 exclusive private 目錄校準一次。只有 Gate C
+Gate C vertically-merged-row 離線修正已完成。下一步需由使用者另行明確核准，才可
+在新的 exclusive private 目錄讀取三份 LIST 並執行一次真實校準；不得沿用已消耗的
+校準額度或自行 retry。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -564,12 +574,12 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail 與 mixed-width 契約已修訂；
-真實校準已越過原 `5992` 欄寬錯誤，但現在由 Word error `5991` 阻擋。依官方 Word
-table 契約與目前程式順序，候選是 schema-2 `Rows.Item(...).Range` 對垂直合併表格的
-存取，但尚未取得細粒度 checkpoint。既有 private reviews、`5992-diagnostic.json`
-與新 `calibration-review.json` 不能覆蓋或刪除；row-access 修正、新的 Word 回合、
-再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
+Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail、mixed-width 與 row-access
+契約均已完成離線修正；先前真實校準已越過原 `5992` 欄寬錯誤，但在 Word error
+`5991` fail closed。候選 `Rows.Item(...).Range` 路徑已從 schema-2 inspection 移除，
+但尚未透過新的 Word 回合證實實機排除。既有 private reviews、
+`5992-diagnostic.json` 與新 `calibration-review.json` 不能覆蓋或刪除；新的 Word
+回合、再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；

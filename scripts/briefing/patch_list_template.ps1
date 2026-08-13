@@ -612,6 +612,41 @@ function Get-PrototypeColumnWidths {
     return $widths
 }
 
+function Get-PrototypeCellFormatEvidence {
+    param(
+        [Parameter(Mandatory = $true)]$Table,
+        [Parameter(Mandatory = $true)][int]$TableNumber,
+        [Parameter(Mandatory = $true)][int]$RowNumber,
+        [Parameter(Mandatory = $true)][int]$ColumnCount,
+        [Parameter(Mandatory = $true)][string]$Operation,
+        [Parameter(Mandatory = $true)][string]$FieldId
+    )
+    $formatParts = @()
+    $shadingParts = @()
+    for ($column = 1; $column -le $ColumnCount; $column += 1) {
+        Set-GateC5992Checkpoint `
+            -Operation $Operation `
+            -FieldId $FieldId `
+            -TableNumber $TableNumber `
+            -RowNumber $RowNumber `
+            -ColumnNumber $column
+        $cell = Get-Cell `
+            -Table $Table `
+            -Row $RowNumber `
+            -Column $column
+        $formatParts += "cell-$column|" + (
+            Get-RangeFormatSignature -Range $cell.Range
+        )
+        $shadingParts += "cell-$column|" + [string](
+            $cell.Range.Shading.BackgroundPatternColor
+        )
+    }
+    return [ordered]@{
+        format_parts = $formatParts
+        shading_parts = $shadingParts
+    }
+}
+
 function Get-ListInspectionV2 {
     param(
         [Parameter(Mandatory = $true)]$Document,
@@ -638,6 +673,9 @@ function Get-ListInspectionV2 {
     $columnWidths = @()
     $formatParts = @()
     $borderParts = @()
+    $prototypeRows = @(2, 2, 2, 1)
+    $prototypeColumnCounts = @(3, 6, 7, 3)
+    $dailyBodyEvidence = $null
     for ($tableIndex = 1; $tableIndex -le 4; $tableIndex += 1) {
         $table = $Document.Tables.Item($tableIndex)
         $widths = @(
@@ -646,20 +684,21 @@ function Get-ListInspectionV2 {
                 -TableNumber $tableIndex
         )
         $columnWidths += ,$widths
-        Set-GateC5992Checkpoint `
-            -Operation "table-format-row" `
-            -FieldId "style_digest" `
+        $prototypeRow = [int]$prototypeRows[$tableIndex - 1]
+        $prototypeColumnCount = [int]$prototypeColumnCounts[$tableIndex - 1]
+        $formatEvidence = Get-PrototypeCellFormatEvidence `
+            -Table $table `
             -TableNumber $tableIndex `
-            -RowNumber $(if ($tableIndex -eq 3) { 2 } else { 1 })
-        $range = if ($tableIndex -eq 3) {
-            $table.Rows.Item([Math]::Min(2, $table.Rows.Count)).Range
+            -RowNumber $prototypeRow `
+            -ColumnCount $prototypeColumnCount `
+            -Operation "table-format-prototype-cell" `
+            -FieldId "style_digest"
+        foreach ($part in $formatEvidence.format_parts) {
+            $formatParts += "table-$tableIndex|$part"
         }
-        else {
-            $table.Rows.Item(1).Range
+        if ($tableIndex -eq 3) {
+            $dailyBodyEvidence = $formatEvidence
         }
-        $formatParts += "table-$tableIndex|" + (
-            Get-RangeFormatSignature -Range $range
-        )
         Set-GateC5992Checkpoint `
             -Operation "table-borders" `
             -FieldId "border_digest" `
@@ -680,25 +719,25 @@ function Get-ListInspectionV2 {
         -FieldId "daily_table" `
         -TableNumber 3
     $dailyTable = $Document.Tables.Item(3)
+    $dailyHeaderEvidence = Get-PrototypeCellFormatEvidence `
+        -Table $dailyTable `
+        -TableNumber 3 `
+        -RowNumber 1 `
+        -ColumnCount 7 `
+        -Operation "daily-header-prototype-cell" `
+        -FieldId "daily_table"
+    if ($null -eq $dailyBodyEvidence) {
+        throw "LIST_DAILY_PROTOTYPE_MISSING"
+    }
     Set-GateC5992Checkpoint `
-        -Operation "daily-header-row" `
+        -Operation "daily-body-prototype-cell" `
         -FieldId "daily_table" `
         -TableNumber 3 `
-        -RowNumber 1
-    $dailyHeaderRange = $dailyTable.Rows.Item(1).Range
-    Set-GateC5992Checkpoint `
-        -Operation "daily-body-row" `
-        -FieldId "daily_table" `
-        -TableNumber 3 `
-        -RowNumber ([Math]::Min(2, $dailyTable.Rows.Count))
-    $dailyBodyRange = $dailyTable.Rows.Item(
-        [Math]::Min(2, $dailyTable.Rows.Count)
+        -RowNumber 2 `
+        -ColumnNumber 1
+    $dailyBodyRange = (
+        Get-Cell -Table $dailyTable -Row 2 -Column 1
     ).Range
-    Set-GateC5992Checkpoint `
-        -Operation "daily-format" `
-        -FieldId "daily_table" `
-        -TableNumber 3 `
-        -RowNumber ([Math]::Min(2, $dailyTable.Rows.Count))
     $fontSize = [double]$dailyBodyRange.Font.Size
     if ($fontSize -le 0 -or $fontSize -gt 72) { $fontSize = 10.0 }
     $lineSpacing = [double]$dailyBodyRange.ParagraphFormat.LineSpacing
@@ -768,14 +807,14 @@ function Get-ListInspectionV2 {
         paragraph_digest = Get-Sha256Text -Text ("paragraph|" + $formatText)
         border_digest = Get-Sha256Text -Text ($borderParts -join [Environment]::NewLine)
         shading_digest = Get-Sha256Text -Text (
-            "header|" + [string]$dailyHeaderRange.Shading.BackgroundPatternColor +
-            "|body|" + [string]$dailyBodyRange.Shading.BackgroundPatternColor
+            "header|" + ($dailyHeaderEvidence.shading_parts -join ",") +
+            "|body|" + ($dailyBodyEvidence.shading_parts -join ",")
         )
         daily_header_digest = Get-Sha256Text -Text (
-            Get-RangeFormatSignature -Range $dailyHeaderRange
+            $dailyHeaderEvidence.format_parts -join [Environment]::NewLine
         )
         daily_body_prototype_digest = Get-Sha256Text -Text (
-            Get-RangeFormatSignature -Range $dailyBodyRange
+            $dailyBodyEvidence.format_parts -join [Environment]::NewLine
         )
         dynamic_content_digest = Get-Sha256Text -Text ([string]$Document.Content.Text)
         adaptive_profiles = @(
