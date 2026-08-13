@@ -458,6 +458,113 @@ class CalibrationComparison:
 
 
 @dataclass(frozen=True, slots=True)
+class HeaderParagraphObservation:
+    paragraph_number: int
+    visible_character_count: int
+    fixed_label_ids: tuple[str, ...]
+    fullwidth_colon_count: int
+    inline_shape_count: int
+    ends_with_cell_marker: bool
+
+    def __post_init__(self) -> None:
+        _positive_int(self.paragraph_number, "paragraph number")
+        for field_name in (
+            "visible_character_count",
+            "fullwidth_colon_count",
+            "inline_shape_count",
+        ):
+            value = getattr(self, field_name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{field_name} must be a non-negative integer")
+        allowed = {"group_code", "group_name"}
+        if (
+            not isinstance(self.fixed_label_ids, tuple)
+            or len(self.fixed_label_ids) != len(set(self.fixed_label_ids))
+            or any(item not in allowed for item in self.fixed_label_ids)
+        ):
+            raise ValueError("fixed_label_ids contains an unsupported label")
+        if not isinstance(self.ends_with_cell_marker, bool):
+            raise ValueError("ends_with_cell_marker must be boolean")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "paragraph_number": self.paragraph_number,
+            "visible_character_count": self.visible_character_count,
+            "fixed_label_ids": list(self.fixed_label_ids),
+            "fullwidth_colon_count": self.fullwidth_colon_count,
+            "inline_shape_count": self.inline_shape_count,
+            "ends_with_cell_marker": self.ends_with_cell_marker,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ListHeaderDiagnosticEvidence:
+    source_sha256: str
+    list_header_paragraph_count: int
+    paragraphs: tuple[HeaderParagraphObservation, ...]
+
+    def __post_init__(self) -> None:
+        _validate_nonzero_sha256(self.source_sha256, "sample source SHA-256")
+        _positive_int(
+            self.list_header_paragraph_count,
+            "list header paragraph count",
+        )
+        if (
+            len(self.paragraphs) != self.list_header_paragraph_count
+            or tuple(item.paragraph_number for item in self.paragraphs)
+            != tuple(range(1, self.list_header_paragraph_count + 1))
+        ):
+            raise ValueError("header paragraph observations are not contiguous")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_sha256": self.source_sha256,
+            "field_path": "list_header_paragraph_count",
+            "observed_value": self.list_header_paragraph_count,
+            "paragraphs": [item.to_dict() for item in self.paragraphs],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ListHeaderDiagnosticResult:
+    word_version: str
+    samples: tuple[ListHeaderDiagnosticEvidence, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.word_version, str) or not self.word_version:
+            raise ValueError("Word version is required")
+        if len(self.samples) != 3 or len(
+            {item.source_sha256 for item in self.samples}
+        ) != 3:
+            raise ValueError("header diagnosis requires three unique samples")
+
+    @property
+    def classification(self) -> str:
+        observed = {
+            item.list_header_paragraph_count for item in self.samples
+        }
+        if observed == {4}:
+            return "EXPECTED_CONTRACT_MATCH"
+        if len(observed) == 1:
+            return "COMMON_EXPECTED_CONTRACT_MISMATCH"
+        return "SAMPLE_CONTRACT_CONFLICT"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "status": "DIAGNOSED",
+            "classification": self.classification,
+            "word_version": self.word_version,
+            "expected_contract": {
+                "field_path": "list_header_paragraph_count",
+                "expected_value": 4,
+            },
+            "source_hashes_unchanged": True,
+            "samples": [item.to_dict() for item in self.samples],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ListCalibrationManifest:
     schema_version: int
     generator_version: str
@@ -654,6 +761,56 @@ class ListCalibrationBuildResult:
     manifest_sha256: str
     word_version: str
     sample_evidence: tuple[CalibrationSampleEvidence, ...]
+
+
+def diagnose_list_header_contract(
+    sample_paths: tuple[Path, ...],
+    *,
+    adapter: WordCalibrationAdapter,
+    timeout_seconds: int = 120,
+) -> ListHeaderDiagnosticResult:
+    samples = _resolve_sample_paths(sample_paths)
+    if timeout_seconds <= 0:
+        raise ValueError("LIST header diagnosis timeout must be positive")
+    before = tuple(_sha256_file(path) for path in samples)
+    with tempfile.TemporaryDirectory(
+        prefix="easytravel-list-header-diagnose-"
+    ) as temp:
+        work_dir = Path(temp)
+        job_path = work_dir / "word-job.json"
+        report_path = work_dir / "header-diagnostic-report.json"
+        job = {
+            "schema_version": 2,
+            "action": "diagnose-header-v2",
+            "ownership_nonce": secrets.token_hex(16),
+            "word_pid_path": str(work_dir / "word-owner.json"),
+            "report_path": str(report_path),
+            "sample_paths": [str(path) for path in samples],
+        }
+        _write_json_exclusive(job_path, job)
+        adapter.run(job_path, timeout_seconds=timeout_seconds)
+        report = _read_header_diagnostic_report(report_path)
+    after = tuple(_sha256_file(path) for path in samples)
+    if after != before:
+        raise CalibrationSourceChangedError()
+    return ListHeaderDiagnosticResult(
+        word_version=report["word_version"],
+        samples=tuple(
+            ListHeaderDiagnosticEvidence(
+                source_sha256=source_hash,
+                list_header_paragraph_count=item[
+                    "list_header_paragraph_count"
+                ],
+                paragraphs=tuple(
+                    HeaderParagraphObservation(**paragraph)
+                    for paragraph in item["paragraphs"]
+                ),
+            )
+            for source_hash, item in zip(
+                before, report["samples"], strict=True
+            )
+        ),
+    )
 
 
 def inspect_list_templates_v2(
@@ -1048,6 +1205,94 @@ def _resolve_sample_paths(
             "LIST calibration samples must be existing Word files"
         )
     return resolved
+
+
+def _read_header_diagnostic_report(path: Path) -> dict[str, Any]:
+    payload = _read_json_object(path, "header diagnostic")
+    expected = {
+        "schema_version",
+        "action",
+        "word_version",
+        "samples",
+    }
+    if (
+        set(payload) != expected
+        or payload.get("schema_version") != 2
+        or payload.get("action") != "diagnose-header-v2"
+        or not isinstance(payload.get("word_version"), str)
+        or not payload["word_version"]
+        or not isinstance(payload.get("samples"), list)
+        or len(payload["samples"]) != 3
+    ):
+        raise ValueError(
+            "Word header diagnostic report does not match schema version 2"
+        )
+    parsed = []
+    evidence_keys = {
+        "list_header_paragraph_count",
+        "paragraphs",
+    }
+    paragraph_keys = {
+        "paragraph_number",
+        "visible_character_count",
+        "fixed_label_ids",
+        "fullwidth_colon_count",
+        "inline_shape_count",
+        "ends_with_cell_marker",
+    }
+    for index, item in enumerate(payload["samples"], start=1):
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"sample_id", "evidence"}
+            or item.get("sample_id") != f"sample-{index:03d}"
+            or not isinstance(item.get("evidence"), dict)
+            or set(item["evidence"]) != evidence_keys
+        ):
+            raise ValueError(
+                "Word header diagnostic report does not match schema version 2"
+            )
+        evidence = item["evidence"]
+        count = evidence["list_header_paragraph_count"]
+        paragraphs = evidence["paragraphs"]
+        if (
+            isinstance(count, bool)
+            or not isinstance(count, int)
+            or not 1 <= count <= 32
+            or not isinstance(paragraphs, list)
+            or len(paragraphs) != count
+        ):
+            raise ValueError(
+                "Word header diagnostic report does not match schema version 2"
+            )
+        normalized_paragraphs = []
+        for number, paragraph in enumerate(paragraphs, start=1):
+            if (
+                not isinstance(paragraph, dict)
+                or set(paragraph) != paragraph_keys
+                or paragraph.get("paragraph_number") != number
+                or not isinstance(paragraph.get("fixed_label_ids"), list)
+            ):
+                raise ValueError(
+                    "Word header diagnostic report does not match schema version 2"
+                )
+            normalized_paragraphs.append(
+                {
+                    **paragraph,
+                    "fixed_label_ids": tuple(
+                        paragraph["fixed_label_ids"]
+                    ),
+                }
+            )
+        parsed.append(
+            {
+                "list_header_paragraph_count": count,
+                "paragraphs": tuple(normalized_paragraphs),
+            }
+        )
+    return {
+        "word_version": payload["word_version"],
+        "samples": tuple(parsed),
+    }
 
 
 def _read_inspection_batch_report(path: Path) -> dict[str, Any]:

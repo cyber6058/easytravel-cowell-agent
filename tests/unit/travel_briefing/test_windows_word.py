@@ -73,7 +73,7 @@ def schema_two_job(tmp_path, *, action="inspect-v2", extra=None):
         "word_pid_path": str((tmp_path / "word-owner.json").resolve()),
         "report_path": str((tmp_path / "report.json").resolve()),
     }
-    if action == "inspect-v2":
+    if action in {"inspect-v2", "diagnose-header-v2"}:
         payload["sample_paths"] = [
             str((tmp_path / f"sample-{index}.doc").resolve())
             for index in range(1, 4)
@@ -262,7 +262,9 @@ def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
     }
 
 
-@pytest.mark.parametrize("action", ["inspect-v2", "calibrate"])
+@pytest.mark.parametrize(
+    "action", ["inspect-v2", "diagnose-header-v2", "calibrate"]
+)
 def test_schema_two_word_jobs_accept_only_the_exact_bounded_shape(
     tmp_path, action
 ):

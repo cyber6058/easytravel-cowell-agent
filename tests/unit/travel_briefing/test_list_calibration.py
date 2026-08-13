@@ -16,6 +16,7 @@ from travel_briefing.list_calibration import (
     build_calibration_manifest,
     calibrate_list_templates,
     compare_calibration_samples,
+    diagnose_list_header_contract,
     manifest_sha256,
     normalized_structure_fingerprint,
     select_base_sample,
@@ -423,6 +424,120 @@ def source_files(tmp_path) -> tuple[Path, ...]:
     for index, path in enumerate(paths, start=1):
         path.write_bytes(f"synthetic-{index}".encode())
     return paths
+
+
+class SyntheticHeaderDiagnosticAdapter:
+    def __init__(
+        self,
+        paragraph_counts: tuple[int, int, int],
+        *,
+        mutate_source: bool = False,
+        add_private_field: bool = False,
+    ) -> None:
+        self.paragraph_counts = paragraph_counts
+        self.mutate_source = mutate_source
+        self.add_private_field = add_private_field
+        self.actions: list[str] = []
+
+    def run(self, job_path: Path, *, timeout_seconds: int) -> None:
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        self.actions.append(job["action"])
+        assert job["action"] == "diagnose-header-v2"
+        assert timeout_seconds == 120
+        if self.mutate_source:
+            Path(job["sample_paths"][1]).write_bytes(b"changed")
+        samples = []
+        for index, count in enumerate(self.paragraph_counts, start=1):
+            evidence = {
+                "list_header_paragraph_count": count,
+                "paragraphs": [
+                    {
+                        "paragraph_number": number,
+                        "visible_character_count": 0 if number == count else 12,
+                        "fixed_label_ids": (
+                            ["group_code"]
+                            if number == 2
+                            else ["group_name"]
+                            if number == 3
+                            else []
+                        ),
+                        "fullwidth_colon_count": (
+                            1 if number in {2, 3} else 0
+                        ),
+                        "inline_shape_count": 0,
+                        "ends_with_cell_marker": number == count,
+                    }
+                    for number in range(1, count + 1)
+                ],
+            }
+            if self.add_private_field:
+                evidence["private_text"] = "must not be accepted"
+            samples.append(
+                {
+                    "sample_id": f"sample-{index:03d}",
+                    "evidence": evidence,
+                }
+            )
+        Path(job["report_path"]).write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "action": "diagnose-header-v2",
+                    "word_version": "16.0-synthetic",
+                    "samples": samples,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+
+def test_header_diagnosis_is_read_only_hash_bound_and_private_safe(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = SyntheticHeaderDiagnosticAdapter((5, 5, 5))
+
+    result = diagnose_list_header_contract(samples, adapter=adapter)
+
+    assert adapter.actions == ["diagnose-header-v2"]
+    assert result.classification == "COMMON_EXPECTED_CONTRACT_MISMATCH"
+    assert [item.list_header_paragraph_count for item in result.samples] == [
+        5,
+        5,
+        5,
+    ]
+    payload = result.to_dict()
+    serialized = json.dumps(payload)
+    assert payload["source_hashes_unchanged"] is True
+    assert all(
+        item["field_path"] == "list_header_paragraph_count"
+        for item in payload["samples"]
+    )
+    assert "LIST-" not in serialized
+    assert "private_text" not in serialized
+
+
+def test_header_diagnosis_detects_source_mutation(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = SyntheticHeaderDiagnosticAdapter(
+        (4, 5, 4),
+        mutate_source=True,
+    )
+
+    with pytest.raises(ValueError) as captured:
+        diagnose_list_header_contract(samples, adapter=adapter)
+
+    assert getattr(captured.value, "code", "") == "CALIBRATION_SOURCE_CHANGED"
+    assert adapter.actions == ["diagnose-header-v2"]
+
+
+def test_header_diagnosis_rejects_any_unapproved_report_field(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = SyntheticHeaderDiagnosticAdapter(
+        (4, 4, 4),
+        add_private_field=True,
+    )
+
+    with pytest.raises(ValueError, match="schema version 2"):
+        diagnose_list_header_contract(samples, adapter=adapter)
 
 
 def test_calibration_inspects_before_building_and_publishes_private_safe_files(

@@ -116,6 +116,22 @@ function Assert-WordJobShape {
                 throw "WORD_JOB_SCHEMA_INVALID"
             }
         }
+        "diagnose-header-v2" {
+            Assert-ExactProperties -Value $Job -Expected (
+                $common + @("sample_paths")
+            )
+            if ($Job.sample_paths.Count -ne 3) {
+                throw "WORD_JOB_SCHEMA_INVALID"
+            }
+            $resolvedSamples = @(
+                $Job.sample_paths | ForEach-Object {
+                    [IO.Path]::GetFullPath([string]$_)
+                }
+            )
+            if (@($resolvedSamples | Select-Object -Unique).Count -ne 3) {
+                throw "WORD_JOB_SCHEMA_INVALID"
+            }
+        }
         "calibrate" {
             Assert-ExactProperties -Value $Job -Expected (
                 $common +
@@ -251,6 +267,57 @@ function Get-Cell {
 function Get-CellText {
     param([Parameter(Mandatory = $true)]$Cell)
     return ([string]$Cell.Range.Text).TrimEnd([char]13, [char]7).Trim()
+}
+
+function Get-HeaderParagraphEvidence {
+    param([Parameter(Mandatory = $true)]$Document)
+    $headerCell = Get-Cell `
+        -Table $Document.Tables.Item(1) `
+        -Row 1 `
+        -Column 1
+    $paragraphCount = [int]$headerCell.Range.Paragraphs.Count
+    if ($paragraphCount -lt 1 -or $paragraphCount -gt 32) {
+        throw "LIST_HEADER_PARAGRAPH_COUNT_UNBOUNDED"
+    }
+    $knownLabels = Get-DefaultAnchorChecks
+    $groupCodeLabel = [string]$knownLabels[0].label
+    $groupNameLabel = [string]$knownLabels[1].label
+    $paragraphs = @()
+    for ($number = 1; $number -le $paragraphCount; $number += 1) {
+        $paragraph = $headerCell.Range.Paragraphs.Item($number)
+        $range = $paragraph.Range
+        $rawText = [string]$range.Text
+        $visibleText = $rawText.TrimEnd([char]13, [char]7).Trim()
+        $labelIds = @()
+        if ($visibleText.Contains($groupCodeLabel)) {
+            $labelIds += "group_code"
+        }
+        if ($visibleText.Contains($groupNameLabel)) {
+            $labelIds += "group_name"
+        }
+        $colonCount = 0
+        foreach ($character in $visibleText.ToCharArray()) {
+            if ($character -eq [char]0xFF1A) {
+                $colonCount += 1
+            }
+        }
+        $endsWithCellMarker = (
+            $rawText.Length -gt 0 -and
+            [int][char]$rawText[$rawText.Length - 1] -eq 7
+        )
+        $paragraphs += [ordered]@{
+            paragraph_number = $number
+            visible_character_count = [int]$visibleText.Length
+            fixed_label_ids = @($labelIds)
+            fullwidth_colon_count = [int]$colonCount
+            inline_shape_count = [int]$range.InlineShapes.Count
+            ends_with_cell_marker = [bool]$endsWithCellMarker
+        }
+    }
+    return [ordered]@{
+        list_header_paragraph_count = $paragraphCount
+        paragraphs = $paragraphs
+    }
 }
 
 function Test-SquareGraphic {
@@ -842,6 +909,54 @@ function Invoke-InspectV2 {
     }) -Path ([string]$Job.report_path)
 }
 
+function Invoke-DiagnoseHeaderV2 {
+    param(
+        [Parameter(Mandatory = $true)]$Job,
+        [Parameter(Mandatory = $true)]$Word
+    )
+    if ($Job.sample_paths.Count -ne 3) {
+        throw "LIST_CALIBRATION_SAMPLE_COUNT_INVALID"
+    }
+    $sampleReports = @()
+    for ($index = 0; $index -lt 3; $index += 1) {
+        $samplePath = [IO.Path]::GetFullPath(
+            [string]$Job.sample_paths[$index]
+        )
+        if (
+            -not [IO.File]::Exists($samplePath) -or
+            [IO.Path]::GetExtension($samplePath).ToLowerInvariant() -notin @(".doc", ".docx")
+        ) {
+            throw "LIST_CALIBRATION_SAMPLE_INVALID"
+        }
+        $document = $null
+        try {
+            $document = $Word.Documents.Open($samplePath, $false, $true)
+            $evidence = Get-HeaderParagraphEvidence -Document $document
+            $sampleReports += [ordered]@{
+                sample_id = "sample-$('{0:D3}' -f ($index + 1))"
+                evidence = $evidence
+            }
+        }
+        finally {
+            if ($null -ne $document) {
+                try { $document.Close($false) } catch {}
+                try {
+                    [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                        $document
+                    )
+                }
+                catch {}
+            }
+        }
+    }
+    Write-JsonExclusive -Value ([ordered]@{
+        schema_version = 2
+        action = "diagnose-header-v2"
+        word_version = [string]$Word.Version
+        samples = $sampleReports
+    }) -Path ([string]$Job.report_path)
+}
+
 function Invoke-Calibrate {
     param(
         [Parameter(Mandatory = $true)]$Job,
@@ -1140,6 +1255,9 @@ try {
         "probe" { Invoke-Probe -Job $job -Word $word }
         "inspect" { Invoke-Inspect -Job $job -Word $word }
         "inspect-v2" { Invoke-InspectV2 -Job $job -Word $word }
+        "diagnose-header-v2" {
+            Invoke-DiagnoseHeaderV2 -Job $job -Word $word
+        }
         "calibrate" { Invoke-Calibrate -Job $job -Word $word }
         "patch" { Invoke-Patch -Job $job -Word $word }
         default { throw "WORD_JOB_ACTION_UNSUPPORTED" }

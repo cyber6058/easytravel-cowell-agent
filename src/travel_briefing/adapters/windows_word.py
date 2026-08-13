@@ -172,6 +172,7 @@ def _read_job_metadata(path: Path) -> dict[str, str | Path]:
         "patch",
         "render",
         "inspect-v2",
+        "diagnose-header-v2",
         "calibrate",
     }:
         raise WordGenerationError("Word automation job action is unsupported")
@@ -203,7 +204,7 @@ def _validate_schema_two_job(
         "report_path",
     }
     action = payload["action"]
-    if action == "inspect-v2":
+    if action in {"inspect-v2", "diagnose-header-v2"}:
         expected = common | {"sample_paths"}
         samples = payload.get("sample_paths")
         if (
