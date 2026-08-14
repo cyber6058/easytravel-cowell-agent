@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C `0x80131501` 的通用 v3 安全診斷已完成
-離線實作，但尚未讀取私人 LIST 或啟動 Word 實跑。沒有 master／manifest／config／
-新 review；最近完整離線測試為 `455 passed, 3 skipped`，尚未 push。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C v3 真實診斷已將 `0x80131501` 精確定位
+到第一份來源 table 1 的 `Borders` collection 存取。來源與既有 reviews 均未變，沒有
+master／manifest／config；安全 private diagnostic 已保留，沒有 retry 或 push。
 
 ## 這次做了什麼
 
@@ -582,12 +582,32 @@
   PowerShell parser、compileall 與 `git diff --check` 均通過。三個 skip 維持既有
   opt-in integrations。本回合未讀私人 LIST、未啟動 Word、未建立或改動任何 private
   artifact，因此 v3 診斷的實機結果仍為**未驗證**。
+- 2026-08-14 使用者明確核准一次 `diagnose-gate-c-v3` 真實診斷，不包含 calibration
+  retry；開工的 `git pull --ff-only` 回傳 `Already up to date.`。執行前再次驗證三份
+  來源與五份既有 private reviews／diagnostics 的 SHA-256 全部符合既定值；全新診斷
+  目錄不存在，既有 master／manifest 數量為 0，真實 config 不存在，WINWORD 為 0。
+- 20 秒 hidden owned probe 成功，原文為
+  `{"available": true, "word_version": "16.0"}`。唯一一次 v3 診斷隨後完成且沒有
+  retry：classification `ERROR_OBSERVED`、完成 source inspections `0`、base sample
+  `sample-000`；checkpoint 為 phase `inspect-source`、sample `sample-001`、operation
+  `table-borders`、field path `samples[0].inspection.border_digest`、table `1`，HRESULT
+  `-2146233087`（`0x80131501`，low word `5377`）、adapter code `NONE`。
+- 此 checkpoint 證實 row-access 修正已越過先前候選路徑，新的阻塞點是 schema-2
+  inspection 對 `$table.Borders` collection 的列舉；尚未核准或執行 border-access
+  修正，也未校準。
+- 診斷後三份來源與五份既有 private reviews／diagnostics 的 SHA-256 全部不變，
+  WINWORD 為 0；沒有 master、manifest、config、PDF 或 PNG。全新 private 目錄只含
+  `gate-c-v3-diagnostic.json`，共 745 bytes，SHA-256 為
+  `60d5de09c7d995f53a268723625145b24ceff19dce17d538e743761d58eed22c`；內容僅含既定
+  hashes、checkpoint 與錯誤欄位，不含來源路徑、檔名或文件文字。本回合沒有程式碼
+  變更，因此未重跑測試，最近完整離線結果維持 `455 passed, 3 skipped in 7.34s`。
 
 ## 下一步
 
-Gate C `diagnose-gate-c-v3` 已完成離線實作與回歸。下一步仍需由使用者另行明確核准，
-才可在新的 exclusive private 目錄讀取三份 LIST 並執行一次 v3 真實診斷；該授權不
-包含校準 retry。取得 checkpoint 後先離線修正，再另行決定是否核准一次新校準。只有 Gate C
+Gate C v3 真實診斷已定位 `$table.Borders` collection。下一步先做可逆的離線
+border-access 修正：移除 schema-2 border fingerprint 對 collection enumeration 的
+依賴，改用固定 prototype cells／固定 border types 並加入 checkpoint 與防回歸測試；
+完成完整離線回歸後，再另行決定是否核准新的真實診斷或校準。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -605,10 +625,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail、mixed-width 與 row-access
-契約均已完成離線修正；新校準在 Word adapter `run-action` 以 `0x80131501` fail closed。
-通用 v3 安全診斷已完成離線實作，但尚未實跑，因此仍沒有可定位 operation／field 的
-真實 checkpoint。既有五份 private reviews／diagnostics 不能覆蓋或刪除；新的 Word
-診斷回合、再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
+契約均已完成離線修正；v3 真實診斷已證實目前 `0x80131501` 發生於 sample 1／table 1
+的 `$table.Borders` collection 列舉，早於任何完成的 source inspection 或 calibration
+mutation。既有六份 private reviews／diagnostics 不能覆蓋或刪除；border-access 修正
+先離線進行，新的 Word 診斷、再次讀取三份 LIST 或重跑 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
