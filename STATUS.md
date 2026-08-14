@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C header-tail normalization 離線修正已
-完成，改為清空 tail 並保留 Word cell 終止段落，另加入 observed-count checkpoint。
-尚未啟動 Word 驗證；最近完整離線測試為 `456 passed, 3 skipped`，沒有 push。
+說明會產生器 0.2.0 的 Gate I 已完成；最新 Gate C v3 真實診斷已完整通過三份 source
+inspection、diagnostic-only mutation 與 SaveAs2，classification `NOT_REPRODUCED`。
+來源與既有 artifacts 未變，尚未執行正式校準，沒有 master／manifest／config 或 push。
 
 ## 這次做了什麼
 
@@ -655,12 +655,32 @@
 - 本回合未讀私人 LIST、未啟動 Word、未執行診斷或校準，也未建立或改動任何 private
   artifact；最近 v3 diagnostic SHA-256 仍為
   `e3c469bb5fb727efc36aeeffa1d7532c9d232d82d0321f45d961ed0ec156cec2`，WINWORD 為 0。
+- 2026-08-14 使用者以「好 下一步」核准一次新的 `diagnose-gate-c-v3` 真實診斷，
+  不包含 calibration retry；開工的 `git pull --ff-only` 回傳 `Already up to date.`。
+  執行前再次驗證三份來源與七份既有 private artifacts 的 SHA-256 全部符合既定值；
+  全新診斷目錄不存在，master／manifest 數量為 0，真實 config 不存在，WINWORD 為 0。
+- 20 秒 hidden owned probe 成功，原文為
+  `{"available": true, "word_version": "16.0"}`。唯一一次 v3 診斷隨後完整通過且
+  沒有 retry：classification `NOT_REPRODUCED`、三份 source inspections 全部完成、
+  base `sample-001`、checkpoint phase／operation 均為 `complete`；HRESULT `0`／
+  `0x00000000`、low word `0`、adapter code `NONE`。
+- 此結果證實 schema-2 source inspection、header-tail normalization、其餘
+  diagnostic-only working-copy mutations 與 `SaveAs2` 路徑均已在 Word `16.0` 實跑
+  完成；diagnostic master 依設計在 temporary boundary 內清除，沒有正式 master 或
+  manifest。這不等於 Gate C 正式 calibration 已執行或成功。
+- 診斷後三份來源與七份既有 private artifacts 的 SHA-256 全部不變，WINWORD 為 0；
+  沒有 master、manifest、config、PDF、PNG 或 diagnostic master。全新 private 目錄
+  只含 `gate-c-v3-diagnostic.json`，共 696 bytes，SHA-256 為
+  `c7db1141eb42240069dae1faa060917d2783ff25367b9a731d425534b4117d25`；內容僅含既定
+  hashes、complete checkpoint 與零錯誤欄位，不含來源路徑、檔名或文件文字。本回合
+  沒有程式碼變更，因此未重跑測試，最近完整離線結果維持
+  `456 passed, 3 skipped in 7.61s`。
 
 ## 下一步
 
-Gate C header-tail normalization 離線修正已完成。下一步需由使用者另行明確核准，
-才可讀取三份 LIST 並執行一次新的 `diagnose-gate-c-v3` 真實診斷；該授權不包含
-calibration retry。若 diagnostic-only mutation 完整通過，再另行決定是否核准新校準。只有 Gate C
+Gate C v3 真實診斷已完整通過。下一步需由使用者另行明確核准一次新的正式 Gate C
+`calibrate-list`；該授權只允許在全新 exclusive private 目錄執行一次，沒有 retry，
+且仍不包含 Gate V 視覺 QA、config 寫入或 Gate E。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -677,11 +697,11 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 已完成，沒有剩餘安裝阻塞。Gate C mixed-width、row-access 與 border-access
-修正均已由 v3 真實診斷證實三份 source inspection 可完整通過；header-tail
-normalization 的額外 CR 路徑已離線修正，但尚未實機驗證。既有七份 private
-reviews／diagnostics 不能覆蓋或刪除；新的 Word 診斷、再次讀取三份 LIST 或重跑
-calibration 都需要新的明確核准。
+Gate I 已完成，沒有剩餘安裝阻塞。Gate C v3 真實診斷已證實三份 source inspection、
+所有 diagnostic-only mutation 與 SaveAs2 可完整通過；目前沒有已知 Word automation
+技術阻塞，但正式 calibration、master／manifest 建立與其契約比較仍未執行。既有八份
+private artifacts 不能覆蓋或刪除；再次讀取三份 LIST 或執行 calibration 都需要新的
+明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
