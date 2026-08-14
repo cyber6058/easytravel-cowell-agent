@@ -30,6 +30,7 @@ from .config import load_config
 from .list_calibration import (
     CalibrationContractError,
     calibrate_list_templates,
+    diagnose_calibration_conflicts,
 )
 from .adapters.windows_word import WindowsWordAdapter
 from .models import BriefingDraft, DraftStatus
@@ -83,6 +84,22 @@ def build_parser() -> argparse.ArgumentParser:
     calibrate.add_argument("--generated-at")
     calibrate.add_argument("--format", choices=("text", "json"), default="text")
     calibrate.set_defaults(handler=run_calibrate_list)
+
+    diagnose = subparsers.add_parser(
+        "diagnose-list-conflicts",
+        help="Inspect three LIST samples without calibrating a master",
+    )
+    diagnose.add_argument(
+        "--sample",
+        action="append",
+        type=Path,
+        required=True,
+    )
+    diagnose.add_argument("--private-dir", type=Path, required=True)
+    diagnose.add_argument(
+        "--format", choices=("text", "json"), default="text"
+    )
+    diagnose.set_defaults(handler=run_diagnose_list_conflicts)
 
     prepare = subparsers.add_parser("prepare", help="Create a reviewable manifest")
     prepare.add_argument("--url")
@@ -285,6 +302,74 @@ def run_calibrate_list(args: argparse.Namespace) -> dict[str, Any]:
             for item in result.sample_evidence
         ],
         "word_version": result.word_version,
+    }
+
+
+def run_diagnose_list_conflicts(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    samples = tuple(path.expanduser().resolve() for path in args.sample)
+    if len(samples) != 3 or len(set(samples)) != 3:
+        raise BriefingInputError(
+            "diagnose-list-conflicts requires exactly three unique samples"
+        )
+    if any(
+        not path.is_file() or path.suffix.casefold() not in {".doc", ".docx"}
+        for path in samples
+    ):
+        raise BriefingInputError(
+            "diagnose-list-conflicts samples must be existing DOC or DOCX files"
+        )
+    private = args.private_dir.expanduser().resolve()
+    if private.exists():
+        raise BriefingInputError(
+            "diagnose-list-conflicts private directory must not exist"
+        )
+    try:
+        private.mkdir(parents=True)
+        result = diagnose_calibration_conflicts(
+            samples,
+            adapter=WindowsWordAdapter(
+                script_path=(
+                    _briefing_scripts_root()
+                    / "patch_list_template.ps1"
+                )
+            ),
+            timeout_seconds=180,
+        )
+        status = (
+            "needs_review"
+            if result.classification == "TEMPLATE_CONTRACT_CONFLICT"
+            else "ok"
+        )
+        report_path = private / "conflict-diagnosis.json"
+        report_payload = {
+            "schema_version": SCHEMA_VERSION,
+            "status": status,
+            "command": "diagnose-list-conflicts",
+            "stage": "compare-samples",
+            "classification": result.classification,
+            "word_version": result.word_version,
+            "source_sha256": list(result.source_sha256),
+            "field_paths": list(result.field_paths),
+        }
+        if result.conflict_matrix is not None:
+            report_payload["conflict_matrix"] = result.conflict_matrix
+        _write_json_exclusive(report_path, report_payload)
+    except Exception:
+        try:
+            if private.is_dir() and not any(private.iterdir()):
+                private.rmdir()
+        except OSError:
+            pass
+        raise
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": status,
+        "command": "diagnose-list-conflicts",
+        "classification": result.classification,
+        "field_paths": list(result.field_paths),
+        "report": str(report_path),
     }
 
 

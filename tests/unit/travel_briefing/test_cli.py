@@ -129,10 +129,26 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
         ]
     )
 
+    diagnosed = parser.parse_args(
+        [
+            "diagnose-list-conflicts",
+            "--sample",
+            "one.doc",
+            "--sample",
+            "two.doc",
+            "--sample",
+            "three.docx",
+            "--private-dir",
+            "private",
+        ]
+    )
+
     assert prepared.command == "prepare"
     assert checked.command == "check-script"
     assert rendered.tts == "yating"
     assert calibrated.command == "calibrate-list"
+    assert diagnosed.command == "diagnose-list-conflicts"
+    assert not hasattr(diagnosed, "pdftoppm")
     assert not hasattr(rendered, "template")
     with pytest.raises(cli.BriefingInputError):
         parser.parse_args(
@@ -234,6 +250,103 @@ def test_calibrate_list_cli_uses_exact_three_samples_and_safe_json(
     assert captured["adapter"].script_path.name == (
         "patch_list_template.ps1"
     )
+
+
+def test_diagnose_list_conflicts_is_read_only_and_writes_safe_report(
+    monkeypatch, capsys, tmp_path
+):
+    samples = tuple(
+        tmp_path / f"private-source-{number}.doc"
+        for number in range(3)
+    )
+    for number, sample in enumerate(samples):
+        sample.write_bytes(f"synthetic-{number}".encode())
+    private = tmp_path / "new-private"
+    matrix = {
+        "schema_version": 1,
+        "stage": "compare-samples",
+        "classification": "TEMPLATE_CONTRACT_CONFLICT",
+        "fields": [],
+    }
+
+    def diagnose(paths, **kwargs):
+        assert paths == samples
+        assert kwargs["timeout_seconds"] == 180
+        assert kwargs["adapter"].script_path.name == (
+            "patch_list_template.ps1"
+        )
+        return SimpleNamespace(
+            word_version="16.0-synthetic",
+            source_sha256=("a" * 64, "b" * 64, "c" * 64),
+            classification="TEMPLATE_CONTRACT_CONFLICT",
+            field_paths=("style_digest",),
+            conflict_matrix=matrix,
+        )
+
+    monkeypatch.setattr(cli, "diagnose_calibration_conflicts", diagnose)
+    monkeypatch.setattr(
+        cli,
+        "calibrate_list_templates",
+        lambda *args, **kwargs: pytest.fail("calibration must not run"),
+    )
+    exit_code = cli.main(
+        [
+            "diagnose-list-conflicts",
+            *sum((["--sample", str(path)] for path in samples), []),
+            "--private-dir",
+            str(private),
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    report_path = private / "conflict-diagnosis.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert exit_code == 20
+    assert payload == {
+        "schema_version": 1,
+        "status": "needs_review",
+        "command": "diagnose-list-conflicts",
+        "classification": "TEMPLATE_CONTRACT_CONFLICT",
+        "field_paths": ["style_digest"],
+        "report": str(report_path),
+    }
+    assert report == {
+        "schema_version": 1,
+        "status": "needs_review",
+        "command": "diagnose-list-conflicts",
+        "stage": "compare-samples",
+        "classification": "TEMPLATE_CONTRACT_CONFLICT",
+        "word_version": "16.0-synthetic",
+        "source_sha256": ["a" * 64, "b" * 64, "c" * 64],
+        "field_paths": ["style_digest"],
+        "conflict_matrix": matrix,
+    }
+    serialized = json.dumps(report)
+    assert all(sample.name not in serialized for sample in samples)
+    assert not (private / "LIST-master.docx").exists()
+    assert not (private / "calibration-manifest.json").exists()
+
+
+def test_diagnose_list_conflicts_rejects_existing_private_dir_before_word(
+    monkeypatch, tmp_path
+):
+    samples = tuple(tmp_path / f"sample-{number}.doc" for number in range(3))
+    for sample in samples:
+        sample.write_bytes(b"synthetic")
+    private = tmp_path / "private"
+    private.mkdir()
+    monkeypatch.setattr(
+        cli,
+        "diagnose_calibration_conflicts",
+        lambda *args, **kwargs: pytest.fail("Word inspection must not run"),
+    )
+
+    with pytest.raises(cli.BriefingInputError, match="must not exist"):
+        cli.run_diagnose_list_conflicts(
+            SimpleNamespace(sample=samples, private_dir=private)
+        )
 
 
 def test_calibrate_list_rejects_existing_private_dir_before_word(tmp_path):

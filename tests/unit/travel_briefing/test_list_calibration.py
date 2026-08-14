@@ -17,6 +17,7 @@ from travel_briefing.list_calibration import (
     build_calibration_conflict_matrix,
     calibrate_list_templates,
     compare_calibration_samples,
+    diagnose_calibration_conflicts,
     diagnose_gate_c_5992,
     diagnose_gate_c_v3,
     diagnose_list_header_contract,
@@ -528,6 +529,46 @@ def source_files(tmp_path) -> tuple[Path, ...]:
     for index, path in enumerate(paths, start=1):
         path.write_bytes(f"synthetic-{index}".encode())
     return paths
+
+
+def test_conflict_diagnosis_only_inspects_and_returns_safe_matrix(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = SyntheticCalibrationAdapter(
+        (
+            inspection(5, dynamic_seed="private-a"),
+            inspection(6, dynamic_seed="private-b"),
+            replace(
+                inspection(7, dynamic_seed="private-c"),
+                style_digest=digest("changed-style"),
+            ),
+        )
+    )
+
+    result = diagnose_calibration_conflicts(samples, adapter=adapter)
+
+    assert adapter.actions == ["inspect-v2"]
+    assert result.classification == "TEMPLATE_CONTRACT_CONFLICT"
+    assert result.field_paths == ("style_digest",)
+    assert result.conflict_matrix is not None
+    assert "private-" not in json.dumps(result.conflict_matrix)
+
+
+def test_conflict_diagnosis_stops_after_compatible_inspection(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = SyntheticCalibrationAdapter(
+        (
+            inspection(5, dynamic_seed="a"),
+            inspection(6, dynamic_seed="b"),
+            inspection(7, dynamic_seed="c"),
+        )
+    )
+
+    result = diagnose_calibration_conflicts(samples, adapter=adapter)
+
+    assert adapter.actions == ["inspect-v2"]
+    assert result.classification == "NORMALIZED_LAYOUT_COMPATIBLE"
+    assert result.field_paths == ()
+    assert result.conflict_matrix is None
 
 
 class SyntheticHeaderDiagnosticAdapter:

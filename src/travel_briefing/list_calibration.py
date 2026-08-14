@@ -974,6 +974,15 @@ class ListInspectionBatchResult:
 
 
 @dataclass(frozen=True, slots=True)
+class CalibrationConflictDiagnosisResult:
+    word_version: str
+    source_sha256: tuple[str, str, str]
+    classification: str
+    field_paths: tuple[str, ...]
+    conflict_matrix: dict[str, Any] | None
+
+
+@dataclass(frozen=True, slots=True)
 class ListCalibrationBuildResult:
     master_path: Path
     manifest_path: Path
@@ -1156,6 +1165,41 @@ def inspect_list_templates_v2(
             )
         ),
         word_version=report["word_version"],
+    )
+
+
+def diagnose_calibration_conflicts(
+    sample_paths: tuple[Path, ...],
+    *,
+    adapter: WordCalibrationAdapter,
+    timeout_seconds: int = 180,
+) -> CalibrationConflictDiagnosisResult:
+    inspected = inspect_list_templates_v2(
+        sample_paths,
+        adapter=adapter,
+        timeout_seconds=timeout_seconds,
+    )
+    field_paths = _calibration_conflict_field_paths(inspected.samples)
+    conflict_matrix = (
+        build_calibration_conflict_matrix(
+            inspected.samples,
+            field_paths,
+        )
+        if field_paths
+        else None
+    )
+    return CalibrationConflictDiagnosisResult(
+        word_version=inspected.word_version,
+        source_sha256=tuple(
+            item.source_sha256 for item in inspected.samples
+        ),
+        classification=(
+            "TEMPLATE_CONTRACT_CONFLICT"
+            if field_paths
+            else "NORMALIZED_LAYOUT_COMPATIBLE"
+        ),
+        field_paths=field_paths,
+        conflict_matrix=conflict_matrix,
     )
 
 
@@ -1415,16 +1459,8 @@ def compare_calibration_samples(
         {item.source_sha256 for item in samples}
     ) != 3:
         raise ValueError("calibration requires three unique samples")
-    reference = _normalized_layout_dict(samples[0].inspection)
-    conflicts: set[str] = set()
-    for item in samples[1:]:
-        current = _normalized_layout_dict(item.inspection)
-        conflicts.update(
-            key for key in reference if reference[key] != current.get(key)
-        )
-        conflicts.update(key for key in current if key not in reference)
-    if conflicts:
-        field_paths = tuple(conflicts)
+    field_paths = _calibration_conflict_field_paths(samples)
+    if field_paths:
         raise CalibrationContractError(
             field_paths,
             conflict_matrix=build_calibration_conflict_matrix(
@@ -1432,6 +1468,7 @@ def compare_calibration_samples(
                 field_paths,
             ),
         )
+    reference = _normalized_layout_dict(samples[0].inspection)
     common_names = {
         profile.name
         for profile in samples[0].inspection.adaptive_profiles
@@ -1827,6 +1864,24 @@ def _read_gate_c_diagnostic_report(
         adapter_code=result["error"]["adapter_code"],
     )
     return result
+
+
+def _calibration_conflict_field_paths(
+    samples: tuple[ListCalibrationSample, ...],
+) -> tuple[str, ...]:
+    if len(samples) != 3 or len(
+        {item.source_sha256 for item in samples}
+    ) != 3:
+        raise ValueError("calibration requires three unique samples")
+    reference = _normalized_layout_dict(samples[0].inspection)
+    conflicts: set[str] = set()
+    for item in samples[1:]:
+        current = _normalized_layout_dict(item.inspection)
+        conflicts.update(
+            key for key in reference if reference[key] != current.get(key)
+        )
+        conflicts.update(key for key in current if key not in reference)
+    return tuple(sorted(conflicts))
 
 
 def _report_calibration_stage(
