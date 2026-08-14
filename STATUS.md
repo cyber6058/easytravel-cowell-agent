@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；一次新的真實 read-only component diagnosis
-已完成且沒有 retry，證實 style component 一致，差異集中於 font、paragraph、border、
-daily prototypes 與 floating shape；三份模板仍需 OP decision，仍無 master／manifest／config。
+說明會產生器 0.2.0 的 Gate I 已完成；component normalization decision policy 已完成
+離線實作與 synthetic 驗證，明確禁止多數決並對 mixed sentinel、shape bundle 與元件集合
+fail closed；尚未產生真實 decision table，仍無 master／manifest／config。
 
 ## 這次做了什麼
 
@@ -822,15 +822,33 @@ daily prototypes 與 floating shape；三份模板仍需 OP decision，仍無 ma
   `86a9cecab6d1b544ee62ebe336ad7368bb591fc072deeeecd1c66ffb5ba5f12a`；report 不含
   大寫 LIST 檔名、Downloads、`source_path` 或 Windows 路徑。本回合沒有程式碼變更，
   最近完整離線回歸維持 `469 passed, 3 skipped in 7.34s`。
+- 2026-08-14 使用者以「好 下一步」核准純離線 normalization decision table 開發；
+  開工 `git pull --ff-only` 回傳 `Already up to date.`。新增
+  `build_component_normalization_decision_table()`：固定 19 個 prototype style/font/
+  paragraph IDs、114 個 border IDs、daily header/body 各 7 個 IDs，以及非空且跨樣本一致的
+  synthetic shape ID/kind；缺漏、多出、重複或 shape kind 不合法均 fail closed，不得由
+  base 選擇修補。
+- 完整一致的 bundle 標為 `PRESERVE_UNANIMOUS`；任何差異標為 `REQUIRES_OP_BASE`，OP
+  日後必須以 exact source SHA-256 與 component-value SHA-256 綁定選擇。兩份相同不會
+  觸發多數決。`9999999` 會把該來源列為不合格 base 並將整表分類為
+  `BLOCKED_MIXED_VALUE`；floating shape 的 left/top/width/height 固定作為一個
+  `geometry_bundle`，不得拼裝。Daily body 是 style/font/paragraph 決策後的 derived audit，
+  不建立第二套可能互相矛盾的決策。
+- 新政策文件為
+  `docs/specs/2026-08-14-list-normalization-decision-table.md`。本回合沒有讀取真實 LIST、
+  既有 private report、啟動 Word、執行 diagnosis/calibration 或修改正式 comparison；
+  `_normalized_layout_dict()` 與 `compare_calibration_samples()` 未變。針對性測試原文為
+  `35 passed`，`compileall OK`，`git diff --check` 通過；完整離線回歸原文為
+  `476 passed, 3 skipped in 7.69s`。
 
 ## 下一步
 
-本次真實 read-only component diagnosis 額度已消耗且沒有 retry。下一步先離線制定
-明確的 normalization decision table：哪些 component 可由產品契約固定、哪些需要 OP
-選定 base，並對 `9999999` sentinel 與 floating shape 建立 fail-closed 規則；不得因
-多數決或方便而自行選值。完成設計與 synthetic 測試後，才另行決定是否核准新的正式
-Gate C calibration。沒有新核准不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或
-calibration。只有 Gate C
+本次 normalization decision policy 已完成。下一步純離線新增 strict artifact reader、
+`plan-list-normalization` CLI 與 OP-choice artifact schema／validator，先以 synthetic report
+驗證 exclusive private output、來源/component hash 綁定、缺漏／多餘決策拒絕及 sentinel
+來源不可選。之後才另行決定是否核准讀取既有 private-safe component report 來產生真實
+decision table；產表後仍須 OP 明確逐項決策，不能直接進 Gate C calibration。沒有新核准
+不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次

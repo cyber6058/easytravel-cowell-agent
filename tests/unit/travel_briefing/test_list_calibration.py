@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import copy
 from pathlib import Path
 from dataclasses import replace
 
@@ -11,10 +12,12 @@ from travel_briefing.list_calibration import (
     CalibrationContractError,
     ListCalibrationManifest,
     ListCalibrationSample,
+    ListComponentDiagnosisResult,
     ListLayoutProfile,
     ListTemplateInspectionV2,
     build_calibration_manifest,
     build_calibration_conflict_matrix,
+    build_component_normalization_decision_table,
     calibrate_list_templates,
     compare_calibration_samples,
     diagnose_calibration_conflicts,
@@ -702,6 +705,232 @@ def test_component_diagnosis_rejects_extra_report_fields(tmp_path):
                 add_private_field=True
             ),
         )
+
+
+def component_result(
+    *evidence: dict[str, object],
+) -> ListComponentDiagnosisResult:
+    return ListComponentDiagnosisResult(
+        word_version="16.0-synthetic",
+        source_sha256=("a" * 64, "b" * 64, "c" * 64),
+        samples=tuple(evidence),
+    )
+
+
+def complete_component_evidence() -> dict[str, object]:
+    cell_ids = tuple(
+        f"table-{table:03d}-row-{row:03d}-column-{column:03d}"
+        for table, row, count in ((1, 2, 3), (2, 2, 6), (3, 2, 7), (4, 1, 3))
+        for column in range(1, count + 1)
+    )
+    styles = [{
+        "cell_id": cell_id,
+        "name_sha256": digest("style"),
+        "vertical_alignment": 0,
+        "shading_color": 0,
+    } for cell_id in cell_ids]
+    fonts = [{
+        "cell_id": cell_id,
+        "name_sha256": digest("font"),
+        "name_far_east_sha256": digest("east"),
+        "size_points": 10.0,
+        "bold": 0,
+        "italic": 0,
+        "underline": 0,
+        "color": 0,
+    } for cell_id in cell_ids]
+    paragraphs = [{
+        "cell_id": cell_id,
+        "alignment": 0,
+        "space_before_points": 0.0,
+        "space_after_points": 0.0,
+        "line_spacing_points": 12.0,
+        "line_spacing_rule": 0,
+        "left_indent_points": 0.0,
+        "right_indent_points": 0.0,
+        "first_line_indent_points": 0.0,
+    } for cell_id in cell_ids]
+    sides = ("top", "left", "bottom", "right", "diagonal-down", "diagonal-up")
+    borders = [{
+        "border_id": f"{cell_id}-{side}",
+        "line_style": 1,
+        "line_width": 4,
+        "color": 0,
+    } for cell_id in cell_ids for side in sides]
+    daily_header = [{
+        "cell_id": f"table-003-row-001-column-{column:03d}",
+        "style_sha256": digest("header-style"),
+        "font_sha256": digest("header-font"),
+        "paragraph_sha256": digest("header-paragraph"),
+        "component_sha256": digest("header-component"),
+    } for column in range(1, 8)]
+    daily_body = [{
+        "cell_id": f"table-003-row-002-column-{column:03d}",
+        "style_sha256": digest("body-style"),
+        "font_sha256": digest("body-font"),
+        "paragraph_sha256": digest("body-paragraph"),
+        "component_sha256": digest("body-component"),
+    } for column in range(1, 8)]
+    return {
+        "styles": styles,
+        "fonts": fonts,
+        "paragraphs": paragraphs,
+        "borders": borders,
+        "daily_header": daily_header,
+        "daily_body": daily_body,
+        "shapes": [{
+            "shape_id": "floating-001",
+            "kind": "floating",
+            "left_points": 1.0,
+            "top_points": 2.0,
+            "width_points": 10.0,
+            "height_points": 10.0,
+        }],
+    }
+
+
+def component_samples() -> list[dict[str, object]]:
+    base = complete_component_evidence()
+    return [copy.deepcopy(base) for _ in range(3)]
+
+
+def test_normalization_table_never_uses_majority_as_a_decision():
+    samples = component_samples()
+    values = (10.0, 10.0, 12.0)
+    for sample, size in zip(samples, values, strict=True):
+        sample["fonts"][9]["size_points"] = size
+
+    table = build_component_normalization_decision_table(
+        component_result(*samples)
+    )
+
+    assert table["classification"] == "REQUIRES_OP_DECISION"
+    assert table["policy"]["automatic_majority_selection"] is False
+    assert len(table["decisions"]) == 1
+    decision = table["decisions"][0]
+    assert decision["component_family"] == "fonts"
+    assert decision["changed_properties"] == ["size_points"]
+    assert decision["status"] == "REQUIRES_OP_BASE"
+    assert decision["eligible_source_sha256"] == [
+        "a" * 64, "b" * 64, "c" * 64
+    ]
+    assert [item["source_sha256"] for item in decision["samples"]] == [
+        "a" * 64, "b" * 64, "c" * 64
+    ]
+    assert all(item["eligible_as_base"] for item in decision["samples"])
+
+
+def test_normalization_table_preserves_complete_unanimous_contract():
+    table = build_component_normalization_decision_table(
+        component_result(*component_samples())
+    )
+
+    assert table["classification"] == "NORMALIZATION_READY"
+    assert table["decisions"] == []
+    assert table["blockers"] == []
+    assert table["preserved_unanimous_counts"] == {
+        "styles": 19,
+        "fonts": 19,
+        "paragraphs": 19,
+        "borders": 114,
+        "daily_header": 7,
+        "daily_body": 7,
+        "shapes": 1,
+    }
+
+
+def test_normalization_table_blocks_mixed_value_source_as_base():
+    samples = component_samples()
+    values = ((15.0, 4), (9999999.0, 9999999), (12.0, 0))
+    for sample, (spacing, rule) in zip(samples, values, strict=True):
+        sample["paragraphs"][2]["line_spacing_points"] = spacing
+        sample["paragraphs"][2]["line_spacing_rule"] = rule
+
+    table = build_component_normalization_decision_table(
+        component_result(*samples)
+    )
+
+    assert table["classification"] == "BLOCKED_MIXED_VALUE"
+    decision = table["decisions"][0]
+    assert decision["status"] == "BLOCKED_MIXED_VALUE"
+    assert decision["eligible_source_sha256"] == ["a" * 64, "c" * 64]
+    assert decision["ineligible_source_sha256"] == ["b" * 64]
+
+
+def test_normalization_table_groups_floating_shape_geometry():
+    samples = component_samples()
+    for index, sample in enumerate(samples, start=1):
+        sample["shapes"][0].update({
+            "left_points": float(index),
+            "top_points": float(index + 1),
+            "width_points": float(index + 10),
+            "height_points": float(index + 10),
+        })
+
+    table = build_component_normalization_decision_table(
+        component_result(*samples)
+    )
+
+    assert len(table["decisions"]) == 1
+    assert table["decisions"][0]["component_family"] == "shapes"
+    assert table["decisions"][0]["changed_properties"] == [
+        "height_points", "left_points", "top_points", "width_points"
+    ]
+    assert table["decisions"][0]["selection_unit"] == "geometry_bundle"
+
+
+def test_normalization_table_fails_closed_on_component_presence_change():
+    samples = component_samples()
+    samples[0]["shapes"].append({
+        "shape_id": "floating-002",
+        "kind": "floating",
+        "left_points": 1.0,
+        "top_points": 2.0,
+        "width_points": 10.0,
+        "height_points": 10.0,
+    })
+
+    table = build_component_normalization_decision_table(
+        component_result(*samples)
+    )
+
+    assert table["classification"] == "COMPONENT_CONTRACT_CONFLICT"
+    assert table["blockers"] == [{
+        "component_family": "shapes",
+        "reason": "COMPONENT_ID_SET_CHANGED",
+    }]
+    assert table["decisions"] == []
+
+
+def test_normalization_table_fails_closed_on_shape_kind_change():
+    samples = component_samples()
+    samples[2]["shapes"][0]["kind"] = "inline"
+
+    with pytest.raises(ValueError, match="component normalization evidence"):
+        build_component_normalization_decision_table(
+            component_result(*samples)
+        )
+
+
+def test_normalization_table_marks_daily_body_as_derived_audit():
+    samples = component_samples()
+    for index, sample in enumerate(samples, start=1):
+        sample["daily_body"][0].update({
+            "font_sha256": digest(f"font-{index}"),
+            "paragraph_sha256": digest(f"paragraph-{index}"),
+            "component_sha256": digest(f"component-{index}"),
+        })
+
+    table = build_component_normalization_decision_table(
+        component_result(*samples)
+    )
+
+    assert table["decisions"] == []
+    assert table["derived_audits"] == [{
+        "component_family": "daily_body",
+        "component_id": "table-003-row-002-column-001",
+        "status": "VERIFY_AFTER_COMPONENT_NORMALIZATION",
+    }]
 
 
 class SyntheticHeaderDiagnosticAdapter:

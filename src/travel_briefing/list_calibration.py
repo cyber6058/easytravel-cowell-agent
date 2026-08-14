@@ -1088,6 +1088,258 @@ def diagnose_list_components(
     )
 
 
+def build_component_normalization_decision_table(
+    diagnosis: ListComponentDiagnosisResult,
+) -> dict[str, Any]:
+    """Build a fail-closed OP decision table without selecting a majority."""
+    if not isinstance(diagnosis, ListComponentDiagnosisResult):
+        raise TypeError("component diagnosis result is required")
+    if len(diagnosis.samples) != 3 or len(diagnosis.source_sha256) != 3:
+        raise ValueError("component decision table requires three samples")
+    source_hashes = tuple(
+        _validate_nonzero_sha256(value, "component source SHA-256")
+        for value in diagnosis.source_sha256
+    )
+    if len(set(source_hashes)) != 3:
+        raise ValueError("component decision table sources must be unique")
+    for evidence in diagnosis.samples:
+        _validate_component_evidence(
+            evidence, "component normalization evidence"
+        )
+
+    family_policy = (
+        ("styles", "cell_id", "style_bundle"),
+        ("fonts", "cell_id", "font_bundle"),
+        ("paragraphs", "cell_id", "paragraph_bundle"),
+        ("borders", "border_id", "border_bundle"),
+        ("daily_header", "cell_id", "daily_header_bundle"),
+        ("daily_body", "cell_id", "derived_audit"),
+        ("shapes", "shape_id", "geometry_bundle"),
+    )
+    prototype_ids = {
+        f"table-{table:03d}-row-{row:03d}-column-{column:03d}"
+        for table, row, count in ((1, 2, 3), (2, 2, 6), (3, 2, 7), (4, 1, 3))
+        for column in range(1, count + 1)
+    }
+    border_sides = {
+        "top", "left", "bottom", "right", "diagonal-down", "diagonal-up"
+    }
+    expected_identity_sets = {
+        "styles": prototype_ids,
+        "fonts": prototype_ids,
+        "paragraphs": prototype_ids,
+        "borders": {
+            f"{component_id}-{side}"
+            for component_id in prototype_ids
+            for side in border_sides
+        },
+        "daily_header": {
+            f"table-003-row-001-column-{column:03d}"
+            for column in range(1, 8)
+        },
+        "daily_body": {
+            f"table-003-row-002-column-{column:03d}"
+            for column in range(1, 8)
+        },
+    }
+    maps_by_family: dict[str, tuple[dict[str, dict[str, Any]], ...]] = {}
+    blockers: list[dict[str, str]] = []
+    for family, identity_key, _selection_unit in family_policy:
+        family_maps = []
+        duplicate_found = False
+        for evidence in diagnosis.samples:
+            items = evidence[family]
+            assert isinstance(items, list)
+            component_map = {
+                str(item[identity_key]): item for item in items
+            }
+            if len(component_map) != len(items):
+                duplicate_found = True
+            family_maps.append(component_map)
+        maps = tuple(family_maps)
+        maps_by_family[family] = maps
+        if duplicate_found:
+            blockers.append(
+                {
+                    "component_family": family,
+                    "reason": "DUPLICATE_COMPONENT_ID",
+                }
+            )
+            continue
+        identity_sets = tuple(set(item) for item in maps)
+        if identity_sets[0] != identity_sets[1] or identity_sets[1] != identity_sets[2]:
+            blockers.append(
+                {
+                    "component_family": family,
+                    "reason": "COMPONENT_ID_SET_CHANGED",
+                }
+            )
+            continue
+        if (
+            family in expected_identity_sets
+            and identity_sets[0] != expected_identity_sets[family]
+        ) or (family == "shapes" and not identity_sets[0]):
+            blockers.append(
+                {
+                    "component_family": family,
+                    "reason": "REQUIRED_COMPONENT_SET_INVALID",
+                }
+            )
+            continue
+        if family == "shapes" and any(
+            len({str(item[component_id]["kind"]) for item in maps}) != 1
+            for component_id in identity_sets[0]
+        ):
+            blockers.append(
+                {
+                    "component_family": family,
+                    "reason": "SHAPE_KIND_CHANGED",
+                }
+            )
+
+    policy = {
+        "contract_fixed": ["component_identity_set", "shape_kind"],
+        "unanimous_components": "PRESERVE_UNANIMOUS",
+        "conflicting_components": "REQUIRES_OP_BASE",
+        "mixed_value_sentinel": 9999999,
+        "mixed_value_action": "BLOCK_SOURCE_AS_BASE",
+        "floating_shape_selection": "GEOMETRY_BUNDLE",
+        "automatic_majority_selection": False,
+        "op_choice_binding": "SOURCE_AND_COMPONENT_SHA256",
+    }
+    if blockers:
+        return {
+            "schema_version": 1,
+            "stage": "component-normalization-decision",
+            "classification": "COMPONENT_CONTRACT_CONFLICT",
+            "source_sha256": list(source_hashes),
+            "policy": policy,
+            "preserved_unanimous_counts": {},
+            "decisions": [],
+            "derived_audits": [],
+            "blockers": blockers,
+        }
+
+    decisions = []
+    derived_audits = []
+    preserved_counts: dict[str, int] = {}
+    mixed_value_found = False
+    for family, identity_key, selection_unit in family_policy:
+        maps = maps_by_family[family]
+        preserved = 0
+        for component_id in sorted(maps[0]):
+            components = tuple(item[component_id] for item in maps)
+            canonical = tuple(
+                _canonical_layout_value(item) for item in components
+            )
+            if canonical[0] == canonical[1] == canonical[2]:
+                preserved += 1
+                continue
+            if family == "daily_body":
+                derived_audits.append(
+                    {
+                        "component_family": family,
+                        "component_id": component_id,
+                        "status": "VERIFY_AFTER_COMPONENT_NORMALIZATION",
+                    }
+                )
+                continue
+            changed_properties = sorted(
+                key
+                for key in components[0]
+                if key != identity_key
+                and len(
+                    {
+                        _canonical_layout_value(item[key])
+                        for item in components
+                    }
+                )
+                > 1
+            )
+            sentinel_flags = tuple(
+                _contains_word_mixed_value(item) for item in components
+            )
+            status = (
+                "BLOCKED_MIXED_VALUE"
+                if any(sentinel_flags)
+                else "REQUIRES_OP_BASE"
+            )
+            if any(sentinel_flags):
+                mixed_value_found = True
+            decisions.append(
+                {
+                    "decision_id": f"{family}:{component_id}",
+                    "component_family": family,
+                    "component_id": component_id,
+                    "selection_unit": selection_unit,
+                    "changed_properties": changed_properties,
+                    "status": status,
+                    "eligible_source_sha256": [
+                        source_hash
+                        for source_hash, blocked in zip(
+                            source_hashes, sentinel_flags, strict=True
+                        )
+                        if not blocked
+                    ],
+                    "ineligible_source_sha256": [
+                        source_hash
+                        for source_hash, blocked in zip(
+                            source_hashes, sentinel_flags, strict=True
+                        )
+                        if blocked
+                    ],
+                    "samples": [
+                        {
+                            "source_sha256": source_hash,
+                            "component_value_sha256": hashlib.sha256(
+                                value.encode("utf-8")
+                            ).hexdigest(),
+                            "eligible_as_base": not blocked,
+                        }
+                        for source_hash, value, blocked in zip(
+                            source_hashes,
+                            canonical,
+                            sentinel_flags,
+                            strict=True,
+                        )
+                    ],
+                }
+            )
+        preserved_counts[family] = preserved
+    classification = (
+        "BLOCKED_MIXED_VALUE"
+        if mixed_value_found
+        else "REQUIRES_OP_DECISION"
+        if decisions
+        else "DERIVED_AUDIT_PENDING"
+        if derived_audits
+        else "NORMALIZATION_READY"
+    )
+    return {
+        "schema_version": 1,
+        "stage": "component-normalization-decision",
+        "classification": classification,
+        "source_sha256": list(source_hashes),
+        "policy": policy,
+        "preserved_unanimous_counts": preserved_counts,
+        "decisions": decisions,
+        "derived_audits": derived_audits,
+        "blockers": [],
+    }
+
+
+def _contains_word_mixed_value(value: object) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return value == 9999999
+    if isinstance(value, dict):
+        return any(_contains_word_mixed_value(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_contains_word_mixed_value(item) for item in value)
+    return False
+
+
 def diagnose_gate_c_5992(
     sample_paths: tuple[Path, ...],
     *,
