@@ -42,6 +42,28 @@ class ListRecalibrationRequiredError(BriefingInputError):
         self.code = "LIST_RECALIBRATION_REQUIRED"
 
 
+class CalibrationContractConflictError(BriefingCliError):
+    def __init__(
+        self,
+        *,
+        stage: str,
+        field_paths: tuple[str, ...],
+        review_path: str,
+    ) -> None:
+        from .exit_codes import NEEDS_REVIEW
+
+        super().__init__(
+            code="CALIBRATION_CONTRACT_CONFLICT",
+            message="Calibration samples have conflicting structural fields",
+            exit_code=NEEDS_REVIEW,
+            details={
+                "stage": stage,
+                "field_paths": list(field_paths),
+                "review": review_path,
+            },
+        )
+
+
 class BriefingSourceError(BriefingCliError):
     def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         from .exit_codes import SOURCE_ERROR

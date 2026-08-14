@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -19,10 +20,17 @@ from .capabilities import (
     word_com_registered,
     yating_registered,
 )
-from .errors import BriefingCliError, BriefingInputError
+from .errors import (
+    BriefingCliError,
+    BriefingInputError,
+    CalibrationContractConflictError,
+)
 from .exit_codes import INTERNAL_ERROR, NEEDS_REVIEW, SUCCESS
 from .config import load_config
-from .list_calibration import calibrate_list_templates
+from .list_calibration import (
+    CalibrationContractError,
+    calibrate_list_templates,
+)
 from .adapters.windows_word import WindowsWordAdapter
 from .models import BriefingDraft, DraftStatus
 from .workflow import (
@@ -210,6 +218,13 @@ def run_calibrate_list(args: argparse.Namespace) -> dict[str, Any]:
         raise BriefingInputError(
             "calibrate-list pdftoppm must be an existing executable"
         )
+    source_hashes = [_sha256_file(path) for path in samples]
+    stage = "inspect-samples"
+
+    def record_stage(value: str) -> None:
+        nonlocal stage
+        stage = value
+
     try:
         private.mkdir(parents=True)
         result = calibrate_list_templates(
@@ -224,7 +239,26 @@ def run_calibrate_list(args: argparse.Namespace) -> dict[str, Any]:
             ),
             created_at=_generated_at(args.generated_at),
             timeout_seconds=180,
+            on_stage=record_stage,
         )
+    except CalibrationContractError as error:
+        review_path = private / "calibration-review.json"
+        _write_json_exclusive(
+            review_path,
+            {
+                "schema_version": SCHEMA_VERSION,
+                "status": "needs_review",
+                "error_code": error.code,
+                "stage": stage,
+                "source_sha256": source_hashes,
+                "field_paths": list(error.field_paths),
+            },
+        )
+        raise CalibrationContractConflictError(
+            stage=stage,
+            field_paths=error.field_paths,
+            review_path=str(review_path),
+        ) from error
     except Exception:
         try:
             if private.is_dir() and not any(private.iterdir()):
@@ -414,6 +448,20 @@ def _generated_at(value: str | None) -> str:
     if value is not None:
         return value
     return datetime.now().astimezone().replace(microsecond=0).isoformat()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _write_json_exclusive(path: Path, payload: dict[str, Any]) -> None:
+    with path.open("x", encoding="utf-8", newline="\n") as stream:
+        json.dump(payload, stream, ensure_ascii=False, indent=2)
+        stream.write("\n")
 
 
 def _read_json_object(path: Path | None, *, label: str) -> dict[str, object] | None:

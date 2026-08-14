@@ -691,6 +691,7 @@ def test_calibration_inspects_before_building_and_publishes_private_safe_files(
             inspection(7, dynamic_seed="c"),
         )
     )
+    stages = []
 
     result = calibrate_list_templates(
         samples,
@@ -698,9 +699,17 @@ def test_calibration_inspects_before_building_and_publishes_private_safe_files(
         manifest_path=manifest_path,
         adapter=adapter,
         created_at="2026-08-13T09:00:00+08:00",
+        on_stage=stages.append,
     )
 
     assert adapter.actions == ["inspect-v2", "calibrate"]
+    assert stages == [
+        "inspect-samples",
+        "compare-samples",
+        "calibrate-master",
+        "validate-master",
+        "publish",
+    ]
     assert result.master_path == master.resolve()
     assert result.manifest_path == manifest_path.resolve()
     assert result.master_sha256 == hashlib.sha256(
@@ -762,6 +771,7 @@ def test_calibration_conflict_and_existing_destinations_fail_before_mutation(
     adapter = SyntheticCalibrationAdapter(
         (inspection(5), inspection(6), conflicted)
     )
+    stages = []
 
     with pytest.raises(
         CalibrationContractError,
@@ -773,8 +783,10 @@ def test_calibration_conflict_and_existing_destinations_fail_before_mutation(
             manifest_path=tmp_path / "manifest.json",
             adapter=adapter,
             created_at="2026-08-13T09:00:00+08:00",
+            on_stage=stages.append,
         )
     assert adapter.actions == ["inspect-v2"]
+    assert stages == ["inspect-samples", "compare-samples"]
 
     master = tmp_path / "owned.docx"
     master.write_bytes(b"user owned")

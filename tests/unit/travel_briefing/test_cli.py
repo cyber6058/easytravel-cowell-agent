@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import pytest
 
 from travel_briefing import cli
 from travel_briefing import capabilities
+from travel_briefing.list_calibration import CalibrationContractError
 from travel_briefing.models import DraftStatus
 
 
@@ -251,6 +253,67 @@ def test_calibrate_list_rejects_existing_private_dir_before_word(tmp_path):
 
     with pytest.raises(cli.BriefingInputError, match="must not exist"):
         cli.run_calibrate_list(args)
+
+
+def test_calibrate_list_contract_conflict_writes_safe_exclusive_review(
+    monkeypatch, capsys, tmp_path
+):
+    samples = tuple(
+        tmp_path / f"private-source-{number}.doc"
+        for number in range(3)
+    )
+    for number, sample in enumerate(samples):
+        sample.write_bytes(f"synthetic-{number}".encode())
+    pdftoppm = tmp_path / "pdftoppm.exe"
+    pdftoppm.write_bytes(b"synthetic")
+    private = tmp_path / "new-private"
+
+    def conflict(paths, **kwargs):
+        kwargs["on_stage"]("inspect-samples")
+        kwargs["on_stage"]("compare-samples")
+        raise CalibrationContractError(("margins_points", "style_digest"))
+
+    monkeypatch.setattr(cli, "calibrate_list_templates", conflict)
+    exit_code = cli.main(
+        [
+            "calibrate-list",
+            *sum((["--sample", str(path)] for path in samples), []),
+            "--private-dir",
+            str(private),
+            "--pdftoppm",
+            str(pdftoppm),
+            "--generated-at",
+            "2026-08-14T12:00:00+08:00",
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    review_path = private / "calibration-review.json"
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    assert exit_code == 20
+    assert payload["error"]["code"] == "CALIBRATION_CONTRACT_CONFLICT"
+    assert payload["error"]["details"] == {
+        "stage": "compare-samples",
+        "field_paths": ["margins_points", "style_digest"],
+        "review": str(review_path),
+    }
+    assert review == {
+        "schema_version": 1,
+        "status": "needs_review",
+        "error_code": "CALIBRATION_CONTRACT_CONFLICT",
+        "stage": "compare-samples",
+        "source_sha256": [
+            hashlib.sha256(sample.read_bytes()).hexdigest()
+            for sample in samples
+        ],
+        "field_paths": ["margins_points", "style_digest"],
+    }
+    serialized = json.dumps(review)
+    assert all(sample.name not in serialized for sample in samples)
+    assert not (private / "LIST-master.docx").exists()
+    assert not (private / "calibration-manifest.json").exists()
 
 
 def test_doctor_preserves_changed_calibration_status_without_private_paths(

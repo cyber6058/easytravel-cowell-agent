@@ -8,7 +8,7 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from .template_contract import (
     A4_HEIGHT_POINTS,
@@ -22,6 +22,13 @@ from .template_contract import (
 
 CALIBRATION_SCHEMA_VERSION = 2
 CALIBRATION_GENERATOR_VERSION = "list-calibration/2"
+CALIBRATION_STAGES = (
+    "inspect-samples",
+    "compare-samples",
+    "calibrate-master",
+    "validate-master",
+    "publish",
+)
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _PROFILE_NAME_PATTERN = re.compile(r"[a-z][a-z0-9-]*")
 _A4_TOLERANCE_POINTS = 2.0
@@ -1154,6 +1161,7 @@ def calibrate_list_templates(
     adapter: WordCalibrationAdapter,
     created_at: str,
     timeout_seconds: int = 180,
+    on_stage: Callable[[str], None] | None = None,
 ) -> ListCalibrationBuildResult:
     samples = _resolve_sample_paths(sample_paths)
     master = master_path.expanduser().resolve()
@@ -1170,11 +1178,13 @@ def calibrate_list_templates(
         )
     if timeout_seconds <= 0:
         raise ValueError("LIST calibration timeout must be positive")
+    _report_calibration_stage(on_stage, "inspect-samples")
     inspected = inspect_list_templates_v2(
         samples,
         adapter=adapter,
         timeout_seconds=timeout_seconds,
     )
+    _report_calibration_stage(on_stage, "compare-samples")
     comparison = compare_calibration_samples(inspected.samples)
     base_index = next(
         index
@@ -1182,6 +1192,7 @@ def calibrate_list_templates(
         if item.source_sha256 == comparison.base_sample_sha256
     )
     before_calibration = tuple(_sha256_file(path) for path in samples)
+    _report_calibration_stage(on_stage, "calibrate-master")
     with tempfile.TemporaryDirectory(
         prefix="easytravel-list-calibrate-"
     ) as temp:
@@ -1203,6 +1214,7 @@ def calibrate_list_templates(
         }
         _write_json_exclusive(job_path, job)
         adapter.run(job_path, timeout_seconds=timeout_seconds)
+        _report_calibration_stage(on_stage, "validate-master")
         report = _read_calibration_report(report_path)
         after_calibration = tuple(_sha256_file(path) for path in samples)
         if after_calibration != before_calibration:
@@ -1241,6 +1253,7 @@ def calibrate_list_templates(
             word_version=report["word_version"],
             calibration_report_sha256=_sha256_file(report_path),
         )
+        _report_calibration_stage(on_stage, "publish")
         master.parent.mkdir(parents=True, exist_ok=True)
         manifest_destination.parent.mkdir(parents=True, exist_ok=True)
         master_created = False
@@ -1702,6 +1715,16 @@ def _read_gate_c_diagnostic_report(
         adapter_code=result["error"]["adapter_code"],
     )
     return result
+
+
+def _report_calibration_stage(
+    callback: Callable[[str], None] | None,
+    stage: str,
+) -> None:
+    if stage not in CALIBRATION_STAGES:
+        raise ValueError("unsupported calibration stage")
+    if callback is not None:
+        callback(stage)
 
 
 def _read_inspection_batch_report(path: Path) -> dict[str, Any]:
