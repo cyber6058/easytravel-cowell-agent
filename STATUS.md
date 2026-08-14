@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；component normalization decision policy 已完成
-離線實作與 synthetic 驗證，明確禁止多數決並對 mixed sentinel、shape bundle 與元件集合
-fail closed；尚未產生真實 decision table，仍無 master／manifest／config。
+說明會產生器 0.2.0 的 Gate I 已完成；strict component artifact reader、離線
+`plan-list-normalization` 與 hash-bound OP-choice validator 已完成 synthetic 驗證；尚未讀取
+既有 private report 或產生真實 decision table，仍無 master／manifest／config。
 
 ## 這次做了什麼
 
@@ -840,14 +840,32 @@ fail closed；尚未產生真實 decision table，仍無 master／manifest／con
   `_normalized_layout_dict()` 與 `compare_calibration_samples()` 未變。針對性測試原文為
   `35 passed`，`compileall OK`，`git diff --check` 通過；完整離線回歸原文為
   `476 passed, 3 skipped in 7.69s`。
+- 2026-08-14 使用者以「好 下一步」核准純離線 normalization planner 開發；開工
+  `git pull --ff-only` 回傳 `Already up to date.`。新增 strict
+  `load_component_diagnosis_artifact()`，只接受 `diagnose-list-components` 產出的 exact
+  schema-1／status／command／stage、三個唯一且非零 source SHA-256、Word version 與三份
+  allowlisted component evidence；額外欄位、缺欄、錯誤 hash 或不合法 component 立即拒絕。
+- 新增 `plan-list-normalization --component-report ... --private-dir ...`。Parser 不接受
+  `--sample`，命令不建立 Word adapter、不呼叫 diagnosis/calibration，只在不存在的 private
+  目錄 exclusive-create `normalization-decision-table.json`；非 ready classification 回傳
+  `needs_review`／exit 20，完全一致才回傳 `ok`。輸入不合法時只移除空目錄，不覆蓋或刪除
+  任何已有 artifact。
+- Decision table 以 canonical JSON 計算 semantic SHA-256。OP-choice artifact exact schema
+  只允許 table hash、原三個 source hashes 與 choices；每個 choice 必須完整且唯一對應一個
+  decision ID，同時匹配 eligible source SHA-256 與該來源的 component-value SHA-256。
+  缺漏、多餘、重複、額外欄位、table/source/component hash 不符、選到 mixed sentinel
+  來源，或試圖用 choice 解決 component-contract conflict 都會拒絕。政策文件已補上 schema。
+- 本回合僅建立 synthetic component report 驗證 planner，沒有讀取既有 private report、
+  真實 LIST、啟動 Word 或執行 calibration；正式 comparison/calibration 接線未修改。
+  針對性測試原文為 `62 passed`，`compileall OK`，`git diff --check` 通過；完整離線回歸
+  原文為 `487 passed, 3 skipped in 7.55s`。
 
 ## 下一步
 
-本次 normalization decision policy 已完成。下一步純離線新增 strict artifact reader、
-`plan-list-normalization` CLI 與 OP-choice artifact schema／validator，先以 synthetic report
-驗證 exclusive private output、來源/component hash 綁定、缺漏／多餘決策拒絕及 sentinel
-來源不可選。之後才另行決定是否核准讀取既有 private-safe component report 來產生真實
-decision table；產表後仍須 OP 明確逐項決策，不能直接進 Gate C calibration。沒有新核准
+本次離線 planner 與 OP-choice validator 已完成。下一步需另行明確核准「讀取一次既有
+private-safe component report，離線產生真實 normalization decision table」；該回合只可
+執行一次 `plan-list-normalization`、使用全新 private 目錄且不得啟動 Word。產表後仍須
+由 OP 對每個 decision 明確選擇 eligible base，不能直接進 Gate C calibration。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。

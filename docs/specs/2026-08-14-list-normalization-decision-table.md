@@ -42,6 +42,36 @@ decision ID, one eligible source SHA-256, and its matching component-value
 SHA-256. Choosing by filename, sample order, median, majority, or convenience is
 not valid.
 
+## Offline artifacts
+
+`plan-list-normalization` accepts only an existing `component-diagnosis.json`
+with the exact schema emitted by `diagnose-list-components`. It never accepts
+LIST paths and does not construct a Word adapter. It writes one exclusively
+created `normalization-decision-table.json` in a new private directory.
+
+The semantic decision-table SHA-256 is calculated from canonical JSON. An OP
+choice artifact has exactly these fields:
+
+```json
+{
+  "schema_version": 1,
+  "decision_table_sha256": "<sha256>",
+  "source_sha256": ["<sample-001>", "<sample-002>", "<sample-003>"],
+  "choices": [
+    {
+      "decision_id": "<family:synthetic-component-id>",
+      "selected_source_sha256": "<eligible-source-sha256>",
+      "selected_component_value_sha256": "<bound-component-sha256>"
+    }
+  ]
+}
+```
+
+Validation rejects unknown fields, a mismatched table hash or source set,
+missing, extra, or duplicate choices, an ineligible mixed-value source, and a
+component-value hash that does not belong to the selected source. A component
+contract conflict cannot be resolved with an OP-choice artifact.
+
 ## Gate boundary
 
 The decision table is offline evidence only. Calibration remains blocked until:

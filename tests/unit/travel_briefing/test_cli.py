@@ -12,6 +12,10 @@ from travel_briefing import cli
 from travel_briefing import capabilities
 from travel_briefing.list_calibration import CalibrationContractError
 from travel_briefing.models import DraftStatus
+from tests.unit.travel_briefing.test_list_calibration import (
+    component_artifact,
+    component_samples,
+)
 
 
 def test_doctor_reports_offline_capabilities_without_exposing_secrets(
@@ -151,6 +155,13 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
             "--private-dir", "private-components",
         ]
     )
+    planned = parser.parse_args(
+        [
+            "plan-list-normalization",
+            "--component-report", "component-report.json",
+            "--private-dir", "normalization-plan",
+        ]
+    )
 
     assert prepared.command == "prepare"
     assert checked.command == "check-script"
@@ -158,6 +169,8 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
     assert calibrated.command == "calibrate-list"
     assert diagnosed.command == "diagnose-list-conflicts"
     assert component_diagnosed.command == "diagnose-list-components"
+    assert planned.command == "plan-list-normalization"
+    assert not hasattr(planned, "sample")
     assert not hasattr(diagnosed, "pdftoppm")
     assert not hasattr(rendered, "template")
     with pytest.raises(cli.BriefingInputError):
@@ -403,6 +416,132 @@ def test_diagnose_list_components_writes_only_safe_private_report(
     serialized = json.dumps(report)
     assert all(sample.name not in serialized for sample in samples)
     assert not (private / "LIST-master.docx").exists()
+
+
+def test_plan_list_normalization_is_offline_and_exclusive(
+    monkeypatch, capsys, tmp_path
+):
+    component_report = tmp_path / "component-report.json"
+    component_report.write_text("{}", encoding="utf-8")
+    private = tmp_path / "normalization-plan"
+    diagnosis = SimpleNamespace(source_sha256=("a" * 64,) * 3)
+    table = {
+        "schema_version": 1,
+        "stage": "component-normalization-decision",
+        "classification": "REQUIRES_OP_DECISION",
+        "source_sha256": ["a" * 64, "b" * 64, "c" * 64],
+        "policy": {},
+        "preserved_unanimous_counts": {},
+        "decisions": [],
+        "derived_audits": [],
+        "blockers": [],
+    }
+
+    def load(path):
+        assert path == component_report.resolve()
+        return diagnosis
+
+    monkeypatch.setattr(cli, "load_component_diagnosis_artifact", load)
+    monkeypatch.setattr(
+        cli,
+        "build_component_normalization_decision_table",
+        lambda value: table if value is diagnosis else pytest.fail(),
+    )
+    monkeypatch.setattr(
+        cli,
+        "component_normalization_decision_table_sha256",
+        lambda value: "d" * 64 if value is table else pytest.fail(),
+    )
+    monkeypatch.setattr(
+        cli,
+        "diagnose_list_components",
+        lambda *args, **kwargs: pytest.fail("Word must not run"),
+    )
+    monkeypatch.setattr(
+        cli,
+        "calibrate_list_templates",
+        lambda *args, **kwargs: pytest.fail("calibration must not run"),
+    )
+
+    exit_code = cli.main([
+        "plan-list-normalization",
+        "--component-report", str(component_report),
+        "--private-dir", str(private),
+        "--format", "json",
+    ])
+
+    report_path = private / "normalization-decision-table.json"
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 20
+    assert json.loads(report_path.read_text(encoding="utf-8")) == table
+    assert payload == {
+        "schema_version": 1,
+        "status": "needs_review",
+        "command": "plan-list-normalization",
+        "classification": "REQUIRES_OP_DECISION",
+        "decision_table_sha256": "d" * 64,
+        "report": str(report_path),
+    }
+    assert not (private / "LIST-master.docx").exists()
+
+
+def test_plan_list_normalization_rejects_existing_private_dir_before_read(
+    monkeypatch, tmp_path
+):
+    component_report = tmp_path / "component-report.json"
+    component_report.write_text("{}", encoding="utf-8")
+    private = tmp_path / "existing"
+    private.mkdir()
+    monkeypatch.setattr(
+        cli,
+        "load_component_diagnosis_artifact",
+        lambda *args: pytest.fail("report must not be read"),
+    )
+
+    with pytest.raises(cli.BriefingInputError, match="must not exist"):
+        cli.run_plan_list_normalization(SimpleNamespace(
+            component_report=component_report,
+            private_dir=private,
+        ))
+
+
+def test_plan_list_normalization_accepts_strict_synthetic_report(
+    monkeypatch, capsys, tmp_path
+):
+    component_report = tmp_path / "component-report.json"
+    component_report.write_text(
+        json.dumps(component_artifact(component_samples())),
+        encoding="utf-8",
+    )
+    private = tmp_path / "normalization-plan"
+    monkeypatch.setattr(
+        cli,
+        "diagnose_list_components",
+        lambda *args, **kwargs: pytest.fail("Word must not run"),
+    )
+    monkeypatch.setattr(
+        cli,
+        "calibrate_list_templates",
+        lambda *args, **kwargs: pytest.fail("calibration must not run"),
+    )
+
+    exit_code = cli.main([
+        "plan-list-normalization",
+        "--component-report", str(component_report),
+        "--private-dir", str(private),
+        "--format", "json",
+    ])
+
+    payload = json.loads(capsys.readouterr().out)
+    table = json.loads(
+        (private / "normalization-decision-table.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert exit_code == 0
+    assert payload["classification"] == "NORMALIZATION_READY"
+    assert table["classification"] == "NORMALIZATION_READY"
+    assert table["decisions"] == []
 
 
 def test_calibrate_list_rejects_existing_private_dir_before_word(tmp_path):

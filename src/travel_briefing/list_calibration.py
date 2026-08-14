@@ -1088,6 +1088,52 @@ def diagnose_list_components(
     )
 
 
+def load_component_diagnosis_artifact(
+    path: Path,
+) -> ListComponentDiagnosisResult:
+    payload = _read_json_object(path.expanduser().resolve(), "component diagnosis")
+    label = "component diagnosis artifact"
+    _require_exact_schema_one_object(
+        payload,
+        {
+            "schema_version",
+            "status",
+            "command",
+            "stage",
+            "word_version",
+            "source_sha256",
+            "samples",
+        },
+        label,
+    )
+    if (
+        payload["schema_version"] != 1
+        or payload["status"] != "ok"
+        or payload["command"] != "diagnose-list-components"
+        or payload["stage"] != "component-evidence"
+        or not isinstance(payload["word_version"], str)
+        or not payload["word_version"]
+        or not isinstance(payload["source_sha256"], list)
+        or len(payload["source_sha256"]) != 3
+        or not isinstance(payload["samples"], list)
+        or len(payload["samples"]) != 3
+    ):
+        raise ValueError(f"{label} does not match schema version 1")
+    source_hashes = tuple(
+        _validate_nonzero_sha256(value, "component source SHA-256")
+        for value in payload["source_sha256"]
+    )
+    if len(set(source_hashes)) != 3:
+        raise ValueError(f"{label} does not match schema version 1")
+    for evidence in payload["samples"]:
+        _validate_component_evidence(evidence, label)
+    return ListComponentDiagnosisResult(
+        word_version=payload["word_version"],
+        source_sha256=source_hashes,
+        samples=tuple(payload["samples"]),
+    )
+
+
 def build_component_normalization_decision_table(
     diagnosis: ListComponentDiagnosisResult,
 ) -> dict[str, Any]:
@@ -1197,16 +1243,7 @@ def build_component_normalization_decision_table(
                 }
             )
 
-    policy = {
-        "contract_fixed": ["component_identity_set", "shape_kind"],
-        "unanimous_components": "PRESERVE_UNANIMOUS",
-        "conflicting_components": "REQUIRES_OP_BASE",
-        "mixed_value_sentinel": 9999999,
-        "mixed_value_action": "BLOCK_SOURCE_AS_BASE",
-        "floating_shape_selection": "GEOMETRY_BUNDLE",
-        "automatic_majority_selection": False,
-        "op_choice_binding": "SOURCE_AND_COMPONENT_SHA256",
-    }
+    policy = _component_normalization_policy()
     if blockers:
         return {
             "schema_version": 1,
@@ -1338,6 +1375,331 @@ def _contains_word_mixed_value(value: object) -> bool:
     if isinstance(value, (list, tuple)):
         return any(_contains_word_mixed_value(item) for item in value)
     return False
+
+
+def component_normalization_decision_table_sha256(
+    table: dict[str, Any],
+) -> str:
+    _validate_component_normalization_decision_table(table)
+    return hashlib.sha256(
+        _canonical_layout_value(table).encode("utf-8")
+    ).hexdigest()
+
+
+def validate_component_normalization_choices(
+    table: dict[str, Any],
+    artifact: object,
+) -> dict[str, Any]:
+    label = "OP normalization choices"
+    _validate_component_normalization_decision_table(table)
+    _require_exact_schema_one_object(
+        artifact,
+        {
+            "schema_version",
+            "decision_table_sha256",
+            "source_sha256",
+            "choices",
+        },
+        label,
+    )
+    assert isinstance(artifact, dict)
+    if (
+        artifact["schema_version"] != 1
+        or artifact["decision_table_sha256"]
+        != component_normalization_decision_table_sha256(table)
+        or artifact["source_sha256"] != table["source_sha256"]
+        or not isinstance(artifact["choices"], list)
+        or table["classification"] == "COMPONENT_CONTRACT_CONFLICT"
+    ):
+        raise ValueError(f"{label} does not match decision table")
+    decisions = {item["decision_id"]: item for item in table["decisions"]}
+    choices: dict[str, dict[str, Any]] = {}
+    for choice in artifact["choices"]:
+        _require_exact_schema_one_object(
+            choice,
+            {
+                "decision_id",
+                "selected_source_sha256",
+                "selected_component_value_sha256",
+            },
+            label,
+        )
+        assert isinstance(choice, dict)
+        decision_id = choice["decision_id"]
+        if not isinstance(decision_id, str) or decision_id in choices:
+            raise ValueError(f"{label} does not match decision table")
+        source_hash = _validate_sha256(
+            choice["selected_source_sha256"], label
+        )
+        value_hash = _validate_sha256(
+            choice["selected_component_value_sha256"], label
+        )
+        decision = decisions.get(decision_id)
+        if decision is None or source_hash not in decision[
+            "eligible_source_sha256"
+        ]:
+            raise ValueError(f"{label} does not match decision table")
+        matching = [
+            item
+            for item in decision["samples"]
+            if item["source_sha256"] == source_hash
+            and item["component_value_sha256"] == value_hash
+            and item["eligible_as_base"] is True
+        ]
+        if len(matching) != 1:
+            raise ValueError(f"{label} does not match decision table")
+        choices[decision_id] = choice
+    if set(choices) != set(decisions):
+        raise ValueError(f"{label} does not match decision table")
+    return json.loads(json.dumps(artifact))
+
+
+def _component_normalization_policy() -> dict[str, Any]:
+    return {
+        "contract_fixed": ["component_identity_set", "shape_kind"],
+        "unanimous_components": "PRESERVE_UNANIMOUS",
+        "conflicting_components": "REQUIRES_OP_BASE",
+        "mixed_value_sentinel": 9999999,
+        "mixed_value_action": "BLOCK_SOURCE_AS_BASE",
+        "floating_shape_selection": "GEOMETRY_BUNDLE",
+        "automatic_majority_selection": False,
+        "op_choice_binding": "SOURCE_AND_COMPONENT_SHA256",
+    }
+
+
+def _validate_component_normalization_decision_table(
+    table: object,
+) -> None:
+    label = "component normalization decision table"
+    top_keys = {
+        "schema_version",
+        "stage",
+        "classification",
+        "source_sha256",
+        "policy",
+        "preserved_unanimous_counts",
+        "decisions",
+        "derived_audits",
+        "blockers",
+    }
+    _require_exact_schema_one_object(table, top_keys, label)
+    assert isinstance(table, dict)
+    classifications = {
+        "COMPONENT_CONTRACT_CONFLICT",
+        "BLOCKED_MIXED_VALUE",
+        "REQUIRES_OP_DECISION",
+        "DERIVED_AUDIT_PENDING",
+        "NORMALIZATION_READY",
+    }
+    if (
+        table["schema_version"] != 1
+        or table["stage"] != "component-normalization-decision"
+        or table["classification"] not in classifications
+        or table["policy"] != _component_normalization_policy()
+        or not isinstance(table["source_sha256"], list)
+        or len(table["source_sha256"]) != 3
+        or not isinstance(table["preserved_unanimous_counts"], dict)
+        or not isinstance(table["decisions"], list)
+        or not isinstance(table["derived_audits"], list)
+        or not isinstance(table["blockers"], list)
+    ):
+        raise ValueError(f"{label} does not match schema version 1")
+    sources = tuple(
+        _validate_nonzero_sha256(value, label)
+        for value in table["source_sha256"]
+    )
+    if len(set(sources)) != 3:
+        raise ValueError(f"{label} does not match schema version 1")
+    _validate_normalization_blockers(table["blockers"], label)
+    _validate_normalization_audits(table["derived_audits"], label)
+    _validate_normalization_decisions(table["decisions"], sources, label)
+    family_names = {
+        "styles", "fonts", "paragraphs", "borders",
+        "daily_header", "daily_body", "shapes",
+    }
+    counts = table["preserved_unanimous_counts"]
+    if counts and (
+        set(counts) != family_names
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in counts.values()
+        )
+    ):
+        raise ValueError(f"{label} does not match schema version 1")
+    if counts:
+        decision_counts = {
+            family: sum(
+                item["component_family"] == family
+                for item in table["decisions"]
+            )
+            for family in family_names
+        }
+        audit_counts = {
+            family: sum(
+                item["component_family"] == family
+                for item in table["derived_audits"]
+            )
+            for family in family_names
+        }
+        expected_counts = {
+            "styles": 19,
+            "fonts": 19,
+            "paragraphs": 19,
+            "borders": 114,
+            "daily_header": 7,
+            "daily_body": 7,
+        }
+        if any(
+            counts[family]
+            + decision_counts[family]
+            + audit_counts[family]
+            != expected
+            for family, expected in expected_counts.items()
+        ) or counts["shapes"] + decision_counts["shapes"] < 1:
+            raise ValueError(f"{label} does not match schema version 1")
+    has_mixed = any(
+        item["status"] == "BLOCKED_MIXED_VALUE"
+        for item in table["decisions"]
+    )
+    expected_classification = (
+        "COMPONENT_CONTRACT_CONFLICT"
+        if table["blockers"]
+        else "BLOCKED_MIXED_VALUE"
+        if has_mixed
+        else "REQUIRES_OP_DECISION"
+        if table["decisions"]
+        else "DERIVED_AUDIT_PENDING"
+        if table["derived_audits"]
+        else "NORMALIZATION_READY"
+    )
+    if (
+        table["classification"] != expected_classification
+        or (table["blockers"] and table["decisions"])
+        or (table["blockers"] and counts)
+    ):
+        raise ValueError(f"{label} does not match schema version 1")
+
+
+def _validate_normalization_blockers(value: list[Any], label: str) -> None:
+    allowed = {
+        "DUPLICATE_COMPONENT_ID",
+        "COMPONENT_ID_SET_CHANGED",
+        "REQUIRED_COMPONENT_SET_INVALID",
+        "SHAPE_KIND_CHANGED",
+    }
+    families = {
+        "styles", "fonts", "paragraphs", "borders",
+        "daily_header", "daily_body", "shapes",
+    }
+    seen = set()
+    for item in value:
+        _require_exact_schema_one_object(
+            item, {"component_family", "reason"}, label
+        )
+        identity = (item["component_family"], item["reason"])
+        if (
+            item["component_family"] not in families
+            or item["reason"] not in allowed
+            or identity in seen
+        ):
+            raise ValueError(f"{label} does not match schema version 1")
+        seen.add(identity)
+
+
+def _validate_normalization_audits(value: list[Any], label: str) -> None:
+    seen = set()
+    for item in value:
+        _require_exact_schema_one_object(
+            item, {"component_family", "component_id", "status"}, label
+        )
+        identity = (item["component_family"], item["component_id"])
+        if (
+            item["component_family"] != "daily_body"
+            or item["status"] != "VERIFY_AFTER_COMPONENT_NORMALIZATION"
+            or identity in seen
+        ):
+            raise ValueError(f"{label} does not match schema version 1")
+        seen.add(identity)
+
+
+def _validate_normalization_decisions(
+    value: list[Any], sources: tuple[str, ...], label: str
+) -> None:
+    selection_units = {
+        "styles": "style_bundle",
+        "fonts": "font_bundle",
+        "paragraphs": "paragraph_bundle",
+        "borders": "border_bundle",
+        "daily_header": "daily_header_bundle",
+        "shapes": "geometry_bundle",
+    }
+    seen = set()
+    keys = {
+        "decision_id",
+        "component_family",
+        "component_id",
+        "selection_unit",
+        "changed_properties",
+        "status",
+        "eligible_source_sha256",
+        "ineligible_source_sha256",
+        "samples",
+    }
+    for item in value:
+        _require_exact_schema_one_object(item, keys, label)
+        family = item["component_family"]
+        decision_id = item["decision_id"]
+        if (
+            family not in selection_units
+            or item["selection_unit"] != selection_units[family]
+            or decision_id != f"{family}:{item['component_id']}"
+            or decision_id in seen
+            or item["status"]
+            not in {"REQUIRES_OP_BASE", "BLOCKED_MIXED_VALUE"}
+            or not isinstance(item["changed_properties"], list)
+            or not item["changed_properties"]
+            or item["changed_properties"]
+            != sorted(set(item["changed_properties"]))
+        ):
+            raise ValueError(f"{label} does not match schema version 1")
+        seen.add(decision_id)
+        eligible = item["eligible_source_sha256"]
+        ineligible = item["ineligible_source_sha256"]
+        if (
+            not isinstance(eligible, list)
+            or not isinstance(ineligible, list)
+            or set(eligible) | set(ineligible) != set(sources)
+            or set(eligible) & set(ineligible)
+            or len(set(eligible)) != len(eligible)
+            or len(set(ineligible)) != len(ineligible)
+            or eligible != [source for source in sources if source in eligible]
+            or ineligible
+            != [source for source in sources if source in ineligible]
+            or not eligible
+            or (item["status"] == "BLOCKED_MIXED_VALUE") != bool(ineligible)
+            or not isinstance(item["samples"], list)
+            or len(item["samples"]) != 3
+        ):
+            raise ValueError(f"{label} does not match schema version 1")
+        for source, sample in zip(sources, item["samples"], strict=True):
+            _require_exact_schema_one_object(
+                sample,
+                {
+                    "source_sha256",
+                    "component_value_sha256",
+                    "eligible_as_base",
+                },
+                label,
+            )
+            if (
+                sample["source_sha256"] != source
+                or _validate_sha256(
+                    sample["component_value_sha256"], label
+                ) != sample["component_value_sha256"]
+                or not isinstance(sample["eligible_as_base"], bool)
+                or sample["eligible_as_base"] != (source in eligible)
+            ):
+                raise ValueError(f"{label} does not match schema version 1")
 
 
 def diagnose_gate_c_5992(
@@ -2534,6 +2896,15 @@ def _require_exact_object(
 ) -> None:
     if not isinstance(value, dict) or set(value) != expected:
         raise ValueError(f"{label} does not match schema version 2")
+
+
+def _require_exact_schema_one_object(
+    value: object,
+    expected: set[str],
+    label: str,
+) -> None:
+    if not isinstance(value, dict) or set(value) != expected:
+        raise ValueError(f"{label} does not match schema version 1")
 
 
 def _positive_int(value: object, label: str) -> int:

@@ -18,6 +18,7 @@ from travel_briefing.list_calibration import (
     build_calibration_manifest,
     build_calibration_conflict_matrix,
     build_component_normalization_decision_table,
+    component_normalization_decision_table_sha256,
     calibrate_list_templates,
     compare_calibration_samples,
     diagnose_calibration_conflicts,
@@ -25,9 +26,11 @@ from travel_briefing.list_calibration import (
     diagnose_gate_c_v3,
     diagnose_list_components,
     diagnose_list_header_contract,
+    load_component_diagnosis_artifact,
     manifest_sha256,
     normalized_structure_fingerprint,
     select_base_sample,
+    validate_component_normalization_choices,
     validate_calibrated_master,
 )
 from travel_briefing.template_contract import (
@@ -931,6 +934,131 @@ def test_normalization_table_marks_daily_body_as_derived_audit():
         "component_id": "table-003-row-002-column-001",
         "status": "VERIFY_AFTER_COMPONENT_NORMALIZATION",
     }]
+
+
+def component_artifact(samples: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "command": "diagnose-list-components",
+        "stage": "component-evidence",
+        "word_version": "16.0-synthetic",
+        "source_sha256": ["a" * 64, "b" * 64, "c" * 64],
+        "samples": samples,
+    }
+
+
+def test_component_artifact_reader_requires_exact_private_safe_schema(tmp_path):
+    path = tmp_path / "component-report.json"
+    payload = component_artifact(component_samples())
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = load_component_diagnosis_artifact(path)
+
+    assert result.source_sha256 == ("a" * 64, "b" * 64, "c" * 64)
+    assert result.word_version == "16.0-synthetic"
+    payload["private_text"] = "must-not-pass"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="component diagnosis artifact"):
+        load_component_diagnosis_artifact(path)
+
+
+def decision_table_with_one_font_choice() -> dict[str, object]:
+    samples = component_samples()
+    samples[2]["fonts"][9]["size_points"] = 12.0
+    return build_component_normalization_decision_table(
+        component_result(*samples)
+    )
+
+
+def valid_choice_artifact(table: dict[str, object]) -> dict[str, object]:
+    decision = table["decisions"][0]
+    selected = decision["samples"][0]
+    return {
+        "schema_version": 1,
+        "decision_table_sha256": (
+            component_normalization_decision_table_sha256(table)
+        ),
+        "source_sha256": list(table["source_sha256"]),
+        "choices": [{
+            "decision_id": decision["decision_id"],
+            "selected_source_sha256": selected["source_sha256"],
+            "selected_component_value_sha256": selected[
+                "component_value_sha256"
+            ],
+        }],
+    }
+
+
+def test_op_choice_validator_binds_table_source_and_component_hashes():
+    table = decision_table_with_one_font_choice()
+    artifact = valid_choice_artifact(table)
+
+    validated = validate_component_normalization_choices(table, artifact)
+
+    assert validated == artifact
+    assert validated is not artifact
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate"])
+def test_op_choice_validator_rejects_non_exact_decision_set(mutation):
+    table = decision_table_with_one_font_choice()
+    artifact = valid_choice_artifact(table)
+    if mutation == "missing":
+        artifact["choices"] = []
+    elif mutation == "extra":
+        artifact["choices"].append({
+            **artifact["choices"][0],
+            "decision_id": "fonts:table-001-row-002-column-001",
+        })
+    else:
+        artifact["choices"].append(dict(artifact["choices"][0]))
+
+    with pytest.raises(ValueError, match="OP normalization choices"):
+        validate_component_normalization_choices(table, artifact)
+
+
+def test_op_choice_validator_rejects_ineligible_mixed_value_source():
+    samples = component_samples()
+    samples[0]["paragraphs"][2]["line_spacing_points"] = 15.0
+    samples[1]["paragraphs"][2]["line_spacing_points"] = 9999999.0
+    samples[1]["paragraphs"][2]["line_spacing_rule"] = 9999999
+    table = build_component_normalization_decision_table(
+        component_result(*samples)
+    )
+    artifact = valid_choice_artifact(table)
+    decision = table["decisions"][0]
+    blocked = decision["samples"][1]
+    artifact["choices"][0].update({
+        "selected_source_sha256": blocked["source_sha256"],
+        "selected_component_value_sha256": blocked[
+            "component_value_sha256"
+        ],
+    })
+
+    with pytest.raises(ValueError, match="OP normalization choices"):
+        validate_component_normalization_choices(table, artifact)
+
+
+def test_op_choice_validator_rejects_wrong_table_or_component_hash():
+    table = decision_table_with_one_font_choice()
+    artifact = valid_choice_artifact(table)
+    artifact["decision_table_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="OP normalization choices"):
+        validate_component_normalization_choices(table, artifact)
+
+    artifact = valid_choice_artifact(table)
+    artifact["choices"][0]["selected_component_value_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="OP normalization choices"):
+        validate_component_normalization_choices(table, artifact)
+
+
+def test_decision_table_hash_rejects_unapproved_fields():
+    table = decision_table_with_one_font_choice()
+    table["private_text"] = "must-not-pass"
+
+    with pytest.raises(ValueError, match="component normalization decision table"):
+        component_normalization_decision_table_sha256(table)
 
 
 class SyntheticHeaderDiagnosticAdapter:

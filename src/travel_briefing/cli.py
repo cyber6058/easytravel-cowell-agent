@@ -30,8 +30,11 @@ from .config import load_config
 from .list_calibration import (
     CalibrationContractError,
     calibrate_list_templates,
+    build_component_normalization_decision_table,
+    component_normalization_decision_table_sha256,
     diagnose_calibration_conflicts,
     diagnose_list_components,
+    load_component_diagnosis_artifact,
 )
 from .adapters.windows_word import WindowsWordAdapter
 from .models import BriefingDraft, DraftStatus
@@ -114,6 +117,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text"
     )
     components.set_defaults(handler=run_diagnose_list_components)
+
+    normalization = subparsers.add_parser(
+        "plan-list-normalization",
+        help="Build an offline OP decision table from component evidence",
+    )
+    normalization.add_argument(
+        "--component-report", type=Path, required=True
+    )
+    normalization.add_argument("--private-dir", type=Path, required=True)
+    normalization.add_argument(
+        "--format", choices=("text", "json"), default="text"
+    )
+    normalization.set_defaults(handler=run_plan_list_normalization)
 
     prepare = subparsers.add_parser("prepare", help="Create a reviewable manifest")
     prepare.add_argument("--url")
@@ -444,6 +460,48 @@ def run_diagnose_list_components(
     }
 
 
+def run_plan_list_normalization(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    source = args.component_report.expanduser().resolve()
+    if not source.is_file() or source.suffix.casefold() != ".json":
+        raise BriefingInputError(
+            "plan-list-normalization component report must be an existing JSON file"
+        )
+    private = args.private_dir.expanduser().resolve()
+    if private.exists():
+        raise BriefingInputError(
+            "plan-list-normalization private directory must not exist"
+        )
+    try:
+        private.mkdir(parents=True)
+        diagnosis = load_component_diagnosis_artifact(source)
+        table = build_component_normalization_decision_table(diagnosis)
+        table_hash = component_normalization_decision_table_sha256(table)
+        report_path = private / "normalization-decision-table.json"
+        _write_json_exclusive(report_path, table)
+    except ValueError as error:
+        _remove_empty_directory(private)
+        raise BriefingInputError(
+            "plan-list-normalization component report is invalid"
+        ) from error
+    except Exception:
+        _remove_empty_directory(private)
+        raise
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": (
+            "ok"
+            if table["classification"] == "NORMALIZATION_READY"
+            else "needs_review"
+        ),
+        "command": "plan-list-normalization",
+        "classification": table["classification"],
+        "decision_table_sha256": table_hash,
+        "report": str(report_path),
+    }
+
+
 def run_prepare(args: argparse.Namespace) -> dict[str, Any]:
     result = prepare_briefing(
         output_root=args.output_dir,
@@ -621,6 +679,14 @@ def _write_json_exclusive(path: Path, payload: dict[str, Any]) -> None:
     with path.open("x", encoding="utf-8", newline="\n") as stream:
         json.dump(payload, stream, ensure_ascii=False, indent=2)
         stream.write("\n")
+
+
+def _remove_empty_directory(path: Path) -> None:
+    try:
+        if path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
+    except OSError:
+        pass
 
 
 def _read_json_object(path: Path | None, *, label: str) -> dict[str, object] | None:
