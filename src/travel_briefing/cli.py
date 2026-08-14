@@ -31,6 +31,7 @@ from .list_calibration import (
     CalibrationContractError,
     calibrate_list_templates,
     diagnose_calibration_conflicts,
+    diagnose_list_components,
 )
 from .adapters.windows_word import WindowsWordAdapter
 from .models import BriefingDraft, DraftStatus
@@ -100,6 +101,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text"
     )
     diagnose.set_defaults(handler=run_diagnose_list_conflicts)
+
+    components = subparsers.add_parser(
+        "diagnose-list-components",
+        help="Read allowlisted LIST formatting components without calibration",
+    )
+    components.add_argument(
+        "--sample", action="append", type=Path, required=True
+    )
+    components.add_argument("--private-dir", type=Path, required=True)
+    components.add_argument(
+        "--format", choices=("text", "json"), default="text"
+    )
+    components.set_defaults(handler=run_diagnose_list_components)
 
     prepare = subparsers.add_parser("prepare", help="Create a reviewable manifest")
     prepare.add_argument("--url")
@@ -369,6 +383,63 @@ def run_diagnose_list_conflicts(
         "command": "diagnose-list-conflicts",
         "classification": result.classification,
         "field_paths": list(result.field_paths),
+        "report": str(report_path),
+    }
+
+
+def run_diagnose_list_components(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    samples = tuple(path.expanduser().resolve() for path in args.sample)
+    if len(samples) != 3 or len(set(samples)) != 3:
+        raise BriefingInputError(
+            "diagnose-list-components requires exactly three unique samples"
+        )
+    if any(
+        not path.is_file() or path.suffix.casefold() not in {".doc", ".docx"}
+        for path in samples
+    ):
+        raise BriefingInputError(
+            "diagnose-list-components samples must be existing DOC or DOCX files"
+        )
+    private = args.private_dir.expanduser().resolve()
+    if private.exists():
+        raise BriefingInputError(
+            "diagnose-list-components private directory must not exist"
+        )
+    try:
+        private.mkdir(parents=True)
+        result = diagnose_list_components(
+            samples,
+            adapter=WindowsWordAdapter(
+                script_path=_briefing_scripts_root() / "patch_list_template.ps1"
+            ),
+            timeout_seconds=120,
+        )
+        report_path = private / "component-diagnosis.json"
+        _write_json_exclusive(
+            report_path,
+            {
+                "schema_version": SCHEMA_VERSION,
+                "status": "ok",
+                "command": "diagnose-list-components",
+                "stage": "component-evidence",
+                "word_version": result.word_version,
+                "source_sha256": list(result.source_sha256),
+                "samples": list(result.samples),
+            },
+        )
+    except Exception:
+        try:
+            if private.is_dir() and not any(private.iterdir()):
+                private.rmdir()
+        except OSError:
+            pass
+        raise
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": "ok",
+        "command": "diagnose-list-components",
         "report": str(report_path),
     }
 

@@ -173,6 +173,7 @@ def _read_job_metadata(path: Path) -> dict[str, str | Path]:
         "render",
         "inspect-v2",
         "diagnose-header-v2",
+        "diagnose-components-v2",
         "diagnose-5992-v2",
         "diagnose-gate-c-v3",
         "calibrate",
@@ -206,7 +207,11 @@ def _validate_schema_two_job(
         "report_path",
     }
     action = payload["action"]
-    if action in {"inspect-v2", "diagnose-header-v2"}:
+    if action in {
+        "inspect-v2",
+        "diagnose-header-v2",
+        "diagnose-components-v2",
+    }:
         expected = common | {"sample_paths"}
         samples = payload.get("sample_paths")
         if (

@@ -142,12 +142,22 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
             "private",
         ]
     )
+    component_diagnosed = parser.parse_args(
+        [
+            "diagnose-list-components",
+            "--sample", "one.doc",
+            "--sample", "two.doc",
+            "--sample", "three.docx",
+            "--private-dir", "private-components",
+        ]
+    )
 
     assert prepared.command == "prepare"
     assert checked.command == "check-script"
     assert rendered.tts == "yating"
     assert calibrated.command == "calibrate-list"
     assert diagnosed.command == "diagnose-list-conflicts"
+    assert component_diagnosed.command == "diagnose-list-components"
     assert not hasattr(diagnosed, "pdftoppm")
     assert not hasattr(rendered, "template")
     with pytest.raises(cli.BriefingInputError):
@@ -347,6 +357,52 @@ def test_diagnose_list_conflicts_rejects_existing_private_dir_before_word(
         cli.run_diagnose_list_conflicts(
             SimpleNamespace(sample=samples, private_dir=private)
         )
+
+
+def test_diagnose_list_components_writes_only_safe_private_report(
+    monkeypatch, capsys, tmp_path
+):
+    samples = tuple(tmp_path / f"private-{index}.doc" for index in range(3))
+    for sample in samples:
+        sample.write_bytes(b"synthetic")
+    private = tmp_path / "components"
+    evidence = {
+        "styles": [], "fonts": [], "paragraphs": [], "borders": [],
+        "daily_header": [], "daily_body": [], "shapes": [],
+    }
+
+    def diagnose(paths, **kwargs):
+        assert paths == samples
+        assert kwargs["timeout_seconds"] == 120
+        return SimpleNamespace(
+            word_version="16.0-synthetic",
+            source_sha256=("a" * 64, "b" * 64, "c" * 64),
+            samples=(evidence, evidence, evidence),
+        )
+
+    monkeypatch.setattr(cli, "diagnose_list_components", diagnose)
+    monkeypatch.setattr(
+        cli,
+        "calibrate_list_templates",
+        lambda *args, **kwargs: pytest.fail("calibration must not run"),
+    )
+
+    exit_code = cli.main([
+        "diagnose-list-components",
+        *sum((["--sample", str(path)] for path in samples), []),
+        "--private-dir", str(private),
+        "--format", "json",
+    ])
+
+    report_path = private / "component-diagnosis.json"
+    payload = json.loads(capsys.readouterr().out)
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert exit_code == 0
+    assert payload["report"] == str(report_path)
+    assert report["samples"] == [evidence, evidence, evidence]
+    serialized = json.dumps(report)
+    assert all(sample.name not in serialized for sample in samples)
+    assert not (private / "LIST-master.docx").exists()
 
 
 def test_calibrate_list_rejects_existing_private_dir_before_word(tmp_path):

@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；真實 read-only `diagnose-list-conflicts` 已只執行
-一次且沒有 retry，取得八欄 private-safe matrix，確認三份模板仍需 OP decision；來源與
-既有 artifacts 未變，仍無 master／manifest／config。
+說明會產生器 0.2.0 的 Gate I 已完成；六組格式 digest 與 shape geometry 的
+private-safe component diagnosis 已完成離線實作與 synthetic 驗證，但尚未獲准讀取
+真實 LIST；三份模板仍需 OP decision，仍無 master／manifest／config。
 
 ## 這次做了什麼
 
@@ -787,15 +787,25 @@
   `24a5fb1ab2b71773096cf8cc893acc7001dc018afbefb27a3d4fbf9283fec53d`。本回合沒有
   程式碼變更，因此未重跑測試，最近完整離線結果維持
   `463 passed, 3 skipped in 7.32s`。
+- 2026-08-14 使用者以「好 下一步」核准離線建立 component diagnosis。新增
+  `diagnose-list-components` 與 Word action `diagnose-components-v2`，只以 read-only
+  開啟三份來源，輸出固定 cell／border／shape IDs、數值／enum，以及立即 SHA-256 後的
+  style／font 名稱與 daily header/body 子元件；不讀取或輸出 Word text、不建立 working
+  copy／master／manifest，也不呼叫 calibration。Python 對 report 採 exact-schema
+  allowlist，拒絕額外欄位，並以執行前後 SHA-256 偵測來源變更。舊 schema-2 inspection
+  digests、`_normalized_layout_dict()` 與正式 comparison contract 均未修改。
+- 本次只用 synthetic adapter 驗證，沒有啟動 Word、沒有讀取真實 LIST，也沒有建立新的
+  private artifact。針對性測試原文為 `70 passed`；PowerShell parser 原文為
+  `PowerShell parse OK`，`compileall OK`，`git diff --check` 通過；完整離線回歸原文為
+  `469 passed, 3 skipped in 7.34s`。
 
 ## 下一步
 
-本次 Gate C calibration 與 read-only diagnosis 額度都已消耗且沒有 retry。下一步先
-離線設計 conflict-component diagnosis：對六個 opaque formatting digests 與已雜湊的
-shape geometry 增加 allowlisted、private-safe component evidence（數值／enum 或
-canonical hash），不得更動正式 comparison 契約；補齊 synthetic 測試後，才另行決定
-是否核准新的真實 read-only component diagnosis。沒有新核准不得讀取真實 LIST、啟動
-Word、執行 diagnosis 或 calibration。只有 Gate C
+本次離線 component diagnosis 已完成；下一步需由使用者另行明確核准「一次新的真實
+read-only component diagnosis」，才可對三份 LIST 執行新命令。該回合必須使用全新
+private 目錄、只允許一次 action、執行來源 hash 前後驗且不得 retry；不含 calibration、
+master／manifest／config 或任何契約放寬。沒有新核准不得讀取真實 LIST、啟動 Word、
+執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次

@@ -76,6 +76,7 @@ def schema_two_job(tmp_path, *, action="inspect-v2", extra=None):
     if action in {
         "inspect-v2",
         "diagnose-header-v2",
+        "diagnose-components-v2",
         "diagnose-5992-v2",
         "diagnose-gate-c-v3",
     }:
@@ -278,6 +279,7 @@ def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
     [
         "inspect-v2",
         "diagnose-header-v2",
+        "diagnose-components-v2",
         "diagnose-5992-v2",
         "diagnose-gate-c-v3",
         "calibrate",
@@ -457,3 +459,22 @@ def test_gate_c_v3_diagnosis_reuses_safe_checkpoint_report_boundary():
     assert "Invoke-DiagnoseGateC" in dispatch
     assert "checkpoint = $checkpointSnapshot" in diagnosis
     assert "source_path" not in diagnosis.split("Write-JsonExclusive", 1)[1]
+
+
+def test_component_diagnosis_is_read_only_and_emits_no_word_text():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    diagnosis = script.split("function Invoke-DiagnoseComponentsV2", 1)[1].split(
+        "function Invoke-DiagnoseGateC", 1
+    )[0]
+    evidence = script.split("function Get-CellComponentEvidence", 1)[1].split(
+        "function Get-ListInspectionV2", 1
+    )[0]
+
+    assert '"diagnose-components-v2"' in script
+    assert "$false, $true" in diagnosis
+    assert "Documents.Open" in diagnosis
+    assert "Save" not in diagnosis
+    assert ".Text" not in evidence
+    assert "source_path" not in diagnosis
+    assert "name_sha256" in evidence
+    assert "shape_id" in evidence

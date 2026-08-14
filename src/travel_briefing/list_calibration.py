@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import secrets
 import shutil
@@ -983,6 +984,13 @@ class CalibrationConflictDiagnosisResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ListComponentDiagnosisResult:
+    word_version: str
+    source_sha256: tuple[str, str, str]
+    samples: tuple[dict[str, Any], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ListCalibrationBuildResult:
     master_path: Path
     manifest_path: Path
@@ -1039,6 +1047,44 @@ def diagnose_list_header_contract(
                 before, report["samples"], strict=True
             )
         ),
+    )
+
+
+def diagnose_list_components(
+    sample_paths: tuple[Path, ...],
+    *,
+    adapter: WordCalibrationAdapter,
+    timeout_seconds: int = 120,
+) -> ListComponentDiagnosisResult:
+    """Read only allowlisted formatting components from three LIST samples."""
+    samples = _resolve_sample_paths(sample_paths)
+    if timeout_seconds <= 0:
+        raise ValueError("LIST component diagnosis timeout must be positive")
+    before = tuple(_sha256_file(path) for path in samples)
+    with tempfile.TemporaryDirectory(
+        prefix="easytravel-list-component-diagnose-"
+    ) as temp:
+        work_dir = Path(temp)
+        job_path = work_dir / "word-job.json"
+        report_path = work_dir / "component-diagnostic-report.json"
+        job = {
+            "schema_version": 2,
+            "action": "diagnose-components-v2",
+            "ownership_nonce": secrets.token_hex(16),
+            "word_pid_path": str(work_dir / "word-owner.json"),
+            "report_path": str(report_path),
+            "sample_paths": [str(path) for path in samples],
+        }
+        _write_json_exclusive(job_path, job)
+        adapter.run(job_path, timeout_seconds=timeout_seconds)
+        report = _read_component_diagnostic_report(report_path)
+    after = tuple(_sha256_file(path) for path in samples)
+    if after != before:
+        raise CalibrationSourceChangedError()
+    return ListComponentDiagnosisResult(
+        word_version=report["word_version"],
+        source_sha256=before,
+        samples=tuple(item["evidence"] for item in report["samples"]),
     )
 
 
@@ -1659,6 +1705,185 @@ def _resolve_sample_paths(
             "LIST calibration samples must be existing Word files"
         )
     return resolved
+
+
+def _read_component_diagnostic_report(path: Path) -> dict[str, Any]:
+    label = "component diagnostic report"
+    payload = _read_json_object(path, "component diagnostic")
+    _require_exact_object(
+        payload,
+        {"schema_version", "action", "word_version", "samples"},
+        label,
+    )
+    if (
+        payload["schema_version"] != 2
+        or payload["action"] != "diagnose-components-v2"
+        or not isinstance(payload["word_version"], str)
+        or not payload["word_version"]
+        or not isinstance(payload["samples"], list)
+        or len(payload["samples"]) != 3
+    ):
+        raise ValueError(f"{label} does not match schema version 2")
+    for index, sample in enumerate(payload["samples"], start=1):
+        _require_exact_object(sample, {"sample_id", "evidence"}, label)
+        if sample["sample_id"] != f"sample-{index:03d}":
+            raise ValueError(f"{label} does not match schema version 2")
+        _validate_component_evidence(sample["evidence"], label)
+    return payload
+
+
+def _validate_component_evidence(value: object, label: str) -> None:
+    families = {
+        "styles",
+        "fonts",
+        "paragraphs",
+        "borders",
+        "daily_header",
+        "daily_body",
+        "shapes",
+    }
+    _require_exact_object(value, families, label)
+    assert isinstance(value, dict)
+    validators = {
+        "styles": _validate_style_component,
+        "fonts": _validate_font_component,
+        "paragraphs": _validate_paragraph_component,
+        "borders": _validate_border_component,
+        "daily_header": _validate_daily_component,
+        "daily_body": _validate_daily_component,
+        "shapes": _validate_shape_component,
+    }
+    for family, validator in validators.items():
+        items = value[family]
+        if not isinstance(items, list):
+            raise ValueError(f"{label} does not match schema version 2")
+        for item in items:
+            validator(item, label)
+
+
+def _validate_style_component(value: object, label: str) -> None:
+    keys = {
+        "cell_id", "name_sha256", "vertical_alignment", "shading_color"
+    }
+    _require_exact_object(value, keys, label)
+    assert isinstance(value, dict)
+    _validate_cell_id(value["cell_id"], label)
+    _validate_sha256(value["name_sha256"], label)
+    _validate_int_components(value, keys - {"cell_id", "name_sha256"}, label)
+
+
+def _validate_font_component(value: object, label: str) -> None:
+    keys = {
+        "cell_id", "name_sha256", "name_far_east_sha256", "size_points",
+        "bold", "italic", "underline", "color",
+    }
+    _require_exact_object(value, keys, label)
+    assert isinstance(value, dict)
+    _validate_cell_id(value["cell_id"], label)
+    _validate_sha256(value["name_sha256"], label)
+    _validate_sha256(value["name_far_east_sha256"], label)
+    _validate_number(value["size_points"], label)
+    _validate_int_components(
+        value,
+        {"bold", "italic", "underline", "color"},
+        label,
+    )
+
+
+def _validate_paragraph_component(value: object, label: str) -> None:
+    integer_keys = {"alignment", "line_spacing_rule"}
+    point_keys = {
+        "space_before_points", "space_after_points", "line_spacing_points",
+        "left_indent_points", "right_indent_points",
+        "first_line_indent_points",
+    }
+    _require_exact_object(
+        value, {"cell_id"} | integer_keys | point_keys, label
+    )
+    assert isinstance(value, dict)
+    _validate_cell_id(value["cell_id"], label)
+    _validate_int_components(value, integer_keys, label)
+    for key in point_keys:
+        _validate_number(value[key], label)
+
+
+def _validate_border_component(value: object, label: str) -> None:
+    keys = {"border_id", "line_style", "line_width", "color"}
+    _require_exact_object(value, keys, label)
+    assert isinstance(value, dict)
+    if (
+        not isinstance(value["border_id"], str)
+        or re.fullmatch(
+            r"table-[0-9]{3}-row-[0-9]{3}-column-[0-9]{3}-"
+            r"(top|left|bottom|right|diagonal-down|diagonal-up)",
+            value["border_id"],
+        ) is None
+    ):
+        raise ValueError(f"{label} does not match schema version 2")
+    _validate_int_components(value, keys - {"border_id"}, label)
+
+
+def _validate_daily_component(value: object, label: str) -> None:
+    keys = {
+        "cell_id",
+        "style_sha256",
+        "font_sha256",
+        "paragraph_sha256",
+        "component_sha256",
+    }
+    _require_exact_object(value, keys, label)
+    assert isinstance(value, dict)
+    _validate_cell_id(value["cell_id"], label)
+    for key in keys - {"cell_id"}:
+        _validate_sha256(value[key], label)
+
+
+def _validate_shape_component(value: object, label: str) -> None:
+    keys = {
+        "shape_id", "kind", "left_points", "top_points", "width_points",
+        "height_points",
+    }
+    _require_exact_object(value, keys, label)
+    assert isinstance(value, dict)
+    if (
+        value["kind"] not in {"inline", "floating"}
+        or not isinstance(value["shape_id"], str)
+        or re.fullmatch(r"(inline|floating)-[0-9]{3}", value["shape_id"])
+        is None
+        or not value["shape_id"].startswith(value["kind"] + "-")
+    ):
+        raise ValueError(f"{label} does not match schema version 2")
+    for key in keys - {"shape_id", "kind"}:
+        _validate_number(value[key], label)
+
+
+def _validate_cell_id(value: object, label: str) -> None:
+    if (
+        not isinstance(value, str)
+        or re.fullmatch(
+            r"table-[0-9]{3}-row-[0-9]{3}-column-[0-9]{3}", value
+        ) is None
+    ):
+        raise ValueError(f"{label} does not match schema version 2")
+
+
+def _validate_int_components(
+    value: dict[str, Any], keys: set[str], label: str
+) -> None:
+    if any(
+        isinstance(value[key], bool) or not isinstance(value[key], int)
+        for key in keys
+    ):
+        raise ValueError(f"{label} does not match schema version 2")
+
+
+def _validate_number(value: object, label: str) -> None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
+        raise ValueError(f"{label} does not match schema version 2")
 
 
 def _read_header_diagnostic_report(path: Path) -> dict[str, Any]:

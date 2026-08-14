@@ -165,6 +165,22 @@ function Assert-WordJobShape {
                 throw "WORD_JOB_SCHEMA_INVALID"
             }
         }
+        "diagnose-components-v2" {
+            Assert-ExactProperties -Value $Job -Expected (
+                $common + @("sample_paths")
+            )
+            if ($Job.sample_paths.Count -ne 3) {
+                throw "WORD_JOB_SCHEMA_INVALID"
+            }
+            $resolvedSamples = @(
+                $Job.sample_paths | ForEach-Object {
+                    [IO.Path]::GetFullPath([string]$_)
+                }
+            )
+            if (@($resolvedSamples | Select-Object -Unique).Count -ne 3) {
+                throw "WORD_JOB_SCHEMA_INVALID"
+            }
+        }
         { $_ -in @("diagnose-5992-v2", "diagnose-gate-c-v3") } {
             Assert-ExactProperties -Value $Job -Expected (
                 $common + @(
@@ -688,6 +704,172 @@ function Get-PrototypeCellBorderEvidence {
         }
     }
     return $parts
+}
+
+function Get-CellComponentEvidence {
+    param(
+        [Parameter(Mandatory = $true)]$Cell,
+        [Parameter(Mandatory = $true)][string]$CellId
+    )
+    $range = $Cell.Range
+    $styleName = ""
+    try { $styleName = [string]$range.Style.NameLocal } catch {}
+    $style = [ordered]@{
+        cell_id = $CellId
+        name_sha256 = Get-Sha256Text -Text $styleName
+        vertical_alignment = [int]$Cell.VerticalAlignment
+        shading_color = [int]$range.Shading.BackgroundPatternColor
+    }
+    $font = [ordered]@{
+        cell_id = $CellId
+        name_sha256 = Get-Sha256Text -Text ([string]$range.Font.Name)
+        name_far_east_sha256 = Get-Sha256Text -Text (
+            [string]$range.Font.NameFarEast
+        )
+        size_points = Get-NormalizedPoint -Value ([double]$range.Font.Size)
+        bold = [int]$range.Font.Bold
+        italic = [int]$range.Font.Italic
+        underline = [int]$range.Font.Underline
+        color = [int]$range.Font.Color
+    }
+    $paragraph = [ordered]@{
+        cell_id = $CellId
+        alignment = [int]$range.ParagraphFormat.Alignment
+        space_before_points = Get-NormalizedPoint -Value (
+            [double]$range.ParagraphFormat.SpaceBefore
+        )
+        space_after_points = Get-NormalizedPoint -Value (
+            [double]$range.ParagraphFormat.SpaceAfter
+        )
+        line_spacing_points = Get-NormalizedPoint -Value (
+            [double]$range.ParagraphFormat.LineSpacing
+        )
+        line_spacing_rule = [int]$range.ParagraphFormat.LineSpacingRule
+        left_indent_points = Get-NormalizedPoint -Value (
+            [double]$range.ParagraphFormat.LeftIndent
+        )
+        right_indent_points = Get-NormalizedPoint -Value (
+            [double]$range.ParagraphFormat.RightIndent
+        )
+        first_line_indent_points = Get-NormalizedPoint -Value (
+            [double]$range.ParagraphFormat.FirstLineIndent
+        )
+    }
+    $canonical = [ordered]@{
+        style = $style
+        font = $font
+        paragraph = $paragraph
+    } | ConvertTo-Json -Depth 5 -Compress
+    return [ordered]@{
+        style = $style
+        font = $font
+        paragraph = $paragraph
+        style_sha256 = Get-Sha256Text -Text (
+            $style | ConvertTo-Json -Depth 3 -Compress
+        )
+        font_sha256 = Get-Sha256Text -Text (
+            $font | ConvertTo-Json -Depth 3 -Compress
+        )
+        paragraph_sha256 = Get-Sha256Text -Text (
+            $paragraph | ConvertTo-Json -Depth 3 -Compress
+        )
+        component_sha256 = Get-Sha256Text -Text $canonical
+    }
+}
+
+function Get-ListComponentEvidence {
+    param([Parameter(Mandatory = $true)]$Document)
+    $prototypeRows = @(2, 2, 2, 1)
+    $prototypeColumnCounts = @(3, 6, 7, 3)
+    $styles = @()
+    $fonts = @()
+    $paragraphs = @()
+    $borders = @()
+    $dailyHeader = @()
+    $dailyBody = @()
+    $borderTypes = @(-1, -2, -3, -4, -7, -8)
+    $borderNames = @(
+        "top", "left", "bottom", "right", "diagonal-down", "diagonal-up"
+    )
+    for ($tableNumber = 1; $tableNumber -le 4; $tableNumber += 1) {
+        $table = $Document.Tables.Item($tableNumber)
+        $rowNumber = [int]$prototypeRows[$tableNumber - 1]
+        $columnCount = [int]$prototypeColumnCounts[$tableNumber - 1]
+        for ($columnNumber = 1; $columnNumber -le $columnCount; $columnNumber += 1) {
+            $cell = Get-Cell -Table $table -Row $rowNumber -Column $columnNumber
+            $cellId = "table-$('{0:D3}' -f $tableNumber)-" +
+                "row-$('{0:D3}' -f $rowNumber)-" +
+                "column-$('{0:D3}' -f $columnNumber)"
+            $component = Get-CellComponentEvidence -Cell $cell -CellId $cellId
+            $styles += $component.style
+            $fonts += $component.font
+            $paragraphs += $component.paragraph
+            if ($tableNumber -eq 3) {
+                $dailyBody += [ordered]@{
+                    cell_id = $cellId
+                    style_sha256 = $component.style_sha256
+                    font_sha256 = $component.font_sha256
+                    paragraph_sha256 = $component.paragraph_sha256
+                    component_sha256 = $component.component_sha256
+                }
+            }
+            for ($borderIndex = 0; $borderIndex -lt 6; $borderIndex += 1) {
+                $border = $cell.Borders.Item([int]$borderTypes[$borderIndex])
+                $borders += [ordered]@{
+                    border_id = "$cellId-$($borderNames[$borderIndex])"
+                    line_style = [int]$border.LineStyle
+                    line_width = [int]$border.LineWidth
+                    color = [int]$border.Color
+                }
+            }
+        }
+    }
+    $dailyTable = $Document.Tables.Item(3)
+    for ($columnNumber = 1; $columnNumber -le 7; $columnNumber += 1) {
+        $cell = Get-Cell -Table $dailyTable -Row 1 -Column $columnNumber
+        $cellId = "table-003-row-001-column-$('{0:D3}' -f $columnNumber)"
+        $component = Get-CellComponentEvidence -Cell $cell -CellId $cellId
+        $dailyHeader += [ordered]@{
+            cell_id = $cellId
+            style_sha256 = $component.style_sha256
+            font_sha256 = $component.font_sha256
+            paragraph_sha256 = $component.paragraph_sha256
+            component_sha256 = $component.component_sha256
+        }
+    }
+    $shapes = @()
+    $shapeNumber = 0
+    foreach ($shape in $Document.InlineShapes) {
+        $shapeNumber += 1
+        $shapes += [ordered]@{
+            shape_id = "inline-$('{0:D3}' -f $shapeNumber)"
+            kind = "inline"
+            left_points = 0.0
+            top_points = 0.0
+            width_points = Get-NormalizedPoint -Value ([double]$shape.Width)
+            height_points = Get-NormalizedPoint -Value ([double]$shape.Height)
+        }
+    }
+    foreach ($shape in $Document.Shapes) {
+        $shapeNumber += 1
+        $shapes += [ordered]@{
+            shape_id = "floating-$('{0:D3}' -f $shapeNumber)"
+            kind = "floating"
+            left_points = Get-NormalizedPoint -Value ([double]$shape.Left)
+            top_points = Get-NormalizedPoint -Value ([double]$shape.Top)
+            width_points = Get-NormalizedPoint -Value ([double]$shape.Width)
+            height_points = Get-NormalizedPoint -Value ([double]$shape.Height)
+        }
+    }
+    return [ordered]@{
+        styles = $styles
+        fonts = $fonts
+        paragraphs = $paragraphs
+        borders = $borders
+        daily_header = $dailyHeader
+        daily_body = $dailyBody
+        shapes = $shapes
+    }
 }
 
 function Get-ListInspectionV2 {
@@ -1321,6 +1503,53 @@ function Invoke-DiagnoseHeaderV2 {
     }) -Path ([string]$Job.report_path)
 }
 
+function Invoke-DiagnoseComponentsV2 {
+    param(
+        [Parameter(Mandatory = $true)]$Job,
+        [Parameter(Mandatory = $true)]$Word
+    )
+    if ($Job.sample_paths.Count -ne 3) {
+        throw "LIST_CALIBRATION_SAMPLE_COUNT_INVALID"
+    }
+    $sampleReports = @()
+    for ($index = 0; $index -lt 3; $index += 1) {
+        $samplePath = [IO.Path]::GetFullPath(
+            [string]$Job.sample_paths[$index]
+        )
+        if (
+            -not [IO.File]::Exists($samplePath) -or
+            [IO.Path]::GetExtension($samplePath).ToLowerInvariant() -notin @(".doc", ".docx")
+        ) {
+            throw "LIST_CALIBRATION_SAMPLE_INVALID"
+        }
+        $document = $null
+        try {
+            $document = $Word.Documents.Open($samplePath, $false, $true)
+            $sampleReports += [ordered]@{
+                sample_id = "sample-$('{0:D3}' -f ($index + 1))"
+                evidence = Get-ListComponentEvidence -Document $document
+            }
+        }
+        finally {
+            if ($null -ne $document) {
+                try { $document.Close($false) } catch {}
+                try {
+                    [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                        $document
+                    )
+                }
+                catch {}
+            }
+        }
+    }
+    Write-JsonExclusive -Value ([ordered]@{
+        schema_version = 2
+        action = "diagnose-components-v2"
+        word_version = [string]$Word.Version
+        samples = $sampleReports
+    }) -Path ([string]$Job.report_path)
+}
+
 function Invoke-DiagnoseGateC {
     param(
         [Parameter(Mandatory = $true)]$Job,
@@ -1826,6 +2055,9 @@ try {
         "inspect-v2" { Invoke-InspectV2 -Job $job -Word $word }
         "diagnose-header-v2" {
             Invoke-DiagnoseHeaderV2 -Job $job -Word $word
+        }
+        "diagnose-components-v2" {
+            Invoke-DiagnoseComponentsV2 -Job $job -Word $word
         }
         "diagnose-5992-v2" {
             Invoke-DiagnoseGateC -Job $job -Word $word

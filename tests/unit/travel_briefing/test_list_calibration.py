@@ -20,6 +20,7 @@ from travel_briefing.list_calibration import (
     diagnose_calibration_conflicts,
     diagnose_gate_c_5992,
     diagnose_gate_c_v3,
+    diagnose_list_components,
     diagnose_list_header_contract,
     manifest_sha256,
     normalized_structure_fingerprint,
@@ -569,6 +570,138 @@ def test_conflict_diagnosis_stops_after_compatible_inspection(tmp_path):
     assert result.classification == "NORMALIZED_LAYOUT_COMPATIBLE"
     assert result.field_paths == ()
     assert result.conflict_matrix is None
+
+
+class SyntheticComponentDiagnosticAdapter:
+    def __init__(
+        self,
+        *,
+        mutate_source: bool = False,
+        add_private_field: bool = False,
+    ) -> None:
+        self.mutate_source = mutate_source
+        self.add_private_field = add_private_field
+        self.actions: list[str] = []
+
+    def run(self, job_path: Path, *, timeout_seconds: int) -> None:
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        self.actions.append(job["action"])
+        assert job["action"] == "diagnose-components-v2"
+        assert timeout_seconds == 120
+        if self.mutate_source:
+            Path(job["sample_paths"][0]).write_bytes(b"changed")
+        samples = []
+        for index in range(1, 4):
+            evidence = {
+                "styles": [{
+                    "cell_id": "table-003-row-002-column-001",
+                    "name_sha256": digest(f"style-{index}"),
+                    "vertical_alignment": 0,
+                    "shading_color": -16777216,
+                }],
+                "fonts": [{
+                    "cell_id": "table-003-row-002-column-001",
+                    "name_sha256": digest(f"font-{index}"),
+                    "name_far_east_sha256": digest(f"east-{index}"),
+                    "size_points": 10.0,
+                    "bold": 0,
+                    "italic": 0,
+                    "underline": 0,
+                    "color": 0,
+                }],
+                "paragraphs": [{
+                    "cell_id": "table-003-row-002-column-001",
+                    "alignment": 0,
+                    "space_before_points": 0.0,
+                    "space_after_points": 0.0,
+                    "line_spacing_points": 12.0,
+                    "line_spacing_rule": 0,
+                    "left_indent_points": 0.0,
+                    "right_indent_points": 0.0,
+                    "first_line_indent_points": 0.0,
+                }],
+                "borders": [{
+                    "border_id": "table-003-row-002-column-001-top",
+                    "line_style": 1,
+                    "line_width": 4,
+                    "color": 0,
+                }],
+                "daily_header": [{
+                    "cell_id": "table-003-row-001-column-001",
+                    "style_sha256": digest(f"header-style-{index}"),
+                    "font_sha256": digest(f"header-font-{index}"),
+                    "paragraph_sha256": digest(f"header-paragraph-{index}"),
+                    "component_sha256": digest(f"header-{index}"),
+                }],
+                "daily_body": [{
+                    "cell_id": "table-003-row-002-column-001",
+                    "style_sha256": digest(f"body-style-{index}"),
+                    "font_sha256": digest(f"body-font-{index}"),
+                    "paragraph_sha256": digest(f"body-paragraph-{index}"),
+                    "component_sha256": digest(f"body-{index}"),
+                }],
+                "shapes": [{
+                    "shape_id": "inline-001",
+                    "kind": "inline",
+                    "left_points": 0.0,
+                    "top_points": 0.0,
+                    "width_points": 24.0,
+                    "height_points": 24.0,
+                }],
+            }
+            if self.add_private_field:
+                evidence["private_text"] = "must-not-pass"
+            samples.append({
+                "sample_id": f"sample-{index:03d}",
+                "evidence": evidence,
+            })
+        report = {
+            "schema_version": 2,
+            "action": "diagnose-components-v2",
+            "word_version": "16.0-synthetic",
+            "samples": samples,
+        }
+        Path(job["report_path"]).write_text(
+            json.dumps(report), encoding="utf-8"
+        )
+
+
+def test_component_diagnosis_is_read_only_and_private_safe(tmp_path):
+    samples = source_files(tmp_path)
+    adapter = SyntheticComponentDiagnosticAdapter()
+
+    result = diagnose_list_components(samples, adapter=adapter)
+
+    assert adapter.actions == ["diagnose-components-v2"]
+    assert result.word_version == "16.0-synthetic"
+    assert result.source_sha256 == tuple(
+        hashlib.sha256(path.read_bytes()).hexdigest() for path in samples
+    )
+    serialized = json.dumps(result.samples)
+    assert "must-not-pass" not in serialized
+    assert all(path.name not in serialized for path in samples)
+
+
+def test_component_diagnosis_detects_source_mutation(tmp_path):
+    samples = source_files(tmp_path)
+
+    with pytest.raises(ValueError, match="CALIBRATION_SOURCE_CHANGED"):
+        diagnose_list_components(
+            samples,
+            adapter=SyntheticComponentDiagnosticAdapter(mutate_source=True),
+        )
+
+
+def test_component_diagnosis_rejects_extra_report_fields(tmp_path):
+    samples = source_files(tmp_path)
+
+    with pytest.raises(ValueError, match="component diagnostic report"):
+        diagnose_list_components(
+            samples,
+            adapter=SyntheticComponentDiagnosticAdapter(
+                add_private_field=True
+            ),
+        )
 
 
 class SyntheticHeaderDiagnosticAdapter:
