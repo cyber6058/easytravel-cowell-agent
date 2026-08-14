@@ -647,6 +647,49 @@ function Get-PrototypeCellFormatEvidence {
     }
 }
 
+function Get-PrototypeCellBorderEvidence {
+    param(
+        [Parameter(Mandatory = $true)]$Table,
+        [Parameter(Mandatory = $true)][int]$TableNumber,
+        [Parameter(Mandatory = $true)][int]$RowNumber,
+        [Parameter(Mandatory = $true)][int]$ColumnCount
+    )
+    $borderTypes = @(-1, -2, -3, -4, -7, -8)
+    $operations = @(
+        "cell-border-top",
+        "cell-border-left",
+        "cell-border-bottom",
+        "cell-border-right",
+        "cell-border-diagonal-down",
+        "cell-border-diagonal-up"
+    )
+    $parts = @()
+    for ($column = 1; $column -le $ColumnCount; $column += 1) {
+        $cell = Get-Cell `
+            -Table $Table `
+            -Row $RowNumber `
+            -Column $column
+        for ($borderIndex = 0; $borderIndex -lt $borderTypes.Count; $borderIndex += 1) {
+            $borderType = [int]$borderTypes[$borderIndex]
+            Set-GateC5992Checkpoint `
+                -Operation ([string]$operations[$borderIndex]) `
+                -FieldId "border_digest" `
+                -TableNumber $TableNumber `
+                -RowNumber $RowNumber `
+                -ColumnNumber $column
+            $border = $cell.Borders.Item($borderType)
+            $parts += @(
+                "cell-$column",
+                [string]$borderType,
+                [string]$border.LineStyle,
+                [string]$border.LineWidth,
+                [string]$border.Color
+            ) -join ":"
+        }
+    }
+    return $parts
+}
+
 function Get-ListInspectionV2 {
     param(
         [Parameter(Mandatory = $true)]$Document,
@@ -699,20 +742,12 @@ function Get-ListInspectionV2 {
         if ($tableIndex -eq 3) {
             $dailyBodyEvidence = $formatEvidence
         }
-        Set-GateC5992Checkpoint `
-            -Operation "table-borders" `
-            -FieldId "border_digest" `
-            -TableNumber $tableIndex
-        $tableBorders = @()
-        foreach ($border in $table.Borders) {
-            $tableBorders += @(
-                [string]$border.Type,
-                [string]$border.LineStyle,
-                [string]$border.LineWidth,
-                [string]$border.Color
-            ) -join ":"
-        }
-        $borderParts += "table-$tableIndex|" + ($tableBorders -join ",")
+        $borderEvidence = Get-PrototypeCellBorderEvidence `
+            -Table $table `
+            -TableNumber $tableIndex `
+            -RowNumber $prototypeRow `
+            -ColumnCount $prototypeColumnCount
+        $borderParts += "table-$tableIndex|" + ($borderEvidence -join ",")
     }
     Set-GateC5992Checkpoint `
         -Operation "daily-table-access" `

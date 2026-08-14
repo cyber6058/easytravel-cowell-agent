@@ -401,6 +401,29 @@ def test_schema_two_format_fingerprint_uses_fixed_prototype_cells():
     assert ".Rows.Item(" not in inspection
 
 
+def test_schema_two_border_fingerprint_uses_fixed_prototype_cells_and_types():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    helper = script.split("function Get-PrototypeCellBorderEvidence", 1)[1].split(
+        "function Get-ListInspectionV2", 1
+    )[0]
+    inspection = script.split("function Get-ListInspectionV2", 1)[1].split(
+        "function Assert-BasicListContract", 1
+    )[0]
+
+    assert "@(-1, -2, -3, -4, -7, -8)" in helper
+    assert '"cell-border-top"' in helper
+    assert '"cell-border-left"' in helper
+    assert '"cell-border-bottom"' in helper
+    assert '"cell-border-right"' in helper
+    assert '"cell-border-diagonal-down"' in helper
+    assert '"cell-border-diagonal-up"' in helper
+    assert "Get-Cell" in helper
+    assert "$cell.Borders.Item($borderType)" in helper
+    assert "$table.Borders" not in inspection
+    assert "foreach ($border in" not in inspection
+    assert "Get-PrototypeCellBorderEvidence" in inspection
+
+
 def test_5992_diagnosis_is_one_reported_job_without_master_output():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
     diagnosis = script.split("function Invoke-DiagnoseGateC", 1)[1].split(
