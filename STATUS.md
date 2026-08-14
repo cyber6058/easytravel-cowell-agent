@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C table-border collection 的離線修正已完成，
-改由固定 prototype cells／border types 建立指紋。尚未啟動 Word 驗證，沒有
-master／manifest／config；最近完整離線測試為 `456 passed, 3 skipped`，尚未 push。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C 新 v3 真實診斷已讓三份來源 inspection
+全部通過，並將下一個阻塞點定位到 working copy 的 header-tail normalization
+postcondition。來源與既有 artifacts 未變，沒有 master／manifest／config，沒有 retry 或 push。
 
 ## 這次做了什麼
 
@@ -616,12 +616,38 @@ master／manifest／config；最近完整離線測試為 `456 passed, 3 skipped`
 - 本回合未讀私人 LIST、未啟動 Word、未執行診斷或校準，也未建立或改動任何 private
   artifact；既有 v3 diagnostic SHA-256 仍為
   `60d5de09c7d995f53a268723625145b24ceff19dce17d538e743761d58eed22c`，WINWORD 為 0。
+- 2026-08-14 使用者明確核准一次新的 `diagnose-gate-c-v3` 真實診斷，不包含
+  calibration retry；開工的 `git pull --ff-only` 回傳 `Already up to date.`。執行前
+  再次驗證三份來源與六份既有 private reviews／diagnostics 的 SHA-256 全部符合既定
+  值；全新診斷目錄不存在，master／manifest 數量為 0，真實 config 不存在，
+  WINWORD 為 0。
+- 20 秒 hidden owned probe 成功，原文為
+  `{"available": true, "word_version": "16.0"}`。唯一一次 v3 診斷隨後完成且沒有
+  retry：三份 source inspections 全部完成，選定 base 為 `sample-001`，證實固定 cell
+  border fingerprint 已實機越過先前 `$table.Borders` 阻塞點。
+- 診斷在 diagnostic-only working copy mutation 明確停止：classification
+  `ERROR_OBSERVED`；checkpoint phase `calibrate-copy`、sample `sample-001`、operation
+  `header-tail-normalize`、field path `master_working_copy.prototype_header`、table 1／
+  row 1／column 1／paragraph 4；HRESULT `-2146233087`（`0x80131501`，low word `5377`），
+  adapter code `LIST_HEADER_NORMALIZATION_FAILED`。
+- 此 adapter code 來自 `Set-NormalizedHeaderDynamicTail` 寫入後的明確 postcondition：
+  `$HeaderCell.Range.Paragraphs.Count -ne 4`。因此這不是未知 COM 寫入結果；目前程式以
+  paragraph 4 start 到 cell end 前一字元的 range 寫入單一 CR，但 Word 完成後仍未得到
+  exact-four 契約。尚未核准或執行 normalization 修正，也未校準。
+- 診斷後三份來源與六份既有 private reviews／diagnostics 的 SHA-256 全部不變，
+  WINWORD 為 0；沒有 master、manifest、config、PDF 或 PNG。全新 private 目錄只含
+  `gate-c-v3-diagnostic.json`，共 782 bytes，SHA-256 為
+  `e3c469bb5fb727efc36aeeffa1d7532c9d232d82d0321f45d961ed0ec156cec2`；內容僅含既定
+  hashes、checkpoint 與錯誤欄位，不含來源路徑、檔名或文件文字。本回合沒有程式碼
+  變更，因此未重跑測試，最近完整離線結果維持 `456 passed, 3 skipped in 8.14s`。
 
 ## 下一步
 
-Gate C border-access 離線修正已完成。下一步需由使用者另行明確核准，才可讀取三份
-LIST 並執行一次新的 `diagnose-gate-c-v3` 真實診斷；該授權不包含 calibration retry。
-若診斷完整通過 inspection 與 diagnostic-only mutation，再另行決定是否核准新校準。只有 Gate C
+Gate C source inspection 已三份全數通過。下一步先做可逆離線修正：調整
+`Set-NormalizedHeaderDynamicTail`，避免以單一 CR 替換包含受 Word cell 終止結構的
+整段 tail range，改為保留／正規化 paragraph 4 並精確移除其後 tail paragraphs；同時
+在 postcondition 前記錄 observed paragraph count checkpoint 並加入防回歸測試。完成
+完整離線回歸後，再另行決定是否核准新的 v3 真實診斷。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -638,11 +664,12 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 已完成，沒有剩餘安裝阻塞。Gate C header tail、mixed-width、row-access 與
-border-access 契約均已完成離線修正；最後一次 v3 真實診斷定位的
-`$table.Borders` collection 路徑已移除，但固定 cell border access 尚未實機驗證。
-既有六份 private reviews／diagnostics 不能覆蓋或刪除；新的 Word 診斷、再次讀取
-三份 LIST 或重跑 calibration 都需要新的明確核准。
+Gate I 已完成，沒有剩餘安裝阻塞。Gate C mixed-width、row-access 與 border-access
+修正均已由 v3 真實診斷證實三份 source inspection 可完整通過；目前阻塞於 base
+working copy 的 header-tail normalization postcondition，adapter code 為
+`LIST_HEADER_NORMALIZATION_FAILED`。既有七份 private reviews／diagnostics 不能覆蓋
+或刪除；header normalization 先離線修正，新的 Word 診斷、再次讀取三份 LIST 或重跑
+calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
