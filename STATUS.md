@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；strict component artifact reader、離線
-`plan-list-normalization` 與 hash-bound OP-choice validator 已完成 synthetic 驗證；尚未讀取
-既有 private report 或產生真實 decision table，仍無 master／manifest／config。
+說明會產生器 0.2.0 的 Gate I 已完成；真實 normalization decision table 已由既有
+private-safe component report 離線產生，分類為 `BLOCKED_MIXED_VALUE`，共有 36 個 OP
+decisions 與 7 個 derived audits；尚未作 OP choices，仍無 master／manifest／config。
 
 ## 這次做了什麼
 
@@ -859,13 +859,33 @@
   真實 LIST、啟動 Word 或執行 calibration；正式 comparison/calibration 接線未修改。
   針對性測試原文為 `62 passed`，`compileall OK`，`git diff --check` 通過；完整離線回歸
   原文為 `487 passed, 3 skipped in 7.55s`。
+- 2026-08-14 使用者明確核准「讀取一次既有 private-safe component report，離線產生
+  真實 normalization decision table」。開工 `git pull --ff-only` 回傳
+  `Already up to date.`；前驗既有 report 為 134,596 bytes，SHA-256 精確匹配
+  `86a9cecab6d1b544ee62ebe336ad7368bb591fc072deeeecd1c66ffb5ba5f12a`，新 private 目標
+  不存在且 WINWORD 0。只執行一次 `plan-list-normalization`，沒有 retry、Word、
+  diagnosis 或 calibration；受控回傳 `needs_review`／`BLOCKED_MIXED_VALUE`。
+- 真實表共有 36 個 decisions：fonts 13、paragraphs 11、borders 4、daily header 7、
+  shapes 1。35 個為 `REQUIRES_OP_BASE`；唯一 `BLOCKED_MIXED_VALUE` 是
+  `paragraphs:table-001-row-002-column-003`，changed properties 為 line spacing points／
+  rule，三份中有 2 個 eligible、1 個 ineligible source。另有 daily body 7 個
+  `VERIFY_AFTER_COMPONENT_NORMALIZATION` derived audits，component-contract blocker 為 0。
+  Unanimous preserved counts 為 styles 19、fonts 6、paragraphs 8、borders 110，其餘 0。
+- 全新 private 目錄只含 53,469-byte `normalization-decision-table.json`；file SHA-256
+  為 `995130a3b8e5a27c0a52b629ef53e3c1d79761bbd58ff43ee415eca7cccdfb27`，canonical
+  decision-table SHA-256 為
+  `a41ce44d79852c1e7407f0f8f03f30e8bfce13603ad68853966c6d4aaf0b50fe`。後驗來源 report
+  hash 不變、WINWORD 0，目標沒有 master／manifest／config。本回合沒有程式碼變更，
+  最近完整離線回歸維持 `487 passed, 3 skipped in 7.55s`。
 
 ## 下一步
 
-本次離線 planner 與 OP-choice validator 已完成。下一步需另行明確核准「讀取一次既有
-private-safe component report，離線產生真實 normalization decision table」；該回合只可
-執行一次 `plan-list-normalization`、使用全新 private 目錄且不得啟動 Word。產表後仍須
-由 OP 對每個 decision 明確選擇 eligible base，不能直接進 Gate C calibration。沒有新核准
+本次真實 decision table 已產生。下一步先純離線建立 reviewable OP-choice worksheet／
+blank choice artifact：以 sample-001／002／003、changed properties 與 allowlisted safe
+numeric／enum evidence 呈現 36 個 decisions，不顯示來源檔名／路徑、不給多數決推薦，並
+讓 sentinel decision 只列出兩個 eligible bases；先用 synthetic 測試，之後才另行核准
+讀取既有兩份 private-safe reports 產生真實 worksheet。所有 choices 完成並通過 hash-bound
+validator 前不能進 Gate C calibration。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
