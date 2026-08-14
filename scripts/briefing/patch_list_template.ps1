@@ -988,7 +988,7 @@ function Set-NormalizedHeaderDynamicTail {
             $HeaderCell.Range.Paragraphs.Item(4).Range.Start
         )
         $tailRange.End = [int]$HeaderCell.Range.End - 1
-        $tailRange.Text = [string][char]13
+        $tailRange.Text = ""
     }
     finally {
         if ($null -ne $tailRange) {
@@ -1000,7 +1000,15 @@ function Set-NormalizedHeaderDynamicTail {
             catch {}
         }
     }
-    if ([int]$HeaderCell.Range.Paragraphs.Count -ne 4) {
+    $observedParagraphCount = [int]$HeaderCell.Range.Paragraphs.Count
+    Set-GateC5992Checkpoint `
+        -Operation "header-tail-postcondition" `
+        -FieldId "prototype_header" `
+        -TableNumber 1 `
+        -RowNumber 1 `
+        -ColumnNumber 1 `
+        -ParagraphNumber $observedParagraphCount
+    if ($observedParagraphCount -ne 4) {
         throw "LIST_HEADER_NORMALIZATION_FAILED"
     }
 }

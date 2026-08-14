@@ -357,7 +357,10 @@ def test_calibration_normalizes_only_the_approved_header_tail():
     assert "$number = 4" in contract
     assert "Paragraphs.Item(4).Range.Start" in normalization
     assert "$HeaderCell.Range.End - 1" in normalization
-    assert "$tailRange.Text = [string][char]13" in normalization
+    assert '$tailRange.Text = ""' in normalization
+    assert "$observedParagraphCount" in normalization
+    assert '-Operation "header-tail-postcondition"' in normalization
+    assert "-ParagraphNumber $observedParagraphCount" in normalization
     assert "LIST_HEADER_NORMALIZATION_FAILED" in normalization
 
 

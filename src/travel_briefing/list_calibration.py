@@ -56,6 +56,7 @@ _GATE_C_5992_OPERATIONS = {
     "floating-shapes",
     "header-fixed-paragraph",
     "header-tail-normalize",
+    "header-tail-postcondition",
     "header-cell-clear",
     "flight-cell-clear",
     "daily-row-normalize",

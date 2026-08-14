@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C 新 v3 真實診斷已讓三份來源 inspection
-全部通過，並將下一個阻塞點定位到 working copy 的 header-tail normalization
-postcondition。來源與既有 artifacts 未變，沒有 master／manifest／config，沒有 retry 或 push。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C header-tail normalization 離線修正已
+完成，改為清空 tail 並保留 Word cell 終止段落，另加入 observed-count checkpoint。
+尚未啟動 Word 驗證；最近完整離線測試為 `456 passed, 3 skipped`，沒有 push。
 
 ## 這次做了什麼
 
@@ -640,14 +640,27 @@ postcondition。來源與既有 artifacts 未變，沒有 master／manifest／co
   `e3c469bb5fb727efc36aeeffa1d7532c9d232d82d0321f45d961ed0ec156cec2`；內容僅含既定
   hashes、checkpoint 與錯誤欄位，不含來源路徑、檔名或文件文字。本回合沒有程式碼
   變更，因此未重跑測試，最近完整離線結果維持 `456 passed, 3 skipped in 8.14s`。
+- 2026-08-14 依「好 下一步」授權完成 Gate C header-tail normalization 離線修正；
+  開工的 `git pull --ff-only` 回傳 `Already up to date.`。既有實作把 paragraph 4 start
+  到 cell marker 前的整段 tail range 替換為單一 CR，會在 Word 受保護的 cell 終止段落
+  之外再形成一個段落；現在改為將該 range 內容清空，讓 Word 保留既有的終止段落作為
+  唯一空白 paragraph 4。
+- exact-four postcondition 現在先取得 `$observedParagraphCount`，並以新的 allowlisted
+  `header-tail-postcondition` checkpoint 記錄 table 1／row 1／column 1 及實際段落數，
+  再判斷是否為 4；若實機仍不符，安全 v3 report 可直接回報 observed count，不需猜測。
+- 更新防回歸測試，禁止 normalization 再寫入額外 CR，並固定清空 tail、observed-count
+  checkpoint 與既有 fail-closed postcondition。針對性測試為 `45 passed`；完整離線
+  回歸為 `456 passed, 3 skipped in 7.61s`，PowerShell parser、compileall 與
+  `git diff --check` 均通過。三個 skip 維持既有 opt-in integrations。
+- 本回合未讀私人 LIST、未啟動 Word、未執行診斷或校準，也未建立或改動任何 private
+  artifact；最近 v3 diagnostic SHA-256 仍為
+  `e3c469bb5fb727efc36aeeffa1d7532c9d232d82d0321f45d961ed0ec156cec2`，WINWORD 為 0。
 
 ## 下一步
 
-Gate C source inspection 已三份全數通過。下一步先做可逆離線修正：調整
-`Set-NormalizedHeaderDynamicTail`，避免以單一 CR 替換包含受 Word cell 終止結構的
-整段 tail range，改為保留／正規化 paragraph 4 並精確移除其後 tail paragraphs；同時
-在 postcondition 前記錄 observed paragraph count checkpoint 並加入防回歸測試。完成
-完整離線回歸後，再另行決定是否核准新的 v3 真實診斷。只有 Gate C
+Gate C header-tail normalization 離線修正已完成。下一步需由使用者另行明確核准，
+才可讀取三份 LIST 並執行一次新的 `diagnose-gate-c-v3` 真實診斷；該授權不包含
+calibration retry。若 diagnostic-only mutation 完整通過，再另行決定是否核准新校準。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -665,10 +678,9 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C mixed-width、row-access 與 border-access
-修正均已由 v3 真實診斷證實三份 source inspection 可完整通過；目前阻塞於 base
-working copy 的 header-tail normalization postcondition，adapter code 為
-`LIST_HEADER_NORMALIZATION_FAILED`。既有七份 private reviews／diagnostics 不能覆蓋
-或刪除；header normalization 先離線修正，新的 Word 診斷、再次讀取三份 LIST 或重跑
+修正均已由 v3 真實診斷證實三份 source inspection 可完整通過；header-tail
+normalization 的額外 CR 路徑已離線修正，但尚未實機驗證。既有七份 private
+reviews／diagnostics 不能覆蓋或刪除；新的 Word 診斷、再次讀取三份 LIST 或重跑
 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
