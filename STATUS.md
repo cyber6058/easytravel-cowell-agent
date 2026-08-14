@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C 已離線新增專用 read-only
-`diagnose-list-conflicts` CLI，只執行 `inspect-v2` 與 normalized comparison，絕不進入
-master calibration。真實 matrix 尚未取得，仍無 master／manifest／config。
+說明會產生器 0.2.0 的 Gate I 已完成；真實 read-only `diagnose-list-conflicts` 已只執行
+一次且沒有 retry，取得八欄 private-safe matrix，確認三份模板仍需 OP decision；來源與
+既有 artifacts 未變，仍無 master／manifest／config。
 
 ## 這次做了什麼
 
@@ -759,14 +759,43 @@ master calibration。真實 matrix 尚未取得，仍無 master／manifest／con
   CLI output 不展開 matrix。測試明確把 calibration function 替換成 fail sentinel，證實
   diagnosis CLI 不會呼叫它。TDD 紅測先確認 diagnosis API 不存在；針對性回歸為
   `40 passed in 1.16s`，完整離線回歸原文為 `463 passed, 3 skipped in 7.32s`。
+- 2026-08-14 使用者以「好 下一步」明確核准一次真實 `diagnose-list-conflicts`；範圍
+  只含 preflight、20 秒 hidden owned probe、全新 private 目錄的一次 `inspect-v2`／
+  comparison 與唯讀後驗，沒有 retry，不含 calibration、Gate V、config、Gate E 或
+  push。開工 `git pull --ff-only` 回傳 `Already up to date.`；三份來源 hash/size、九份
+  既有 private artifacts 全部符合既定值，新目標與 config 不存在，master／manifest
+  各 0，WINWORD 0。
+- 20 秒 hidden owned probe 成功，原文為
+  `{"available": true, "word_version": "16.0"}`。隨後在全新
+  `list-diagnosis-v8-conflict-matrix` 執行且只執行一次 `diagnose-list-conflicts`，沒有
+  retry；結果為 `TEMPLATE_CONTRACT_CONFLICT`、stage `compare-samples`，重現相同八個
+  field paths：`border_digest`、`daily_body_prototype_digest`、`daily_header_digest`、
+  `font_digest`、`paragraph_digest`、`shape_geometry_points`、`style_digest`、
+  `table_column_widths_points`。命令只完成 inspection/comparison，沒有 calibration 路徑。
+- Matrix 顯示 `border_digest` 與 `daily_header_digest` 各有兩種值：sample-001／002 相同，
+  sample-003 不同。其餘六欄各有三種值。欄寬的四表總寬以程式計算：sample-001 為
+  `563.6／556.7／556.35／556.7 pt`，sample-002 與 sample-003 均為
+  `558.25／556.7／556.35／556.7 pt`；第 2–4 表總寬相同但部分欄位重新分配，第 1 表
+  sample-001 總寬另多 5.35 pt。這些只是不透明差異與數值證據，未據此選 base、平均或
+  放寬契約。
+- 第一次唯讀群組摘要腳本使用此 PowerShell/.NET 不支援的 `SHA256.HashData()`，導致
+  群組數無效，且 case-insensitive `-match 'LIST-'` 誤中 CLI command 的小寫 `list-`；
+  diagnosis 沒有重跑。改用 report 已有的 safe digest/value 分組並改成 case-sensitive
+  檢查後，上述矩陣結果成立，report 不含大寫 LIST 檔名、Downloads 或 `source_path`。
+- 後驗三份來源 hash/size 與九份舊 artifacts 全部不變，WINWORD 0，仍無 master、
+  manifest 或 config。新目標只含 8,888-byte `conflict-diagnosis.json`，SHA-256 為
+  `24a5fb1ab2b71773096cf8cc893acc7001dc018afbefb27a3d4fbf9283fec53d`。本回合沒有
+  程式碼變更，因此未重跑測試，最近完整離線結果維持
+  `463 passed, 3 skipped in 7.32s`。
 
 ## 下一步
 
-本次 Gate C calibration 額度已消耗且沒有 retry；read-only conflict diagnosis CLI 已
-完成。下一步必須由使用者明確核准一次真實 `diagnose-list-conflicts`，其範圍只包含
-preflight、20 秒 hidden owned probe、全新 exclusive private 目錄的一次 `inspect-v2`／
-comparison 與唯讀後驗，沒有 retry，也不包含 calibration、Gate V、config、Gate E 或
-push。沒有新核准不得讀取真實 LIST、啟動 Word 或執行 diagnosis。只有 Gate C
+本次 Gate C calibration 與 read-only diagnosis 額度都已消耗且沒有 retry。下一步先
+離線設計 conflict-component diagnosis：對六個 opaque formatting digests 與已雜湊的
+shape geometry 增加 allowlisted、private-safe component evidence（數值／enum 或
+canonical hash），不得更動正式 comparison 契約；補齊 synthetic 測試後，才另行決定
+是否核准新的真實 read-only component diagnosis。沒有新核准不得讀取真實 LIST、啟動
+Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -786,8 +815,9 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C v3 真實診斷已證實三份 source inspection、
 所有 diagnostic-only mutation 與 SaveAs2 可完整通過；最新正式 calibration 已確認
 阻塞於 `compare-samples` 的八個 field paths，而非 Word adapter 失敗。離線 matrix
-核心與 read-only CLI 入口已完成，但尚未對真實樣本執行，因此不能倒推真實 values
-或自行放寬契約。
+核心與 read-only CLI 已對真實樣本執行；欄寬已有安全數值矩陣，但六個 formatting
+digests 與 shape geometry 仍只有 opaque hashes，尚不足以判定哪些差異可安全正規化，
+不能自行放寬契約。
 既有八份 private artifacts 與最新 review 都不能覆蓋或刪除；新的 Word 回合、再次讀取
 三份 LIST、診斷或 calibration 都需要新的明確核准。
 
