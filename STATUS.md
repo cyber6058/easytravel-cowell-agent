@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；Gate C 已補上五階段安全追蹤與
-`CALIBRATION_CONTRACT_CONFLICT` review，完整離線測試通過。上次正式校準沒有 retry，
-仍未建立 master；下一次真實校準必須重新取得明確核准。
+說明會產生器 0.2.0 的 Gate I 已完成；最新一次正式 Gate C calibration 已依核准只
+執行一次且沒有 retry，現在確定停止於 `compare-samples` 的八個結構欄位衝突。來源與
+既有 artifacts 未變，只有安全 review，尚未建立 master／manifest／config。
 
 ## 這次做了什麼
 
@@ -706,13 +706,34 @@
   原文為 `457 passed, 3 skipped in 7.36s`；`compileall -q src tests` 與
   `git diff --check` 均通過。此 venv 沒有 `ruff.exe`，因此 Ruff 明確標記為未驗證，
   沒有為此安裝新依賴。
+- 2026-08-14 使用者明確重新核准一次新的正式 Gate C calibration；範圍只含 20 秒
+  hidden owned probe、全新 exclusive private 目錄的一次 `calibrate-list` 與唯讀後驗，
+  不含 retry、Gate V、config 寫入、Gate E 或 push。開工 `git pull --ff-only` 回傳
+  `Already up to date.`。第一次 preflight 腳本因 PowerShell 單一字串索引錯誤而無法
+  取得來源 hash/size，且三個縮略的 artifact 預期 hash 不足以驗證；該次沒有啟動 Word、
+  沒有讀取文件內容，也沒有執行 calibration。改從既有 STATUS 取回完整 hash 並修正
+  唯讀腳本後，三份來源 hash/size、八份既有 private artifacts 全部符合既定值；新目標、
+  config 不存在，master／manifest 各 0，WINWORD 0，pdftoppm 可用。
+- 20 秒 hidden owned probe 成功，原文為
+  `{"available": true, "word_version": "16.0"}`。隨後在全新
+  `list-calibration-v7-safe-review` 執行且只執行一次正式 `calibrate-list`，沒有 retry；
+  命令受控回傳 `CALIBRATION_CONTRACT_CONFLICT`、stage `compare-samples`，field paths
+  為 `border_digest`、`daily_body_prototype_digest`、`daily_header_digest`、`font_digest`、
+  `paragraph_digest`、`shape_geometry_points`、`style_digest`、
+  `table_column_widths_points`。因此未進入 `calibrate-master`，不得自行放寬契約。
+- 後驗三份來源 hash/size 與八份舊 artifacts 全部不變，WINWORD 0，仍無 master、
+  manifest 或 config。全新目錄只含 606-byte `calibration-review.json`，SHA-256 為
+  `3b60876667ce6f093f1299371c57956a74209a0e85c34bc7b010d9bd8ef69dc7`；keys 僅為
+  schema/status、error code、stage、source SHA-256、field paths，且不含 LIST 名稱、
+  Downloads 路徑、`source_path` 或文件內容。本回合沒有程式碼變更，因此未重跑測試，
+  最近完整離線結果維持 `457 passed, 3 skipped in 7.36s`。
 
 ## 下一步
 
-Gate C 離線安全修正已完成。下一步若使用者明確核准新的正式 Gate C calibration，
-先重做來源與既有 private artifacts 雜湊、目標目錄不存在、config/WINWORD 為零等
-preflight，再只執行一次且不 retry；若樣本契約衝突，應停在安全 review 供人工判斷，
-不得自行放寬契約。只有 Gate C
+本次 Gate C calibration 額度已消耗且沒有 retry。下一步先離線設計可審查的 conflict
+matrix：對上述八個 field paths 只輸出每份來源 hash 對應的正規化數值或 digest，明確
+區分可證明的自適應排版差異與不可歸一的模板差異；沒有新的明確核准，不得再次讀取
+真實 LIST、啟動 Word、診斷或 calibration，也不得自行移除任何比較欄位。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -730,10 +751,11 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C v3 真實診斷已證實三份 source inspection、
-所有 diagnostic-only mutation 與 SaveAs2 可完整通過；上一次正式 calibration 仍只知
-以缺乏 details 的 `INTERNAL_ERROR` 停止，確切 stage 未驗證。離線安全 stage/review 已
-補齊，但不能倒推上次錯誤或自行放寬契約。既有八份 private artifacts 不能覆蓋或刪除；
-新的 Word 回合、再次讀取三份 LIST 或執行 calibration 都需要新的明確核准。
+所有 diagnostic-only mutation 與 SaveAs2 可完整通過；最新正式 calibration 已確認
+阻塞於 `compare-samples` 的八個 field paths，而非 Word adapter 失敗。安全 review 只
+指出衝突欄位，尚未提供足以判定哪些差異可正規化的逐樣本矩陣，不能自行放寬契約。
+既有八份 private artifacts 與最新 review 都不能覆蓋或刪除；新的 Word 回合、再次讀取
+三份 LIST、診斷或 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
