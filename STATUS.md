@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；最新 Gate C v3 真實診斷已完整通過三份 source
-inspection、diagnostic-only mutation 與 SaveAs2，classification `NOT_REPRODUCED`。
-來源與既有 artifacts 未變，尚未執行正式校準，沒有 master／manifest／config 或 push。
+說明會產生器 0.2.0 的 Gate I 已完成；最新正式 Gate C 校準只執行一次但回傳泛化的
+`INTERNAL_ERROR`，沒有安全 stage/details。來源與八份既有 artifacts 未變，沒有
+master／manifest／config／review，沒有 retry 或 push；確切原因仍未驗證。
 
 ## 這次做了什麼
 
@@ -675,12 +675,35 @@ inspection、diagnostic-only mutation 與 SaveAs2，classification `NOT_REPRODUC
   hashes、complete checkpoint 與零錯誤欄位，不含來源路徑、檔名或文件文字。本回合
   沒有程式碼變更，因此未重跑測試，最近完整離線結果維持
   `456 passed, 3 skipped in 7.61s`。
+- 2026-08-14 使用者以「好 下一步」明確核准一次正式 Gate C `calibrate-list`；範圍
+  只允許全新 exclusive private 目錄執行一次，沒有 retry，不包含 Gate V、config
+  寫入、Gate E 或 push。開工的 `git pull --ff-only` 回傳 `Already up to date.`；
+  執行前再次驗證三份來源與八份既有 private artifacts 的 SHA-256 全部符合既定值，
+  全新校準目錄不存在，既有 master／manifest 數量為 0，真實 config 不存在，
+  WINWORD 為 0，`pdftoppm 25.07.0` 可用。
+- 20 秒 hidden owned probe 成功，原文為
+  `{"available": true, "word_version": "16.0"}`。唯一一次正式 `calibrate-list` 隨後
+  執行完成且沒有 retry，但 CLI 只回傳 `INTERNAL_ERROR`／`Unexpected internal error`，
+  `details` 為空；沒有 Word adapter stage、HRESULT、field paths 或受控 review。
+- 事後唯讀程式路徑確認：正式 calibration 先執行 `inspect-v2`，再由
+  `compare_calibration_samples()` 比較三份 normalized layouts；若拋出
+  `CalibrationContractError`，目前 `main()` 的 generic `except Exception` 會把它抹成
+  本次看到的 `INTERNAL_ERROR`。由於前一回 v3 已證實相同 source inspection、mutation
+  與 SaveAs2 路徑可通過，sample contract comparison conflict 是目前最可能原因；但
+  本次沒有安全 stage/report，因此只記為**未驗證推論**，不據此修改契約。
+- 校準後三份來源與八份既有 private artifacts 的 SHA-256 全部不變，WINWORD 為 0；
+  全新 private 目錄因空白由 CLI 自動移除，沒有 master、manifest、config、review、
+  PDF 或 PNG。本回合沒有程式碼變更，因此未重跑測試，最近完整離線結果維持
+  `456 passed, 3 skipped in 7.61s`。
 
 ## 下一步
 
-Gate C v3 真實診斷已完整通過。下一步需由使用者另行明確核准一次新的正式 Gate C
-`calibrate-list`；該授權只允許在全新 exclusive private 目錄執行一次，沒有 retry，
-且仍不包含 Gate V 視覺 QA、config 寫入或 Gate E。只有 Gate C
+本次正式 Gate C 校準額度已消耗且沒有 retry。下一步先做可逆離線修正：讓 calibration
+orchestration 以 allowlisted stage 追蹤 `inspect-samples`／`compare-samples`／
+`calibrate-master`／`validate-master`／`publish`，將 `CalibrationContractError` 轉成
+受控 `CALIBRATION_CONTRACT_CONFLICT`，並在新 private 目錄 exclusive create 只含
+source hashes、field paths 與 stage 的安全 review；補齊測試與完整離線回歸後，再
+另行決定是否核准新的唯讀 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -698,10 +721,11 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C v3 真實診斷已證實三份 source inspection、
-所有 diagnostic-only mutation 與 SaveAs2 可完整通過；目前沒有已知 Word automation
-技術阻塞，但正式 calibration、master／manifest 建立與其契約比較仍未執行。既有八份
-private artifacts 不能覆蓋或刪除；再次讀取三份 LIST 或執行 calibration 都需要新的
-明確核准。
+所有 diagnostic-only mutation 與 SaveAs2 可完整通過；正式 calibration 則以缺乏
+details 的 `INTERNAL_ERROR` 停止，確切 stage 未驗證。最可能是 sample contract
+comparison conflict，但不能在沒有安全 field paths 的情況下猜測或放寬契約。既有八份
+private artifacts 不能覆蓋或刪除；先離線補安全 stage/review，新的 Word 回合、再次
+讀取三份 LIST 或執行 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
