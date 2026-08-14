@@ -4,9 +4,15 @@
 
 說明會產生器 0.2.0 的 Gate I 已完成；真實 OP-choice worksheet 與 blank choice artifact
 已由既有兩份 private-safe reports 純離線產生並驗證，decision table 仍為
-`BLOCKED_MIXED_VALUE`；36 個 choices 尚未由 OP 填寫，仍無 master／manifest／config。
+`BLOCKED_MIXED_VALUE`；36 個 choices 已整理成 13 個 review groups，但尚未由 OP 選擇或
+填寫，仍無 master／manifest／config。
 
 ## 這次做了什麼
+
+- 2026-08-14 只讀真實 private-safe worksheet，依相同 decision family、component pattern、
+  changed properties、三份 safe values 與 eligibility 將 36 decisions 整理成 13 個 OP
+  review groups。沒有使用多數決、沒有選 base、沒有填 blank choices，也沒有新增 private
+  artifact、啟動 Word 或進入 Gate C。
 
 - 2026-08-14 經當次明確核准，只讀取唯一且 SHA-256 符合 STATUS 紀錄的
   `component-diagnosis.json` 與 `normalization-decision-table.json`，執行一次
@@ -904,9 +910,10 @@
 
 ## 下一步
 
-真實 worksheet 與 blank choice artifact 已完成。下一步由 OP 依 worksheet 逐項選擇
-36 個 eligible base，填入 blank artifact 的 source SHA-256 與 matching component-value
-SHA-256，再用既有 hash-bound validator 驗證。所有 choices 完成並通過 validator 前
+真實 worksheet 與 blank choice artifact 已完成，36 decisions 已整理成 13 個 review
+groups。下一步由 OP 對每組明確指定 sample-001／002／003；選擇會展開到該組每個 exact
+decision，再填入 blank artifact 的 source SHA-256 與 matching component-value SHA-256，
+並用既有 hash-bound validator 驗證。所有 choices 完成並通過 validator 前
 不能進 Gate C calibration。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
