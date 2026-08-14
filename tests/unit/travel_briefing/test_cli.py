@@ -267,11 +267,31 @@ def test_calibrate_list_contract_conflict_writes_safe_exclusive_review(
     pdftoppm = tmp_path / "pdftoppm.exe"
     pdftoppm.write_bytes(b"synthetic")
     private = tmp_path / "new-private"
+    conflict_matrix = {
+        "schema_version": 1,
+        "stage": "compare-samples",
+        "classification": "TEMPLATE_CONTRACT_CONFLICT",
+        "fields": [
+            {
+                "field_path": "style_digest",
+                "normalization_status": "REQUIRES_OP_DECISION",
+                "samples": [
+                    {
+                        "source_sha256": "a" * 64,
+                        "normalized_digest": "b" * 64,
+                    }
+                ],
+            }
+        ],
+    }
 
     def conflict(paths, **kwargs):
         kwargs["on_stage"]("inspect-samples")
         kwargs["on_stage"]("compare-samples")
-        raise CalibrationContractError(("margins_points", "style_digest"))
+        raise CalibrationContractError(
+            ("margins_points", "style_digest"),
+            conflict_matrix=conflict_matrix,
+        )
 
     monkeypatch.setattr(cli, "calibrate_list_templates", conflict)
     exit_code = cli.main(
@@ -309,6 +329,7 @@ def test_calibrate_list_contract_conflict_writes_safe_exclusive_review(
             for sample in samples
         ],
         "field_paths": ["margins_points", "style_digest"],
+        "conflict_matrix": conflict_matrix,
     }
     serialized = json.dumps(review)
     assert all(sample.name not in serialized for sample in samples)

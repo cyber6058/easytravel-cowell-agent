@@ -95,9 +95,15 @@ _GATE_C_5992_FIELDS = {
 
 
 class CalibrationContractError(ValueError):
-    def __init__(self, field_paths: tuple[str, ...]) -> None:
+    def __init__(
+        self,
+        field_paths: tuple[str, ...],
+        *,
+        conflict_matrix: dict[str, Any] | None = None,
+    ) -> None:
         self.code = "CALIBRATION_CONTRACT_CONFLICT"
         self.field_paths = tuple(sorted(set(field_paths)))
+        self.conflict_matrix = conflict_matrix
         fields = ", ".join(self.field_paths)
         super().__init__(f"{self.code}: structural fields differ: {fields}")
 
@@ -1303,6 +1309,105 @@ def select_base_sample(
     )
 
 
+def build_calibration_conflict_matrix(
+    samples: tuple[ListCalibrationSample, ...],
+    field_paths: tuple[str, ...],
+) -> dict[str, Any]:
+    if len(samples) != 3 or len(
+        {item.source_sha256 for item in samples}
+    ) != 3:
+        raise ValueError("conflict matrix requires three unique samples")
+    ordered_samples = tuple(
+        sorted(samples, key=lambda item: item.source_sha256)
+    )
+    layouts = tuple(
+        _normalized_layout_dict(item.inspection)
+        for item in ordered_samples
+    )
+    fields = tuple(sorted(set(field_paths)))
+    if not fields:
+        raise ValueError("conflict matrix field paths are required")
+    available_fields = set(layouts[0])
+    if any(
+        field not in available_fields
+        or any(field not in layout for layout in layouts)
+        for field in fields
+    ):
+        raise ValueError("conflict matrix field is not a normalized layout field")
+    matrix_fields = []
+    for field in fields:
+        values = tuple(layout[field] for layout in layouts)
+        canonical_values = {
+            _canonical_layout_value(value)
+            for value in values
+        }
+        if len(canonical_values) < 2:
+            raise ValueError(
+                f"conflict matrix field is not conflicting: {field}"
+            )
+        matrix_fields.append(
+            {
+                "field_path": field,
+                "normalization_status": "REQUIRES_OP_DECISION",
+                "samples": [
+                    {
+                        "source_sha256": item.source_sha256,
+                        **_safe_conflict_matrix_value(field, value),
+                    }
+                    for item, value in zip(
+                        ordered_samples, values, strict=True
+                    )
+                ],
+            }
+        )
+    return {
+        "schema_version": 1,
+        "stage": "compare-samples",
+        "classification": "TEMPLATE_CONTRACT_CONFLICT",
+        "fields": matrix_fields,
+    }
+
+
+def _safe_conflict_matrix_value(
+    field: str,
+    value: Any,
+) -> dict[str, Any]:
+    canonical = _canonical_layout_value(value)
+    if field.endswith("_digest"):
+        return {"normalized_digest": value}
+    if _is_numeric_layout_value(value):
+        return {"normalized_value": json.loads(canonical)}
+    return {
+        "normalized_value_sha256": hashlib.sha256(
+            canonical.encode("utf-8")
+        ).hexdigest()
+    }
+
+
+def _canonical_layout_value(value: Any) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _is_numeric_layout_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    if isinstance(value, (list, tuple)):
+        return all(_is_numeric_layout_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(key, str) and _is_numeric_layout_value(item)
+            for key, item in value.items()
+        )
+    return False
+
+
 def compare_calibration_samples(
     samples: tuple[ListCalibrationSample, ...],
 ) -> CalibrationComparison:
@@ -1319,7 +1424,14 @@ def compare_calibration_samples(
         )
         conflicts.update(key for key in current if key not in reference)
     if conflicts:
-        raise CalibrationContractError(tuple(conflicts))
+        field_paths = tuple(conflicts)
+        raise CalibrationContractError(
+            field_paths,
+            conflict_matrix=build_calibration_conflict_matrix(
+                samples,
+                field_paths,
+            ),
+        )
     common_names = {
         profile.name
         for profile in samples[0].inspection.adaptive_profiles

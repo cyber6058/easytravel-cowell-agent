@@ -14,6 +14,7 @@ from travel_briefing.list_calibration import (
     ListLayoutProfile,
     ListTemplateInspectionV2,
     build_calibration_manifest,
+    build_calibration_conflict_matrix,
     calibrate_list_templates,
     compare_calibration_samples,
     diagnose_gate_c_5992,
@@ -206,6 +207,107 @@ def test_comparison_allows_only_declared_adaptive_differences():
     assert captured.value.code == "CALIBRATION_CONTRACT_CONFLICT"
     assert "table_column_widths_points" in captured.value.field_paths
     assert "private-group" not in str(captured.value)
+
+
+def test_conflict_matrix_is_deterministic_private_safe_and_decision_bound():
+    original = inspection(5, dynamic_seed="private-group-a")
+    changed = replace(
+        inspection(8, dynamic_seed="private-group-b"),
+        border_digest=digest("changed-border"),
+        shape_geometry_points=(
+            ("private-shape-name", 501.0, 12.0, 42.0, 42.0),
+        ),
+        table_column_widths_points=(
+            original.table_column_widths_points[0],
+            original.table_column_widths_points[1],
+            (55.0, 71.0, 108.0, 90.0, 72.0, 72.0, 72.0),
+            original.table_column_widths_points[3],
+        ),
+    )
+    samples = (
+        sample("3" * 64, changed),
+        sample("1" * 64, original),
+        sample("2" * 64, original),
+    )
+
+    matrix = build_calibration_conflict_matrix(
+        samples,
+        (
+            "table_column_widths_points",
+            "shape_geometry_points",
+            "border_digest",
+        ),
+    )
+
+    assert matrix["schema_version"] == 1
+    assert matrix["stage"] == "compare-samples"
+    assert matrix["classification"] == "TEMPLATE_CONTRACT_CONFLICT"
+    assert [item["field_path"] for item in matrix["fields"]] == [
+        "border_digest",
+        "shape_geometry_points",
+        "table_column_widths_points",
+    ]
+    assert all(
+        item["normalization_status"] == "REQUIRES_OP_DECISION"
+        for item in matrix["fields"]
+    )
+    assert all(
+        [sample_value["source_sha256"] for sample_value in item["samples"]]
+        == ["1" * 64, "2" * 64, "3" * 64]
+        for item in matrix["fields"]
+    )
+    serialized = json.dumps(matrix)
+    assert "private-group" not in serialized
+    assert "private-shape-name" not in serialized
+    assert "dynamic_content_digest" not in serialized
+    assert "adaptive_profiles" not in serialized
+    by_field = {
+        item["field_path"]: item
+        for item in matrix["fields"]
+    }
+    assert all(
+        set(value) == {"source_sha256", "normalized_digest"}
+        for value in by_field["border_digest"]["samples"]
+    )
+    assert all(
+        set(value) == {"source_sha256", "normalized_value"}
+        for value in by_field["table_column_widths_points"]["samples"]
+    )
+    assert all(
+        set(value) == {
+            "source_sha256",
+            "normalized_value_sha256",
+        }
+        for value in by_field["shape_geometry_points"]["samples"]
+    )
+    with pytest.raises(ValueError, match="not conflicting"):
+        build_calibration_conflict_matrix(samples, ("margins_points",))
+    with pytest.raises(ValueError, match="normalized layout field"):
+        build_calibration_conflict_matrix(samples, ("private_content",))
+
+
+def test_comparison_attaches_safe_conflict_matrix_to_contract_error():
+    samples = (
+        sample("1" * 64, inspection(5, dynamic_seed="private-a")),
+        sample("2" * 64, inspection(6, dynamic_seed="private-b")),
+        sample(
+            "3" * 64,
+            replace(
+                inspection(7, dynamic_seed="private-c"),
+                style_digest=digest("changed-style"),
+            ),
+        ),
+    )
+
+    with pytest.raises(CalibrationContractError) as captured:
+        compare_calibration_samples(samples)
+
+    matrix = captured.value.conflict_matrix
+    assert matrix is not None
+    assert [item["field_path"] for item in matrix["fields"]] == [
+        "style_digest"
+    ]
+    assert "private-" not in json.dumps(matrix)
 
 
 def test_base_selection_uses_median_day_then_lowest_hash():

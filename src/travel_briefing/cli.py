@@ -243,16 +243,19 @@ def run_calibrate_list(args: argparse.Namespace) -> dict[str, Any]:
         )
     except CalibrationContractError as error:
         review_path = private / "calibration-review.json"
+        review_payload = {
+            "schema_version": SCHEMA_VERSION,
+            "status": "needs_review",
+            "error_code": error.code,
+            "stage": stage,
+            "source_sha256": source_hashes,
+            "field_paths": list(error.field_paths),
+        }
+        if error.conflict_matrix is not None:
+            review_payload["conflict_matrix"] = error.conflict_matrix
         _write_json_exclusive(
             review_path,
-            {
-                "schema_version": SCHEMA_VERSION,
-                "status": "needs_review",
-                "error_code": error.code,
-                "stage": stage,
-                "source_sha256": source_hashes,
-                "field_paths": list(error.field_paths),
-            },
+            review_payload,
         )
         raise CalibrationContractConflictError(
             stage=stage,

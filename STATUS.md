@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；最新一次正式 Gate C calibration 已依核准只
-執行一次且沒有 retry，現在確定停止於 `compare-samples` 的八個結構欄位衝突。來源與
-既有 artifacts 未變，只有安全 review，尚未建立 master／manifest／config。
+說明會產生器 0.2.0 的 Gate I 已完成；Gate C 已離線補上 deterministic、private-safe
+conflict matrix 核心，所有未核准正規化的模板差異均標為 `REQUIRES_OP_DECISION`。
+真實 matrix 尚未取得，仍無 master／manifest／config。
 
 ## 這次做了什麼
 
@@ -727,13 +727,31 @@
   schema/status、error code、stage、source SHA-256、field paths，且不含 LIST 名稱、
   Downloads 路徑、`source_path` 或文件內容。本回合沒有程式碼變更，因此未重跑測試，
   最近完整離線結果維持 `457 passed, 3 skipped in 7.36s`。
+- 2026-08-14 依使用者「好 下一步」完成 Gate C conflict matrix 離線核心，沒有讀取
+  真實 LIST、啟動 Word、執行 diagnosis/calibration，亦未建立或修改 private artifact。
+  `build_calibration_conflict_matrix()` 只接受三個唯一 sample 與 normalized layout 既有
+  欄位；欄位必須確實存在至少兩種 canonical values，否則 fail closed。field 與 sample
+  均固定排序，classification 為 `TEMPLATE_CONTRACT_CONFLICT`，每個差異固定標示
+  `REQUIRES_OP_DECISION`，不會自行宣稱可正規化。
+- Matrix 明確排除 day count、dynamic content 與 adaptive profiles。既有 `*_digest`
+  只輸出 normalized digest，純數值樹才輸出 normalized value；任何其他含字串結構
+  （包括可能帶 Word shape 名稱的 `shape_geometry_points`）只輸出 canonical SHA-256，
+  避免 private 名稱進入 review。`compare_calibration_samples()` 發現衝突時會附上此
+  matrix，CLI 只將它 exclusive-create 到 private `calibration-review.json`，一般錯誤
+  details 仍只含 stage、field paths 與 review path。
+- TDD 紅測先確認 matrix builder 不存在；收緊 shape 名稱輸出後，針對性回歸為
+  `36 passed in 1.23s`，完整離線回歸原文為 `459 passed, 3 skipped in 7.24s`；
+  `compileall -q src tests`、production Python 100 字元行寬與 `git diff --check` 均通過。
+  此 venv 仍沒有 Ruff，因此 Ruff 未驗證且沒有安裝新依賴。
 
 ## 下一步
 
-本次 Gate C calibration 額度已消耗且沒有 retry。下一步先離線設計可審查的 conflict
-matrix：對上述八個 field paths 只輸出每份來源 hash 對應的正規化數值或 digest，明確
-區分可證明的自適應排版差異與不可歸一的模板差異；沒有新的明確核准，不得再次讀取
-真實 LIST、啟動 Word、診斷或 calibration，也不得自行移除任何比較欄位。只有 Gate C
+本次 Gate C calibration 額度已消耗且沒有 retry，conflict matrix 核心已完成。下一步
+離線新增專用的 read-only conflict diagnosis CLI 入口，只允許 `inspect-samples` 與
+`compare-samples`，即使三份樣本相符也必須停止，不能進入 `calibrate-master`；補齊
+synthetic 測試後，才另行取得一次真實 LIST／Word 診斷核准以產生 matrix。沒有新的
+明確核准，不得再次讀取真實 LIST、啟動 Word、診斷或 calibration，也不得自行移除
+任何比較欄位。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -752,8 +770,9 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C v3 真實診斷已證實三份 source inspection、
 所有 diagnostic-only mutation 與 SaveAs2 可完整通過；最新正式 calibration 已確認
-阻塞於 `compare-samples` 的八個 field paths，而非 Word adapter 失敗。安全 review 只
-指出衝突欄位，尚未提供足以判定哪些差異可正規化的逐樣本矩陣，不能自行放寬契約。
+阻塞於 `compare-samples` 的八個 field paths，而非 Word adapter 失敗。離線 matrix
+核心已能安全表示差異，但尚無 read-only CLI 入口，也尚未對真實樣本執行，因此不能
+倒推真實 values 或自行放寬契約。
 既有八份 private artifacts 與最新 review 都不能覆蓋或刪除；新的 Word 回合、再次讀取
 三份 LIST、診斷或 calibration 都需要新的明確核准。
 
