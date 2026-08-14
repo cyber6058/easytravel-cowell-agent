@@ -2,9 +2,9 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；六組格式 digest 與 shape geometry 的
-private-safe component diagnosis 已完成離線實作與 synthetic 驗證，但尚未獲准讀取
-真實 LIST；三份模板仍需 OP decision，仍無 master／manifest／config。
+說明會產生器 0.2.0 的 Gate I 已完成；一次新的真實 read-only component diagnosis
+已完成且沒有 retry，證實 style component 一致，差異集中於 font、paragraph、border、
+daily prototypes 與 floating shape；三份模板仍需 OP decision，仍無 master／manifest／config。
 
 ## 這次做了什麼
 
@@ -798,14 +798,39 @@ private-safe component diagnosis 已完成離線實作與 synthetic 驗證，但
   private artifact。針對性測試原文為 `70 passed`；PowerShell parser 原文為
   `PowerShell parse OK`，`compileall OK`，`git diff --check` 通過；完整離線回歸原文為
   `469 passed, 3 skipped in 7.34s`。
+- 2026-08-14 使用者明確核准「一次新的真實 read-only component diagnosis」。開工
+  `git pull --ff-only` 回傳 `Already up to date.`；三份來源依序精確匹配既定 SHA-256
+  與 `77,824／81,408／86,016` bytes，新 private 目標不存在，WINWORD 0。只執行一次
+  `diagnose-list-components`，沒有 probe、retry 或 calibration；命令回傳 `status: ok`。
+- 三份 component 數量完全相同且沒有 presence 差異：styles／fonts／paragraphs 各 19、
+  borders 114、daily header/body 各 7、shapes 1。styles 19 格全部一致，證實舊
+  `style_digest` 衝突是因舊 digest 同時混入 font／paragraph，而非 style 本身不同。
+  Fonts 有 13 格不同且全為 sample-001／002 相同、sample-003 不同：12 格字級、3 格
+  bold、4 格 color。Paragraphs 有 11 格不同，均涉及 line spacing，其中 1 格另有
+  line-spacing rule 差異，且該格 sample-002 回傳 Word mixed/undefined sentinel
+  `9999999`，不得當成可直接套用的標準值。
+- Borders 只有 4 個 prototype side 不同，全部為 sample-001／002 相同、sample-003
+  不同，差異僅 line width `12／12／4`。Daily header 7 格全為 sample-001／002 相同、
+  sample-003 不同，差異來自 font 與 paragraph 子元件，style 相同；daily body 7 格的
+  font 與 paragraph 都不同，其中 1 格 sample-001／002 相同、其餘 6 格三份皆不同。
+  唯一 `floating-001` 三份皆存在，但 left/top/width/height 皆不同，尺寸依序為
+  `95.4／83.95／103.4 pt` 正方形。
+- 第一版唯讀差異彙總腳本因 `ConvertTo-Json -Depth` 陣列語法錯誤而產生無效零差異；
+  沒有重新執行 Word action。修正後只重讀既有安全 JSON 並得到上述結果。後驗三份來源
+  hash／size 均不變，WINWORD 0。全新 private 目錄只含 134,596-byte
+  `component-diagnosis.json`，SHA-256 為
+  `86a9cecab6d1b544ee62ebe336ad7368bb591fc072deeeecd1c66ffb5ba5f12a`；report 不含
+  大寫 LIST 檔名、Downloads、`source_path` 或 Windows 路徑。本回合沒有程式碼變更，
+  最近完整離線回歸維持 `469 passed, 3 skipped in 7.34s`。
 
 ## 下一步
 
-本次離線 component diagnosis 已完成；下一步需由使用者另行明確核准「一次新的真實
-read-only component diagnosis」，才可對三份 LIST 執行新命令。該回合必須使用全新
-private 目錄、只允許一次 action、執行來源 hash 前後驗且不得 retry；不含 calibration、
-master／manifest／config 或任何契約放寬。沒有新核准不得讀取真實 LIST、啟動 Word、
-執行 diagnosis 或 calibration。只有 Gate C
+本次真實 read-only component diagnosis 額度已消耗且沒有 retry。下一步先離線制定
+明確的 normalization decision table：哪些 component 可由產品契約固定、哪些需要 OP
+選定 base，並對 `9999999` sentinel 與 floating shape 建立 fail-closed 規則；不得因
+多數決或方便而自行選值。完成設計與 synthetic 測試後，才另行決定是否核准新的正式
+Gate C calibration。沒有新核准不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或
+calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -825,10 +850,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 Gate I 已完成，沒有剩餘安裝阻塞。Gate C v3 真實診斷已證實三份 source inspection、
 所有 diagnostic-only mutation 與 SaveAs2 可完整通過；最新正式 calibration 已確認
 阻塞於 `compare-samples` 的八個 field paths，而非 Word adapter 失敗。離線 matrix
-核心與 read-only CLI 已對真實樣本執行；欄寬已有安全數值矩陣，但六個 formatting
-digests 與 shape geometry 仍只有 opaque hashes，尚不足以判定哪些差異可安全正規化，
-不能自行放寬契約。
-既有八份 private artifacts 與最新 review 都不能覆蓋或刪除；新的 Word 回合、再次讀取
+核心與 read-only CLI 已對真實樣本執行；component evidence 已定位 font、paragraph、
+border、daily prototypes 與 shape geometry 差異，但尚無產品決策可判定標準值，且
+存在 Word mixed/undefined sentinel，不能自行放寬契約。
+既有 private artifacts 與最新 reports 都不能覆蓋或刪除；新的 Word 回合、再次讀取
 三份 LIST、診斷或 calibration 都需要新的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
