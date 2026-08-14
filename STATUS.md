@@ -2,11 +2,25 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；離線 OP-choice worksheet／blank choice 產生器
-已完成並通過 synthetic 回歸；真實 decision table 仍為 `BLOCKED_MIXED_VALUE`，尚未產生
-真實 worksheet 或作 OP choices，仍無 master／manifest／config。
+說明會產生器 0.2.0 的 Gate I 已完成；真實 OP-choice worksheet 與 blank choice artifact
+已由既有兩份 private-safe reports 純離線產生並驗證，decision table 仍為
+`BLOCKED_MIXED_VALUE`；36 個 choices 尚未由 OP 填寫，仍無 master／manifest／config。
 
 ## 這次做了什麼
+
+- 2026-08-14 經當次明確核准，只讀取唯一且 SHA-256 符合 STATUS 紀錄的
+  `component-diagnosis.json` 與 `normalization-decision-table.json`，執行一次
+  `prepare-list-normalization-choices`；未讀原始 LIST、未啟動 Word，也未執行 diagnosis
+  或 calibration。
+- 全新 private 目錄只含 `normalization-choice-worksheet.json`（60,473 bytes，SHA-256
+  `5683469da2c788982b3b8145fdbf5cc2c3c58bb5630f34d2089bbe30268da517`）與
+  `normalization-choices.blank.json`（5,975 bytes，SHA-256
+  `43c81418254d6b7e15dfe56e6c66b16809cf7eb134492fb67de218fd0f6e61a4`）。
+- 真實 worksheet 分類為 `BLOCKED_MIXED_VALUE`，含 36 decisions、7 derived audits、
+  0 blockers、108 options；固定 sample-001／002／003，其中 1 個 sentinel option 標成
+  ineligible。36 個 blank choices 全未填；unsafe filename/path/recommendation token 命中 0。
+- 後驗重建驗證顯示 worksheet 與 blank artifact 均 exact match；兩份來源 report SHA-256
+  維持不變，WINWORD process 0。private artifacts 未加入 Git。
 
 - 2026-08-14 新增 strict decision-table reader 與
   `prepare-list-normalization-choices` 純離線 CLI；它只接受互相吻合的 component report
@@ -890,10 +904,10 @@
 
 ## 下一步
 
-純離線 worksheet／blank choice 工具已完成。下一步需另行明確核准讀取既有兩份
-private-safe reports，執行一次 `prepare-list-normalization-choices` 產生真實 worksheet
-與 blank choice artifact；之後由 OP 逐項選擇 eligible base，再用既有 hash-bound validator
-驗證。所有 choices 完成並通過 validator 前不能進 Gate C calibration。沒有新核准
+真實 worksheet 與 blank choice artifact 已完成。下一步由 OP 依 worksheet 逐項選擇
+36 個 eligible base，填入 blank artifact 的 source SHA-256 與 matching component-value
+SHA-256，再用既有 hash-bound validator 驗證。所有 choices 完成並通過 validator 前
+不能進 Gate C calibration。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
