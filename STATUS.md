@@ -2,11 +2,21 @@
 
 ## 一句話現況
 
-說明會產生器 0.2.0 的 Gate I 已完成；真實 normalization decision table 已由既有
-private-safe component report 離線產生，分類為 `BLOCKED_MIXED_VALUE`，共有 36 個 OP
-decisions 與 7 個 derived audits；尚未作 OP choices，仍無 master／manifest／config。
+說明會產生器 0.2.0 的 Gate I 已完成；離線 OP-choice worksheet／blank choice 產生器
+已完成並通過 synthetic 回歸；真實 decision table 仍為 `BLOCKED_MIXED_VALUE`，尚未產生
+真實 worksheet 或作 OP choices，仍無 master／manifest／config。
 
 ## 這次做了什麼
+
+- 2026-08-14 新增 strict decision-table reader 與
+  `prepare-list-normalization-choices` 純離線 CLI；它只接受互相吻合的 component report
+  與 decision table，在全新 private 目錄 exclusive-create worksheet 與 blank choices。
+- Worksheet 固定使用 sample-001／002／003，只呈現 source/component SHA-256、changed
+  properties 與 allowlisted numeric／enum／digest values；不含來源檔名、路徑或推薦，
+  sentinel option 保留證據但標成 `eligible_as_base: false`。
+- 本回合只用 synthetic artifacts，未讀既有 private reports、未啟動 Word、未執行
+  diagnosis 或 calibration。targeted tests 為 `69 passed`；完整離線回歸為
+  `494 passed, 3 skipped in 7.63s`，compileall 與 `git diff --check` 通過；venv 未安裝 Ruff。
 
 - 從 Cowell CLI 0.3.2 以 allowlist 複製護照名單與既有訂單分房功能。
 - CLI 只保留 doctor、auth、passports、rooms。
@@ -880,12 +890,10 @@ decisions 與 7 個 derived audits；尚未作 OP choices，仍無 master／mani
 
 ## 下一步
 
-本次真實 decision table 已產生。下一步先純離線建立 reviewable OP-choice worksheet／
-blank choice artifact：以 sample-001／002／003、changed properties 與 allowlisted safe
-numeric／enum evidence 呈現 36 個 decisions，不顯示來源檔名／路徑、不給多數決推薦，並
-讓 sentinel decision 只列出兩個 eligible bases；先用 synthetic 測試，之後才另行核准
-讀取既有兩份 private-safe reports 產生真實 worksheet。所有 choices 完成並通過 hash-bound
-validator 前不能進 Gate C calibration。沒有新核准
+純離線 worksheet／blank choice 工具已完成。下一步需另行明確核准讀取既有兩份
+private-safe reports，執行一次 `prepare-list-normalization-choices` 產生真實 worksheet
+與 blank choice artifact；之後由 OP 逐項選擇 eligible base，再用既有 hash-bound validator
+驗證。所有 choices 完成並通過 validator 前不能進 Gate C calibration。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。

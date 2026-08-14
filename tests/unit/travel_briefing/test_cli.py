@@ -14,6 +14,7 @@ from travel_briefing.list_calibration import CalibrationContractError
 from travel_briefing.models import DraftStatus
 from tests.unit.travel_briefing.test_list_calibration import (
     component_artifact,
+    component_result,
     component_samples,
 )
 
@@ -162,6 +163,14 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
             "--private-dir", "normalization-plan",
         ]
     )
+    choice_prepared = parser.parse_args(
+        [
+            "prepare-list-normalization-choices",
+            "--component-report", "component-report.json",
+            "--decision-table", "decision-table.json",
+            "--private-dir", "normalization-choices",
+        ]
+    )
 
     assert prepared.command == "prepare"
     assert checked.command == "check-script"
@@ -170,7 +179,9 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
     assert diagnosed.command == "diagnose-list-conflicts"
     assert component_diagnosed.command == "diagnose-list-components"
     assert planned.command == "plan-list-normalization"
+    assert choice_prepared.command == "prepare-list-normalization-choices"
     assert not hasattr(planned, "sample")
+    assert not hasattr(choice_prepared, "sample")
     assert not hasattr(diagnosed, "pdftoppm")
     assert not hasattr(rendered, "template")
     with pytest.raises(cli.BriefingInputError):
@@ -542,6 +553,88 @@ def test_plan_list_normalization_accepts_strict_synthetic_report(
     assert payload["classification"] == "NORMALIZATION_READY"
     assert table["classification"] == "NORMALIZATION_READY"
     assert table["decisions"] == []
+
+
+def test_prepare_normalization_choices_writes_only_offline_review_artifacts(
+    monkeypatch, capsys, tmp_path
+):
+    samples = component_samples()
+    samples[2]["fonts"][9]["size_points"] = 12.0
+    diagnosis = component_result(*samples)
+    table = cli.build_component_normalization_decision_table(diagnosis)
+    component_report = tmp_path / "component-report.json"
+    component_report.write_text(
+        json.dumps(component_artifact(samples)), encoding="utf-8"
+    )
+    decision_table = tmp_path / "decision-table.json"
+    decision_table.write_text(json.dumps(table), encoding="utf-8")
+    private = tmp_path / "normalization-choices"
+    monkeypatch.setattr(
+        cli,
+        "diagnose_list_components",
+        lambda *args, **kwargs: pytest.fail("Word must not run"),
+    )
+    monkeypatch.setattr(
+        cli,
+        "calibrate_list_templates",
+        lambda *args, **kwargs: pytest.fail("calibration must not run"),
+    )
+
+    exit_code = cli.main([
+        "prepare-list-normalization-choices",
+        "--component-report", str(component_report),
+        "--decision-table", str(decision_table),
+        "--private-dir", str(private),
+        "--format", "json",
+    ])
+
+    payload = json.loads(capsys.readouterr().out)
+    worksheet = json.loads(
+        (private / "normalization-choice-worksheet.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    blank = json.loads(
+        (private / "normalization-choices.blank.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert exit_code == 20
+    assert payload["status"] == "needs_review"
+    assert payload["decision_count"] == 1
+    assert worksheet["decisions"][0]["options"][2]["safe_values"] == {
+        "size_points": 12.0
+    }
+    assert blank["choices"][0]["selected_source_sha256"] == ""
+    assert not (private / "LIST-master.docx").exists()
+
+
+def test_prepare_normalization_choices_rejects_existing_dir_before_read(
+    monkeypatch, tmp_path
+):
+    component_report = tmp_path / "component-report.json"
+    decision_table = tmp_path / "decision-table.json"
+    component_report.write_text("{}", encoding="utf-8")
+    decision_table.write_text("{}", encoding="utf-8")
+    private = tmp_path / "existing"
+    private.mkdir()
+    monkeypatch.setattr(
+        cli,
+        "load_component_diagnosis_artifact",
+        lambda *args: pytest.fail("component report must not be read"),
+    )
+    monkeypatch.setattr(
+        cli,
+        "load_component_normalization_decision_table",
+        lambda *args: pytest.fail("decision table must not be read"),
+    )
+
+    with pytest.raises(cli.BriefingInputError, match="must not exist"):
+        cli.run_prepare_list_normalization_choices(SimpleNamespace(
+            component_report=component_report,
+            decision_table=decision_table,
+            private_dir=private,
+        ))
 
 
 def test_calibrate_list_rejects_existing_private_dir_before_word(tmp_path):

@@ -17,6 +17,8 @@ from travel_briefing.list_calibration import (
     ListTemplateInspectionV2,
     build_calibration_manifest,
     build_calibration_conflict_matrix,
+    build_blank_component_normalization_choices,
+    build_component_normalization_choice_worksheet,
     build_component_normalization_decision_table,
     component_normalization_decision_table_sha256,
     calibrate_list_templates,
@@ -27,6 +29,7 @@ from travel_briefing.list_calibration import (
     diagnose_list_components,
     diagnose_list_header_contract,
     load_component_diagnosis_artifact,
+    load_component_normalization_decision_table,
     manifest_sha256,
     normalized_structure_fingerprint,
     select_base_sample,
@@ -1059,6 +1062,100 @@ def test_decision_table_hash_rejects_unapproved_fields():
 
     with pytest.raises(ValueError, match="component normalization decision table"):
         component_normalization_decision_table_sha256(table)
+
+
+def test_decision_table_reader_requires_exact_private_safe_schema(tmp_path):
+    table = decision_table_with_one_font_choice()
+    path = tmp_path / "normalization-decision-table.json"
+    path.write_text(json.dumps(table), encoding="utf-8")
+
+    loaded = load_component_normalization_decision_table(path)
+
+    assert loaded == table
+    assert loaded is not table
+    table["source_path"] = "must-not-pass"
+    path.write_text(json.dumps(table), encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="component normalization decision table"
+    ):
+        load_component_normalization_decision_table(path)
+
+
+def test_choice_worksheet_exposes_only_fixed_labels_and_safe_changed_values():
+    samples = component_samples()
+    for sample, size in zip(samples, (10.0, 10.0, 12.0), strict=True):
+        sample["fonts"][9]["size_points"] = size
+    diagnosis = component_result(*samples)
+    table = build_component_normalization_decision_table(diagnosis)
+
+    worksheet = build_component_normalization_choice_worksheet(
+        diagnosis, table
+    )
+
+    assert worksheet["sample_labels"] == [
+        {"sample_id": "sample-001", "source_sha256": "a" * 64},
+        {"sample_id": "sample-002", "source_sha256": "b" * 64},
+        {"sample_id": "sample-003", "source_sha256": "c" * 64},
+    ]
+    decision = worksheet["decisions"][0]
+    assert decision["changed_properties"] == ["size_points"]
+    assert [option["safe_values"] for option in decision["options"]] == [
+        {"size_points": 10.0},
+        {"size_points": 10.0},
+        {"size_points": 12.0},
+    ]
+    serialized = json.dumps(worksheet)
+    assert "recommend" not in serialized.casefold()
+    assert "source_path" not in serialized
+    assert ".doc" not in serialized
+
+
+def test_choice_worksheet_marks_mixed_value_option_ineligible():
+    samples = component_samples()
+    samples[0]["paragraphs"][2]["line_spacing_points"] = 15.0
+    samples[1]["paragraphs"][2]["line_spacing_points"] = 9999999.0
+    samples[1]["paragraphs"][2]["line_spacing_rule"] = 9999999
+    diagnosis = component_result(*samples)
+    table = build_component_normalization_decision_table(diagnosis)
+
+    worksheet = build_component_normalization_choice_worksheet(
+        diagnosis, table
+    )
+
+    options = worksheet["decisions"][0]["options"]
+    assert [option["eligible_as_base"] for option in options] == [
+        True, False, True
+    ]
+    assert options[1]["safe_values"] == {
+        "line_spacing_points": 9999999.0,
+        "line_spacing_rule": 9999999,
+    }
+
+
+def test_choice_worksheet_rejects_mismatched_diagnosis_and_table():
+    diagnosis = component_result(*component_samples())
+    table = decision_table_with_one_font_choice()
+
+    with pytest.raises(ValueError, match="do not match"):
+        build_component_normalization_choice_worksheet(diagnosis, table)
+
+
+def test_blank_choices_are_incomplete_until_op_fills_exact_hash_binding():
+    table = decision_table_with_one_font_choice()
+
+    artifact = build_blank_component_normalization_choices(table)
+
+    assert artifact["choices"] == [{
+        "decision_id": table["decisions"][0]["decision_id"],
+        "selected_source_sha256": "",
+        "selected_component_value_sha256": "",
+    }]
+    with pytest.raises(ValueError, match="OP normalization choices"):
+        validate_component_normalization_choices(table, artifact)
+    artifact["choices"][0].update(
+        valid_choice_artifact(table)["choices"][0]
+    )
+    assert validate_component_normalization_choices(table, artifact) == artifact
 
 
 class SyntheticHeaderDiagnosticAdapter:

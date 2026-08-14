@@ -1134,6 +1134,17 @@ def load_component_diagnosis_artifact(
     )
 
 
+def load_component_normalization_decision_table(
+    path: Path,
+) -> dict[str, Any]:
+    payload = _read_json_object(
+        path.expanduser().resolve(),
+        "component normalization decision table",
+    )
+    _validate_component_normalization_decision_table(payload)
+    return json.loads(json.dumps(payload))
+
+
 def build_component_normalization_decision_table(
     diagnosis: ListComponentDiagnosisResult,
 ) -> dict[str, Any]:
@@ -1384,6 +1395,136 @@ def component_normalization_decision_table_sha256(
     return hashlib.sha256(
         _canonical_layout_value(table).encode("utf-8")
     ).hexdigest()
+
+
+def build_component_normalization_choice_worksheet(
+    diagnosis: ListComponentDiagnosisResult,
+    table: dict[str, Any],
+) -> dict[str, Any]:
+    """Expose only allowlisted values needed for an explicit OP base choice."""
+    expected = build_component_normalization_decision_table(diagnosis)
+    _validate_component_normalization_decision_table(table)
+    if table != expected:
+        raise ValueError("component diagnosis and decision table do not match")
+
+    source_hashes = tuple(table["source_sha256"])
+    sample_labels = [
+        {
+            "sample_id": f"sample-{index:03d}",
+            "source_sha256": source_hash,
+        }
+        for index, source_hash in enumerate(source_hashes, start=1)
+    ]
+    identity_keys = {
+        "styles": "cell_id",
+        "fonts": "cell_id",
+        "paragraphs": "cell_id",
+        "borders": "border_id",
+        "daily_header": "cell_id",
+        "shapes": "shape_id",
+    }
+    component_maps = {
+        family: tuple(
+            {
+                str(item[identity_key]): item
+                for item in evidence[family]
+            }
+            for evidence in diagnosis.samples
+        )
+        for family, identity_key in identity_keys.items()
+    }
+    decisions = []
+    for decision in table["decisions"]:
+        family = decision["component_family"]
+        component_id = decision["component_id"]
+        options = []
+        for label, sample, component_map in zip(
+            sample_labels,
+            decision["samples"],
+            component_maps[family],
+            strict=True,
+        ):
+            component = component_map.get(component_id)
+            if component is None:
+                raise ValueError(
+                    "component diagnosis and decision table do not match"
+                )
+            component_hash = hashlib.sha256(
+                _canonical_layout_value(component).encode("utf-8")
+            ).hexdigest()
+            if (
+                sample["source_sha256"] != label["source_sha256"]
+                or sample["component_value_sha256"] != component_hash
+            ):
+                raise ValueError(
+                    "component diagnosis and decision table do not match"
+                )
+            options.append(
+                {
+                    "sample_id": label["sample_id"],
+                    "source_sha256": label["source_sha256"],
+                    "component_value_sha256": component_hash,
+                    "eligible_as_base": sample["eligible_as_base"],
+                    "safe_values": {
+                        key: component[key]
+                        for key in decision["changed_properties"]
+                    },
+                }
+            )
+        decisions.append(
+            {
+                "decision_id": decision["decision_id"],
+                "component_family": family,
+                "component_id": component_id,
+                "selection_unit": decision["selection_unit"],
+                "changed_properties": list(
+                    decision["changed_properties"]
+                ),
+                "status": decision["status"],
+                "options": options,
+            }
+        )
+    return {
+        "schema_version": 1,
+        "stage": "component-normalization-choice-review",
+        "classification": table["classification"],
+        "decision_table_sha256": (
+            component_normalization_decision_table_sha256(table)
+        ),
+        "sample_labels": sample_labels,
+        "policy": {
+            "automatic_majority_selection": False,
+            "selection_instruction": (
+                "SELECT_ONE_ELIGIBLE_BASE_PER_DECISION"
+            ),
+            "sentinel_option_action": "INELIGIBLE",
+        },
+        "decisions": decisions,
+        "derived_audits": json.loads(json.dumps(table["derived_audits"])),
+        "blockers": json.loads(json.dumps(table["blockers"])),
+    }
+
+
+def build_blank_component_normalization_choices(
+    table: dict[str, Any],
+) -> dict[str, Any]:
+    """Build an intentionally incomplete artifact for explicit OP entry."""
+    _validate_component_normalization_decision_table(table)
+    return {
+        "schema_version": 1,
+        "decision_table_sha256": (
+            component_normalization_decision_table_sha256(table)
+        ),
+        "source_sha256": list(table["source_sha256"]),
+        "choices": [
+            {
+                "decision_id": decision["decision_id"],
+                "selected_source_sha256": "",
+                "selected_component_value_sha256": "",
+            }
+            for decision in table["decisions"]
+        ],
+    }
 
 
 def validate_component_normalization_choices(

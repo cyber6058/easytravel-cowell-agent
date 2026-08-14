@@ -30,11 +30,14 @@ from .config import load_config
 from .list_calibration import (
     CalibrationContractError,
     calibrate_list_templates,
+    build_blank_component_normalization_choices,
+    build_component_normalization_choice_worksheet,
     build_component_normalization_decision_table,
     component_normalization_decision_table_sha256,
     diagnose_calibration_conflicts,
     diagnose_list_components,
     load_component_diagnosis_artifact,
+    load_component_normalization_decision_table,
 )
 from .adapters.windows_word import WindowsWordAdapter
 from .models import BriefingDraft, DraftStatus
@@ -130,6 +133,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text"
     )
     normalization.set_defaults(handler=run_plan_list_normalization)
+
+    choices = subparsers.add_parser(
+        "prepare-list-normalization-choices",
+        help="Build an offline OP worksheet and blank choice artifact",
+    )
+    choices.add_argument(
+        "--component-report", type=Path, required=True
+    )
+    choices.add_argument(
+        "--decision-table", type=Path, required=True
+    )
+    choices.add_argument("--private-dir", type=Path, required=True)
+    choices.add_argument(
+        "--format", choices=("text", "json"), default="text"
+    )
+    choices.set_defaults(handler=run_prepare_list_normalization_choices)
 
     prepare = subparsers.add_parser("prepare", help="Create a reviewable manifest")
     prepare.add_argument("--url")
@@ -499,6 +518,57 @@ def run_plan_list_normalization(
         "classification": table["classification"],
         "decision_table_sha256": table_hash,
         "report": str(report_path),
+    }
+
+
+def run_prepare_list_normalization_choices(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    component_report = args.component_report.expanduser().resolve()
+    decision_table = args.decision_table.expanduser().resolve()
+    if (
+        not component_report.is_file()
+        or component_report.suffix.casefold() != ".json"
+        or not decision_table.is_file()
+        or decision_table.suffix.casefold() != ".json"
+    ):
+        raise BriefingInputError(
+            "prepare-list-normalization-choices inputs must be existing JSON files"
+        )
+    private = args.private_dir.expanduser().resolve()
+    if private.exists():
+        raise BriefingInputError(
+            "prepare-list-normalization-choices private directory must not exist"
+        )
+    try:
+        private.mkdir(parents=True)
+        diagnosis = load_component_diagnosis_artifact(component_report)
+        table = load_component_normalization_decision_table(decision_table)
+        worksheet = build_component_normalization_choice_worksheet(
+            diagnosis, table
+        )
+        blank_choices = build_blank_component_normalization_choices(table)
+        worksheet_path = private / "normalization-choice-worksheet.json"
+        blank_path = private / "normalization-choices.blank.json"
+        _write_json_exclusive(worksheet_path, worksheet)
+        _write_json_exclusive(blank_path, blank_choices)
+    except ValueError as error:
+        _remove_empty_directory(private)
+        raise BriefingInputError(
+            "prepare-list-normalization-choices inputs are invalid or mismatched"
+        ) from error
+    except Exception:
+        _remove_empty_directory(private)
+        raise
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": "needs_review",
+        "command": "prepare-list-normalization-choices",
+        "classification": table["classification"],
+        "decision_table_sha256": worksheet["decision_table_sha256"],
+        "decision_count": len(table["decisions"]),
+        "worksheet": str(worksheet_path),
+        "blank_choices": str(blank_path),
     }
 
 

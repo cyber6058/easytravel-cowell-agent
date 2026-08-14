@@ -72,6 +72,24 @@ missing, extra, or duplicate choices, an ineligible mixed-value source, and a
 component-value hash that does not belong to the selected source. A component
 contract conflict cannot be resolved with an OP-choice artifact.
 
+`prepare-list-normalization-choices` accepts only an existing strict component
+report and its exactly matching strict decision table. It does not accept LIST
+paths or construct a Word adapter. In a new private directory it exclusively
+creates:
+
+- `normalization-choice-worksheet.json`, with fixed `sample-001` through
+  `sample-003` labels, the bound source and component hashes, changed-property
+  names, and only the corresponding allowlisted numeric, enum, or digest values;
+  and
+- `normalization-choices.blank.json`, with one intentionally blank hash-bound
+  choice for every decision.
+
+The worksheet never records source filenames or paths and never recommends a
+sample. A sentinel-bearing option remains visible as evidence but has
+`eligible_as_base: false`. The blank choice artifact is deliberately invalid
+until the OP fills every selected source SHA-256 and matching component-value
+SHA-256 from an eligible worksheet option.
+
 ## Gate boundary
 
 The decision table is offline evidence only. Calibration remains blocked until:
