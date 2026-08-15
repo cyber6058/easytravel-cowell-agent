@@ -4,10 +4,21 @@
 
 說明會產生器 0.2.0 的 Gate I 已完成；真實 OP-choice worksheet 與 blank choice artifact
 已由既有兩份 private-safe reports 純離線產生並驗證，decision table 仍為
-`BLOCKED_MIXED_VALUE`；36 個 choices 已整理成 13 個 review groups，但尚未由 OP 選擇或
-填寫，仍無 master／manifest／config。
+`BLOCKED_MIXED_VALUE`；OP 已明確指定 13 組全部選 sample-001，36 個 hash-bound choices
+已填妥並通過 strict validation；尚未執行新的 Gate C，仍無 master／manifest／config。
 
 ## 這次做了什麼
+
+- 2026-08-15 OP 明確指示「就選 sample 1」；13 個 review groups 全部展開為 36 個 exact
+  decisions，均選擇 eligible `sample-001`。G05 的 sentinel 位於 sample-002，因此本次選擇
+  沒有觸及 ineligible option。
+- 在既有 private review 目錄 exclusive-create
+  `normalization-choices.op-selected.json`（10,583 bytes，SHA-256
+  `55946dad8d35fad300e1a48245f899263609a7ebc4995406a8e5c297e344b970`）；原 worksheet 與
+  blank artifact SHA-256 維持不變。
+- 獨立 read-back strict validation 為 `PASS`：36 choices、selected source 唯一且全為
+  sample-001、decision-table SHA-256 綁定正確。未啟動 Word、未執行 calibration，
+  WINWORD process 0。
 
 - 2026-08-14 只讀真實 private-safe worksheet，依相同 decision family、component pattern、
   changed properties、三份 safe values 與 eligibility 將 36 decisions 整理成 13 個 OP
@@ -910,11 +921,9 @@
 
 ## 下一步
 
-真實 worksheet 與 blank choice artifact 已完成，36 decisions 已整理成 13 個 review
-groups。下一步由 OP 對每組明確指定 sample-001／002／003；選擇會展開到該組每個 exact
-decision，再填入 blank artifact 的 source SHA-256 與 matching component-value SHA-256，
-並用既有 hash-bound validator 驗證。所有 choices 完成並通過 validator 前
-不能進 Gate C calibration。沒有新核准
+真實 worksheet、blank artifact 與 OP-selected artifact 均已完成；36 choices 全選
+sample-001 並通過 hash-bound validator。下一步是另行取得「一次新的 Gate C 真實校準」
+明確核准，才可讀取三份 LIST、啟動 Word，依已驗證 choices 建立並驗證 master。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
