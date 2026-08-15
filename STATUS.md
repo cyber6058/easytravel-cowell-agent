@@ -5,9 +5,19 @@
 說明會產生器 0.2.0 的 Gate I 已完成；真實 OP-choice worksheet 與 blank choice artifact
 已由既有兩份 private-safe reports 純離線產生並驗證，decision table 仍為
 `BLOCKED_MIXED_VALUE`；OP 已明確指定 13 組全部選 sample-001，36 個 hash-bound choices
-已填妥並通過 strict validation；尚未執行新的 Gate C，仍無 master／manifest／config。
+已填妥並通過 strict validation；新的 Gate C 已獲核准，但 preflight 發現 choices 尚未接入
+calibration 且漏列 table-column-width 決策，因此尚未啟動 Word，仍無 master／manifest／config。
 
 ## 這次做了什麼
+
+- 2026-08-15 使用者明確核准「一次新的 Gate C 真實校準」。唯讀 code／STATUS preflight
+  發現現有 36-choice validator 尚未接入 `calibrate-list` 或 Word normalization job；直接
+  執行只會重現已知 `compare-samples` 衝突，因此沒有消耗真實 Word 校準回合。
+- 36 個 component choices 可覆蓋 font、paragraph、border、daily-header、shape 與相關
+  digest 衝突，但 worksheet 漏列獨立的 `table_column_widths_points`。既有 private-safe
+  證據顯示 sample-001 四表總寬為 `563.6／556.7／556.35／556.7 pt`，sample-002／003
+  為 `558.25／556.7／556.35／556.7 pt`，第 2–4 表內部亦有部分欄位重新分配；不能自行
+  平均、視為 derived 或假設 OP 已選。尚需一個明確 width base 決策後才能補最小整合實作。
 
 - 2026-08-15 OP 明確指示「就選 sample 1」；13 個 review groups 全部展開為 36 個 exact
   decisions，均選擇 eligible `sample-001`。G05 的 sentinel 位於 sample-002，因此本次選擇
@@ -921,9 +931,11 @@
 
 ## 下一步
 
-真實 worksheet、blank artifact 與 OP-selected artifact 均已完成；36 choices 全選
-sample-001 並通過 hash-bound validator。下一步是另行取得「一次新的 Gate C 真實校準」
-明確核准，才可讀取三份 LIST、啟動 Word，依已驗證 choices 建立並驗證 master。沒有新核准
+真實 worksheet、blank artifact 與 OP-selected artifact 均已完成；36 component choices
+全選 sample-001 並通過 hash-bound validator，Gate C 亦已獲核准。下一步需 OP 明確指定
+`table_column_widths_points` 也選 sample-001、sample-002 或 sample-003；隨後先以 synthetic
+測試補齊 choices → Word normalization → unchanged schema-2 validation 的最小整合，再執行
+本次已核准的唯一真實 Gate C。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
