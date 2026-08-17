@@ -177,6 +177,18 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
             "--private-dir", "normalization-choices",
         ]
     )
+    gate_c_diagnosed = parser.parse_args(
+        [
+            "diagnose-normalized-gate-c-failure",
+            "--sample", "one.doc",
+            "--sample", "two.doc",
+            "--sample", "three.docx",
+            "--decision-table", "decision-table.json",
+            "--normalization-choices", "choices.json",
+            "--width-base-sample", "sample-001",
+            "--private-dir", "gate-c-diagnosis",
+        ]
+    )
 
     assert prepared.command == "prepare"
     assert checked.command == "check-script"
@@ -187,6 +199,10 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
     assert component_diagnosed.command == "diagnose-list-components"
     assert planned.command == "plan-list-normalization"
     assert choice_prepared.command == "prepare-list-normalization-choices"
+    assert gate_c_diagnosed.command == (
+        "diagnose-normalized-gate-c-failure"
+    )
+    assert not hasattr(gate_c_diagnosed, "pdftoppm")
     assert not hasattr(planned, "sample")
     assert not hasattr(choice_prepared, "sample")
     assert not hasattr(diagnosed, "pdftoppm")
@@ -642,6 +658,79 @@ def test_prepare_normalization_choices_rejects_existing_dir_before_read(
             decision_table=decision_table,
             private_dir=private,
         ))
+
+
+def test_normalized_gate_c_failure_diagnosis_is_read_only_and_safe(
+    monkeypatch, capsys, tmp_path
+):
+    samples = []
+    for index in range(3):
+        path = tmp_path / f"sample-{index}.doc"
+        path.write_bytes(f"source-{index}".encode())
+        samples.append(path)
+    hashes = [hashlib.sha256(path.read_bytes()).hexdigest() for path in samples]
+    decision_table = tmp_path / "decision-table.json"
+    choices_path = tmp_path / "choices.json"
+    decision_table.write_text("{}", encoding="utf-8")
+    choices_path.write_text("{}", encoding="utf-8")
+    private = tmp_path / "diagnosis"
+    table = {"source_sha256": hashes}
+    validated_choices = {"choices": []}
+    monkeypatch.setattr(
+        cli, "load_component_normalization_decision_table", lambda path: table
+    )
+    monkeypatch.setattr(
+        cli,
+        "validate_component_normalization_choices",
+        lambda observed_table, artifact: validated_choices,
+    )
+    monkeypatch.setattr(
+        cli,
+        "inspect_list_templates_v2",
+        lambda *args, **kwargs: SimpleNamespace(
+            samples=("safe-inspection",),
+            word_version="16.0-synthetic",
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "compare_calibration_samples_with_normalization",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            ValueError("calibration samples have no common normal profile")
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "calibrate_list_templates",
+        lambda *args, **kwargs: pytest.fail("calibration must not run"),
+    )
+
+    exit_code = cli.main([
+        "diagnose-normalized-gate-c-failure",
+        *sum((["--sample", str(path)] for path in samples), []),
+        "--decision-table", str(decision_table),
+        "--normalization-choices", str(choices_path),
+        "--width-base-sample", "sample-001",
+        "--private-dir", str(private),
+        "--format", "json",
+    ])
+
+    payload = json.loads(capsys.readouterr().out)
+    report = json.loads(
+        (private / "normalized-gate-c-failure-diagnosis.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert exit_code == 20
+    assert payload["classification"] == "ERROR_OBSERVED"
+    assert report["stage"] == "compare-normalized-layout"
+    assert report["error"] == {
+        "exception_type": "ValueError",
+        "error_code": "NO_COMMON_NORMAL_PROFILE",
+        "field_paths": [],
+    }
+    assert "source_path" not in json.dumps(report)
+    assert not (private / "LIST-master.docx").exists()
 
 
 def test_calibrate_list_rejects_existing_private_dir_before_word(tmp_path):

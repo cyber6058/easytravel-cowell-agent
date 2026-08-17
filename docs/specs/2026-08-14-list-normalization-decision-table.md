@@ -107,6 +107,14 @@ must still reproduce the selected source's normalized structure fingerprint,
 and all existing dynamic-token, source-mutation, exclusive-create, and manifest
 checks remain unchanged.
 
+`diagnose-normalized-gate-c-failure` is a separate read-only diagnostic. It
+performs exactly one schema-2 inspection and the pure normalized comparison,
+then stops before working-copy creation or the `calibrate` Word action. Its
+exclusive private-safe report records only fixed stages, classifications,
+source hashes, Word version, selected-base/fingerprint evidence, and an
+allowlisted exception type/code/field list. It never records exception text,
+source paths, filenames, document content, or a master artifact.
+
 ## Gate boundary
 
 The decision table is offline evidence only. Calibration remains blocked until:

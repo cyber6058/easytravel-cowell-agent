@@ -11,6 +11,16 @@
 
 ## 這次做了什麼
 
+- 2026-08-17 經明確核准新增 `diagnose-normalized-gate-c-failure` read-only CLI：只執行一次
+  schema-2 `inspect-v2` 與純 Python normalized comparison，停在任何 working-copy 或
+  `calibrate` Word action 前。report 只允許固定 stage／classification、source hashes、Word
+  version、selected base／fingerprint 與 allowlisted exception type／code／field paths；不含
+  raw exception text、來源路徑／檔名、文件內容或 master。
+- Synthetic 測試以 calibration fail sentinel 證明 diagnosis 不會呼叫 calibration function；
+  targeted regression 為 `72 passed in 1.77s`，完整離線回歸為
+  `497 passed, 3 skipped in 9.01s`，compileall 與 `git diff --check` 通過；sandbox-safe
+  basetemp 已清除。
+
 - 2026-08-17 真實 Gate C preflight 通過：三份來源依 decision-table 順序各唯一匹配，
   hash 與 `77,824／81,408／86,016` bytes 不變；decision table SHA-256 為
   `995130a3b8e5a27c0a52b629ef53e3c1d79761bbd58ff43ee415eca7cccdfb27`，completed choices
@@ -956,9 +966,9 @@
 
 真實 worksheet、OP-selected artifact、sample-001 欄寬決策與 fail-closed Gate C 整合均已
 完成並通過離線回歸，但唯一真實 Gate C 已以 `INTERNAL_ERROR` 結束且無輸出。下一步需另行
-核准一次新的 read-only Gate C failure diagnosis：重新做一次 inspect-v2，但只保留 exact-schema
-private-safe stage／exception evidence，不建立 master、不執行 calibration mutation、不 retry；
-定位並離線修正後，才另行核准新的真實 Gate C。沒有新核准
+執行已核准的唯一一次 read-only Gate C failure diagnosis：重新做一次 inspect-v2，但只保留
+exact-schema private-safe stage／exception evidence，不建立 master、不執行 calibration
+mutation、不 retry；定位並離線修正後，才另行核准新的真實 Gate C。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。

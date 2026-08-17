@@ -34,8 +34,10 @@ from .list_calibration import (
     build_component_normalization_choice_worksheet,
     build_component_normalization_decision_table,
     component_normalization_decision_table_sha256,
+    compare_calibration_samples_with_normalization,
     diagnose_calibration_conflicts,
     diagnose_list_components,
+    inspect_list_templates_v2,
     load_component_diagnosis_artifact,
     load_component_normalization_decision_table,
     validate_component_normalization_choices,
@@ -156,6 +158,32 @@ def build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text"
     )
     choices.set_defaults(handler=run_prepare_list_normalization_choices)
+
+    gate_c_failure = subparsers.add_parser(
+        "diagnose-normalized-gate-c-failure",
+        help="Inspect normalized Gate C pre-mutation stages only",
+    )
+    gate_c_failure.add_argument(
+        "--sample", action="append", type=Path, required=True
+    )
+    gate_c_failure.add_argument(
+        "--decision-table", type=Path, required=True
+    )
+    gate_c_failure.add_argument(
+        "--normalization-choices", type=Path, required=True
+    )
+    gate_c_failure.add_argument(
+        "--width-base-sample",
+        choices=("sample-001", "sample-002", "sample-003"),
+        required=True,
+    )
+    gate_c_failure.add_argument("--private-dir", type=Path, required=True)
+    gate_c_failure.add_argument(
+        "--format", choices=("text", "json"), default="text"
+    )
+    gate_c_failure.set_defaults(
+        handler=run_diagnose_normalized_gate_c_failure
+    )
 
     prepare = subparsers.add_parser("prepare", help="Create a reviewable manifest")
     prepare.add_argument("--url")
@@ -615,6 +643,136 @@ def run_prepare_list_normalization_choices(
         "decision_count": len(table["decisions"]),
         "worksheet": str(worksheet_path),
         "blank_choices": str(blank_path),
+    }
+
+
+def run_diagnose_normalized_gate_c_failure(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    samples = tuple(path.expanduser().resolve() for path in args.sample)
+    if len(samples) != 3 or len(set(samples)) != 3:
+        raise BriefingInputError(
+            "normalized Gate C diagnosis requires three unique samples"
+        )
+    if any(
+        not path.is_file() or path.suffix.casefold() not in {".doc", ".docx"}
+        for path in samples
+    ):
+        raise BriefingInputError(
+            "normalized Gate C diagnosis samples must be existing Word files"
+        )
+    private = args.private_dir.expanduser().resolve()
+    if private.exists():
+        raise BriefingInputError(
+            "normalized Gate C diagnosis private directory must not exist"
+        )
+    source_hashes = [_sha256_file(path) for path in samples]
+    try:
+        table = load_component_normalization_decision_table(
+            args.decision_table
+        )
+        choices = validate_component_normalization_choices(
+            table,
+            _read_json_object(
+                args.normalization_choices,
+                label="normalization choices",
+            ),
+        )
+    except (OSError, UnicodeError, ValueError) as error:
+        raise BriefingInputError(
+            "normalized Gate C diagnosis inputs are invalid"
+        ) from error
+    if table["source_sha256"] != source_hashes:
+        raise BriefingInputError(
+            "normalized Gate C diagnosis sources do not match inputs"
+        )
+    width_index = int(args.width_base_sample[-3:]) - 1
+    stage = "inspect-samples"
+    try:
+        private.mkdir(parents=True)
+        inspected = inspect_list_templates_v2(
+            samples,
+            adapter=WindowsWordAdapter(
+                script_path=(
+                    _briefing_scripts_root() / "patch_list_template.ps1"
+                )
+            ),
+            timeout_seconds=180,
+        )
+        stage = "compare-normalized-layout"
+        try:
+            comparison = compare_calibration_samples_with_normalization(
+                inspected.samples,
+                table=table,
+                choices=choices,
+                width_base_source_sha256=source_hashes[width_index],
+            )
+            classification = "PRE_MUTATION_PATH_CLEAR"
+            error_evidence = None
+            base_source = comparison.base_sample_sha256
+            fingerprint = comparison.normalized_structure_fingerprint
+        except Exception as error:
+            classification = "ERROR_OBSERVED"
+            error_evidence = _safe_normalization_diagnosis_error(error)
+            base_source = None
+            fingerprint = None
+        report = {
+            "schema_version": SCHEMA_VERSION,
+            "status": "DIAGNOSED",
+            "command": "diagnose-normalized-gate-c-failure",
+            "stage": stage,
+            "classification": classification,
+            "source_sha256": source_hashes,
+            "word_version": inspected.word_version,
+            "selected_base_source_sha256": base_source,
+            "normalized_structure_fingerprint": fingerprint,
+            "error": error_evidence,
+        }
+        report_path = private / "normalized-gate-c-failure-diagnosis.json"
+        _write_json_exclusive(report_path, report)
+    except Exception:
+        _remove_empty_directory(private)
+        raise
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": "needs_review",
+        "command": "diagnose-normalized-gate-c-failure",
+        "classification": classification,
+        "stage": stage,
+        "report": str(report_path),
+    }
+
+
+def _safe_normalization_diagnosis_error(error: Exception) -> dict[str, Any]:
+    known_messages = {
+        "calibration samples have no common normal profile": (
+            "NO_COMMON_NORMAL_PROFILE"
+        ),
+        "normalization sources do not match calibration samples": (
+            "NORMALIZATION_SOURCE_MISMATCH"
+        ),
+        "normalization requires one complete approved source layout": (
+            "MIXED_NORMALIZATION_SOURCES"
+        ),
+    }
+    if isinstance(error, CalibrationContractError):
+        return {
+            "exception_type": "CalibrationContractError",
+            "error_code": "UNAPPROVED_SCHEMA_CONFLICT",
+            "field_paths": list(error.field_paths),
+        }
+    if isinstance(error, ValueError):
+        return {
+            "exception_type": "ValueError",
+            "error_code": known_messages.get(
+                str(error), "UNEXPECTED_VALUE_ERROR"
+            ),
+            "field_paths": [],
+        }
+    return {
+        "exception_type": type(error).__name__,
+        "error_code": "UNEXPECTED_COMPARISON_ERROR",
+        "field_paths": [],
     }
 
 
