@@ -6,14 +6,27 @@
 已由既有兩份 private-safe reports 純離線產生並驗證，decision table 仍為
 `BLOCKED_MIXED_VALUE`；OP 已明確指定 13 組全部選 sample-001，36 個 hash-bound choices
 已填妥並通過 strict validation；欄寬亦明確選 sample-001，Gate C 單一來源 normalization
-整合已通過完整離線回歸；已核准的唯一真實 Gate C 回傳 `INTERNAL_ERROR` 且未留下輸出，
-來源不變、WINWORD 0；read-only diagnosis 已證明 pre-mutation path 全通，故錯誤位於後段
-calibration／validation／publish 路徑；仍無 master／manifest／config，禁止無核准重試。
+整合已通過完整離線回歸；唯一真實 Gate C 回傳 `INTERNAL_ERROR` 且未留下輸出，而後續
+read-only 與 diagnostic-only working-copy diagnosis 已分別證明 pre-mutation comparison
+及 sample-001 normalization mutation 全通，故錯誤已縮小到 SaveAs2／master validation／
+publish 路徑；仍無 master／manifest／config，禁止無核准重試。
 
 ## 這次做了什麼
 
-- 2026-08-17 已依核准範圍完成 `diagnose-sample-001-working-copy` 的離線實作，尚未消耗
-  唯一一次真實 Word 診斷。命令嚴格綁定 decision table 的 sample-001 hash、36 個已完成
+- 2026-08-17 唯一一次 `diagnose-sample-001-working-copy` 已執行且沒有 retry；命令回傳
+  `needs_review`、classification `NOT_REPRODUCED`，checkpoint phase／operation 均為
+  `complete`，HRESULT `0x00000000`、adapter code `NONE`。這證明 sample-001 的既有
+  normalization mutation 可在 Word `16.0` 的 temporary working copy 完整跑到
+  `SaveAs2` 前。
+- 新 private 目錄只含 717-byte `sample-001-working-copy-diagnosis.json`，SHA-256
+  `f6ad8fa982a467b9b3c6e92d7c1a638d16436ceaed02fffcf6e37bd4506c9ebb`；private-unsafe
+  token 命中 0、master／manifest 0、working-copy cleanup 為 true。後驗 sample-001
+  SHA-256 仍為 `c230eb24397124cbf0fc6940765be14a9e5a07742f64039f0c01d60f05420b76`、
+  size 77,824 bytes，WINWORD 0。原始 Gate C `INTERNAL_ERROR` 因此進一步縮小到
+  `SaveAs2`、master validation 或 publish，不再包含 normalization mutation。
+
+- 2026-08-17 已依核准範圍完成 `diagnose-sample-001-working-copy` 的離線實作；執行真實
+  Word 診斷前先完成 commit。命令嚴格綁定 decision table 的 sample-001 hash、36 個已完成
   choices 全選同一來源，且 schema-2 Word job 只建立 temporary working copy、沿用既有
   normalization mutation 並在 `SaveAs2` 前返回；`finally` 必須刪除 working copy，來源 hash
   若變更或 working copy 殘留均 fail closed。CLI 只允許在全新 private 目錄 exclusive-create
@@ -988,13 +1001,11 @@ calibration／validation／publish 路徑；仍無 master／manifest／config，
 ## 下一步
 
 真實 worksheet、OP-selected artifact、sample-001 欄寬決策與 fail-closed Gate C 整合均已
-完成並通過離線回歸，但唯一真實 Gate C 已以 `INTERNAL_ERROR` 結束且無輸出。下一步需另行
-read-only diagnosis 已證明 pre-mutation path 全通。下一步需另行核准一次 sample-001
-diagnostic-only working-copy calibration：允許只對 temp working copy 執行既有 normalization，
-不 SaveAs2、不建立或發布 master／manifest，只保留 private-safe checkpoint／exception evidence，
-finally 刪除 working copy 且不 retry；若此路徑也通過，再另行設計 SaveAs2／post-validation
-診斷。沒有新核准
-不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
+完成並通過離線回歸。read-only comparison 與 diagnostic-only working-copy normalization
+也已各執行一次並通過；唯一真實 Gate C 的 `INTERNAL_ERROR` 現已縮小到 SaveAs2、master
+validation 或 publish。下一步是先純離線設計一個 bounded SaveAs2／post-validation
+diagnostic，再另行取得真實 Word 執行核准。沒有新核准不得再次讀取真實 LIST、啟動 Word、
+執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -1011,12 +1022,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 公開處」規則，正常情況在 repo 重新驗證為 private 前不得 push；使用者本次在明知
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
-Gate I 已完成，沒有剩餘安裝阻塞。Gate C v3 真實診斷已證實三份 source inspection、
-所有 diagnostic-only mutation 與 SaveAs2 可完整通過；最新正式 calibration 已確認
-阻塞於 `compare-samples` 的八個 field paths，而非 Word adapter 失敗。離線 matrix
-核心與 read-only CLI 已對真實樣本執行；component evidence 已定位 font、paragraph、
-border、daily prototypes 與 shape geometry 差異，但尚無產品決策可判定標準值，且
-存在 Word mixed/undefined sentinel，不能自行放寬契約。
+Gate I 已完成，沒有剩餘安裝阻塞。OP 已用 hash-bound choices 解決既有八個 schema-2
+field conflicts；最新診斷證實 normalized comparison 與 sample-001 working-copy mutation
+都可通過，但正式 Gate C 仍阻塞於 SaveAs2、master validation 或 publish 的未定位
+`INTERNAL_ERROR`。不得自行放寬契約或把 diagnostic-only 成功宣稱為 Gate C 完成。
 既有 private artifacts 與最新 reports 都不能覆蓋或刪除；新的 Word 回合、再次讀取
 三份 LIST、診斷或 calibration 都需要新的明確核准。
 
