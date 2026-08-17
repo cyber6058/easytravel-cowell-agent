@@ -7,9 +7,22 @@
 `BLOCKED_MIXED_VALUE`；OP 已明確指定 13 組全部選 sample-001，36 個 hash-bound choices
 已填妥並通過 strict validation；欄寬亦明確選 sample-001，Gate C 單一來源 normalization
 整合已通過完整離線回歸；已核准的唯一真實 Gate C 回傳 `INTERNAL_ERROR` 且未留下輸出，
-來源不變、WINWORD 0，仍無 master／manifest／config，禁止無核准重試。
+來源不變、WINWORD 0；read-only diagnosis 已證明 pre-mutation path 全通，故錯誤位於後段
+calibration／validation／publish 路徑；仍無 master／manifest／config，禁止無核准重試。
 
 ## 這次做了什麼
+
+- 2026-08-17 唯一一次 `diagnose-normalized-gate-c-failure` 已執行且沒有 retry；命令以預期
+  `needs_review`／exit 20 結束，classification 為 `PRE_MUTATION_PATH_CLEAR`、stage 為
+  `compare-normalized-layout`。這證明真實 `inspect-v2`、source／choice binding、八欄位
+  allowlist、sample-001 base、common profile 與 normalized fingerprint 計算全部通過；
+  selected base 確實為 sample-001，fingerprint 為
+  `c5786b598f981789a5dc856129d11435bc2e9ab9de665a7f1b5b5008f2e1cd0a`。
+- 新 private 目錄只含 680-byte `normalized-gate-c-failure-diagnosis.json`，SHA-256
+  `b6d3f3fd63ac3f2600f17c39acfa6f18959e57c4a1dfca5887e29e8ef0841463`；unsafe token
+  命中 0、error 為 null、master／manifest 0。後驗三份來源 hash／size 不變、WINWORD 0。
+  因此先前 `INTERNAL_ERROR` 已縮小到 working-copy calibration、SaveAs2、master validation
+  或 publish，不能再歸因於 comparison。
 
 - 2026-08-17 經明確核准新增 `diagnose-normalized-gate-c-failure` read-only CLI：只執行一次
   schema-2 `inspect-v2` 與純 Python normalized comparison，停在任何 working-copy 或
@@ -966,9 +979,11 @@
 
 真實 worksheet、OP-selected artifact、sample-001 欄寬決策與 fail-closed Gate C 整合均已
 完成並通過離線回歸，但唯一真實 Gate C 已以 `INTERNAL_ERROR` 結束且無輸出。下一步需另行
-執行已核准的唯一一次 read-only Gate C failure diagnosis：重新做一次 inspect-v2，但只保留
-exact-schema private-safe stage／exception evidence，不建立 master、不執行 calibration
-mutation、不 retry；定位並離線修正後，才另行核准新的真實 Gate C。沒有新核准
+read-only diagnosis 已證明 pre-mutation path 全通。下一步需另行核准一次 sample-001
+diagnostic-only working-copy calibration：允許只對 temp working copy 執行既有 normalization，
+不 SaveAs2、不建立或發布 master／manifest，只保留 private-safe checkpoint／exception evidence，
+finally 刪除 working copy 且不 retry；若此路徑也通過，再另行設計 SaveAs2／post-validation
+診斷。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
