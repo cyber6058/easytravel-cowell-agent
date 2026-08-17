@@ -13,6 +13,14 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 擴列修正後的 4 天 Word 案例通過 day-row contract，隨後固定失敗於
+  `LIST_HEADER_PARAGRAPHS_CHANGED`；後驗仍為零產物、WINWORD 0、master hash 不變。
+  根因是 `Set-HeaderParagraph` 覆寫整段 range，最後一段包含 Word cell terminator，另補
+  `CR` 會多造第 5 段。已先用紅測鎖住 terminator preservation，再改為只替換剔除既有
+  paragraph／cell terminators 後的可見文字；targeted test、PowerShell parser、compileall、
+  `git diff --check` 與完整離線回歸均通過，結果為
+  `506 passed, 8 skipped in 8.82s`。尚未在 Word 重跑此修正。
+
 - 2026-08-17 只重跑已核准集合內的 4 天 fixture 取得 private-safe 固定錯誤
   `LIST_DAY_COUNT_MISMATCH`（stage `run-action`、return code 30）；後驗仍為零產物、
   WINWORD 0、master hash 不變。manifest 與 master DOCX XML 都證明第 3 表正確為 2 列，

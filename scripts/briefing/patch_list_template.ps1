@@ -1266,7 +1266,34 @@ function Set-HeaderParagraph {
         throw "LIST_HEADER_PARAGRAPH_MISSING"
     }
     $paragraph = $HeaderCell.Range.Paragraphs.Item($number)
-    $paragraph.Range.Text = ([string]$Patch.text) + "`r"
+    $visibleRange = $null
+    try {
+        $visibleRange = $paragraph.Range.Duplicate
+        $visibleText = [string]$visibleRange.Text
+        $visibleEnd = [int]$visibleRange.End
+        for ($index = $visibleText.Length - 1; $index -ge 0; $index -= 1) {
+            if (
+                [int][char]$visibleText[$index] -notin @(
+                    [int][char]13, [int][char]7
+                )
+            ) {
+                break
+            }
+            $visibleEnd -= 1
+        }
+        $visibleRange.End = $visibleEnd
+        $visibleRange.Text = [string]$Patch.text
+    }
+    finally {
+        if ($null -ne $visibleRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $visibleRange
+                )
+            }
+            catch {}
+        }
+    }
     $paragraph = $HeaderCell.Range.Paragraphs.Item($number)
     Set-TokenHighlight -Range $paragraph.Range -Token ([string]$Patch.highlight_text)
 }

@@ -268,6 +268,17 @@ def test_daily_row_resize_reconciles_formatted_text_row_side_effect():
     assert 'throw "LIST_DAILY_ROW_RESIZE_FAILED"' in function
 
 
+def test_header_patch_preserves_paragraph_and_cell_terminators():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split("function Set-HeaderParagraph {", 1)[1].split(
+        "function Set-ListCell {", 1
+    )[0]
+
+    assert '$paragraph.Range.Text = ([string]$Patch.text) + "`r"' not in function
+    assert "$visibleRange.End = $visibleEnd" in function
+    assert "$visibleRange.Text = [string]$Patch.text" in function
+
+
 def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
     job_path = job(tmp_path)
     (tmp_path / "word-owner.json").write_text(
