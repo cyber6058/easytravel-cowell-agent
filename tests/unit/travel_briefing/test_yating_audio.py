@@ -1,4 +1,5 @@
 import json
+import re
 import wave
 from pathlib import Path
 
@@ -49,6 +50,39 @@ class SuccessfulYatingAdapter:
                     ],
                 },
                 ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+
+class ChunkedYatingAdapter:
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    def synthesize(self, job_path, *, timeout_seconds: int) -> None:
+        self.call_count += 1
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        names = re.findall(r'<mark name="([^"]+)"/>', job["ssml"])
+        segment_count = len(names) + 1
+        with wave.open(job["output_wav"], "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(16_000)
+            output.writeframes(b"\x00\x00" * (1_600 * segment_count))
+        Path(job["output_bookmarks"]).write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "voice": "Microsoft Yating",
+                    "markers": [
+                        {
+                            "type": "Speech:Bookmark",
+                            "name": name,
+                            "time_ticks": index * 1_000_000,
+                        }
+                        for index, name in enumerate(names, start=1)
+                    ],
+                }
             ),
             encoding="utf-8",
         )
@@ -270,6 +304,29 @@ def test_yating_pipeline_builds_continuous_wav_bookmark_srt_and_metadata(tmp_pat
             "reason": "MP3_CONVERTER_UNAVAILABLE",
         },
     }
+
+
+def test_yating_chunks_long_narration_and_reassembles_verified_artifacts(tmp_path):
+    adapter = ChunkedYatingAdapter()
+    plan = segment_narration("這是一個來源綁定句子。" * 80)
+
+    result = synthesize_yating(
+        plan,
+        output_wav=tmp_path / "sample.wav",
+        output_srt=tmp_path / "sample.srt",
+        output_txt=tmp_path / "sample.txt",
+        output_metadata=tmp_path / "sample.json",
+        adapter=adapter,
+    )
+
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    assert adapter.call_count > 1
+    assert metadata["synthesis_chunk_count"] == adapter.call_count
+    assert result.segment_count == len(plan.segments)
+    assert result.bookmark_count == len(plan.segments) - 1
+    assert result.srt_path.read_text(encoding="utf-8").count(" --> ") == len(
+        plan.segments
+    )
 
 
 def test_yating_uses_the_decoded_wav_sample_rate_instead_of_assuming_16khz(

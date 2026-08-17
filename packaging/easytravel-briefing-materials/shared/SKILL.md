@@ -37,12 +37,14 @@ populate weather. Bind every OP value and conflict decision to the exact draft I
 
 ## Workflow
 
-- `briefing prepare`: create a new manifest, review, and narration input. Stop
-  for missing OP fields, conflicts, unavailable weather, or source failure.
+- `briefing prepare`: create a new manifest, review, and narration input. Missing
+  OP fields, unavailable weather, and pronunciation review remain visible but
+  allow a URL-only DRAFT; stop for conflicts, source integrity failure, or drift.
 - `briefing check-script`: validate the locally written narration. Stop until
   every blocking issue is cleared.
 - `briefing render`: create DRAFT Word and local Yating artifacts. Stop for
-  Word, visual, audio, duration, subtitle, or MP3 failure.
+  Word, visual, speech, duration, or subtitle failure. Missing ffmpeg leaves MP3
+  incomplete but preserves a reviewable Word/WAV/TXT/SRT DRAFT.
 - `briefing render --confirm-draft-id`: copy an exact verified DRAFT into local
   CONFIRMED artifacts. Stop unless the OP gives current explicit approval for
   that exact draft ID.
@@ -56,8 +58,9 @@ and use configured ffmpeg when it is already present. Do not ask for another app
 
 This authorization belongs only to the supplied sources and resulting draft. A
 different source or changed facts require a new generation request. Stop once
-and report all actionable exceptions when a source is ambiguous, an OP value is
-missing, sources conflict, a parser or template drifts, or QA fails.
+and report all actionable exceptions when a source is ambiguous or untraceable,
+sources conflict, a parser or template drifts, or QA fails. Missing values and
+other actionable review items do not stop the source-bound local DRAFT.
 
 It does not authorize LIST calibration, live JMA access, dependency installation,
 CONFIRMED, LINE, email, upload, deploy, publish, push, or any Cowell access. These
@@ -69,7 +72,8 @@ remain separate current-approval boundaries.
    its supplied URL and/or PDF without another normal-stage approval. Otherwise,
    do not fetch a source or start a DRAFT.
 3. Run `prepare` into a new local output directory. Review `review.md` and
-   `narration-input.json`; do not treat `DRAFT_READY` as final approval.
+   `narration-input.json`; continue when `ready` is true even if nonblocking
+   review items remain. Do not treat `DRAFT_READY` as final approval.
 4. Collect only explicit OP values and `use_a` or `use_b` conflict decisions.
    Revise from the reviewed manifest without refetching sources.
 5. If narration input is ready, write the eight-section script using only its
@@ -106,7 +110,8 @@ remain separate current-approval boundaries.
   currently reviewed draft ID.
 - Writing from `review.md`: write only from `narration-input.json` so prohibited
   values never enter the script.
-- Treating exit code `20` as success: it means review remains.
+- Treating exit code `20` as either completion or an automatic stop: it means
+  review remains; use narration input `ready` to decide whether a DRAFT may run.
 - Confirming after a partial render: confirmation requires successful Word QA,
   Yating artifacts, MP3, zero blocking conflicts, and zero required yellow fields.
 - Sending a confirmed MP3 automatically: confirmation changes only local state.

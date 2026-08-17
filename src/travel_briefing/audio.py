@@ -4,6 +4,7 @@ import hashlib
 import html
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -31,6 +32,7 @@ from .subtitles import (
 HANHAN_VOICE = "Microsoft Hanhan Desktop"
 YATING_VOICE = "Microsoft Yating"
 YATING_LANGUAGE = "zh-TW"
+YATING_CHUNK_MAX_CHARACTERS = 120
 SAMPLE_RATE = 44_100
 SAMPLE_WIDTH = 2
 CHANNELS = 1
@@ -263,6 +265,18 @@ def synthesize_yating(
     srt_path = _new_output(output_srt, ".srt")
     txt_path = _new_output(output_txt, ".txt")
     metadata_path = _new_output(output_metadata, ".json")
+    chunks = _chunk_yating_plan(plan)
+    if len(chunks) > 1:
+        return _synthesize_yating_chunks(
+            plan,
+            chunks=chunks,
+            wav_path=wav_path,
+            srt_path=srt_path,
+            txt_path=txt_path,
+            metadata_path=metadata_path,
+            adapter=adapter,
+            timeout_seconds=timeout_seconds,
+        )
     with tempfile.TemporaryDirectory(prefix="easytravel-briefing-yating-") as temp:
         work_dir = Path(temp)
         job_path = work_dir / "speech-job.json"
@@ -406,6 +420,217 @@ def synthesize_yating(
         bookmark_count=len(bookmark_milliseconds),
         narration_text_sha256=plan.text_sha256,
     )
+
+
+def _chunk_yating_plan(
+    plan: NarrationPlan,
+    *,
+    max_characters: int = YATING_CHUNK_MAX_CHARACTERS,
+    max_segments: int = 2,
+) -> tuple[NarrationPlan, ...]:
+    if sum(len(segment.text) for segment in plan.segments) <= max_characters:
+        return (plan,)
+    chunks: list[NarrationPlan] = []
+    current = []
+    current_characters = 0
+    for segment in plan.segments:
+        if current and (
+            len(current) >= max_segments
+            or current_characters + len(segment.text) > max_characters
+        ):
+            text = "".join(item.text for item in current)
+            chunks.append(
+                NarrationPlan(
+                    segments=tuple(current),
+                    text_sha256=_sha256_bytes(text.encode("utf-8")),
+                )
+            )
+            current = []
+            current_characters = 0
+        current.append(segment)
+        current_characters += len(segment.text)
+    if current:
+        text = "".join(item.text for item in current)
+        chunks.append(
+            NarrationPlan(
+                segments=tuple(current),
+                text_sha256=_sha256_bytes(text.encode("utf-8")),
+            )
+        )
+    return tuple(chunks)
+
+
+def _synthesize_yating_chunks(
+    plan: NarrationPlan,
+    *,
+    chunks: tuple[NarrationPlan, ...],
+    wav_path: Path,
+    srt_path: Path,
+    txt_path: Path,
+    metadata_path: Path,
+    adapter: SpeechAdapter,
+    timeout_seconds: int,
+) -> YatingAudioBuildResult:
+    with tempfile.TemporaryDirectory(prefix="easytravel-briefing-yating-chunks-") as temp:
+        work_dir = Path(temp)
+        results: list[YatingAudioBuildResult] = []
+        for index, chunk in enumerate(chunks, start=1):
+            try:
+                result = synthesize_yating(
+                    chunk,
+                    output_wav=work_dir / f"chunk-{index:03d}.wav",
+                    output_srt=work_dir / f"chunk-{index:03d}.srt",
+                    output_txt=work_dir / f"chunk-{index:03d}.txt",
+                    output_metadata=work_dir / f"chunk-{index:03d}.json",
+                    adapter=adapter,
+                    timeout_seconds=timeout_seconds,
+                )
+            except (AudioSynthesisError, LocalTtsUnavailableError, UnknownAudioResultError) as error:
+                error.details.update(
+                    chunk_index=index,
+                    chunk_count=len(chunks),
+                )
+                raise
+            results.append(result)
+
+        wave_infos = tuple(_inspect_wave(result.wav_path) for result in results)
+        first_format = (
+            wave_infos[0].sample_rate,
+            wave_infos[0].sample_width,
+            wave_infos[0].channels,
+        )
+        if any(
+            (info.sample_rate, info.sample_width, info.channels) != first_format
+            for info in wave_infos[1:]
+        ):
+            raise AudioSynthesisError("Yating chunks use inconsistent PCM formats")
+        combined_wav = work_dir / "combined.wav"
+        _write_combined_wav(combined_wav, wave_infos)
+        combined_info = _inspect_wave(combined_wav)
+
+        timed_segments: list[TimedSubtitleSegment] = []
+        offset_ms = 0
+        for chunk, result, info in zip(chunks, results, wave_infos, strict=True):
+            timings = _read_srt_timings(
+                result.srt_path,
+                expected_count=len(chunk.segments),
+            )
+            for segment, (start_ms, end_ms) in zip(
+                chunk.segments, timings, strict=True
+            ):
+                timed_segments.append(
+                    TimedSubtitleSegment(
+                        segment_id=segment.segment_id,
+                        text=segment.text,
+                        start_ms=offset_ms + start_ms,
+                        end_ms=offset_ms + end_ms,
+                    )
+                )
+            offset_ms += _frames_to_milliseconds(
+                info.frame_count,
+                info.sample_rate,
+            )
+
+        srt_bytes = build_timed_srt(tuple(timed_segments)).encode("utf-8")
+        narration_bytes = (
+            "".join(segment.text for segment in plan.segments) + "\n"
+        ).encode("utf-8")
+        wav_sha256 = _sha256_file(combined_wav)
+        srt_sha256 = _sha256_bytes(srt_bytes)
+        txt_sha256 = _sha256_bytes(narration_bytes)
+        duration_seconds = (
+            combined_info.frame_count / combined_info.sample_rate
+        )
+        metadata = {
+            "schema_version": 1,
+            "engine": "windows-media-speech",
+            "voice": YATING_VOICE,
+            "language": YATING_LANGUAGE,
+            "narration_text_sha256": plan.text_sha256,
+            "segment_count": len(plan.segments),
+            "bookmark_count": len(plan.segments) - 1,
+            "synthesis_chunk_count": len(chunks),
+            "audio": {
+                "format": "PCM",
+                "sample_rate": combined_info.sample_rate,
+                "bits_per_sample": combined_info.sample_width * 8,
+                "channels": combined_info.channels,
+                "frame_count": combined_info.frame_count,
+                "duration_seconds": duration_seconds,
+            },
+            "artifacts": {
+                "wav": {"sha256": wav_sha256},
+                "srt": {"sha256": srt_sha256},
+                "txt": {"sha256": txt_sha256},
+            },
+            "mp3": {
+                "status": "unavailable",
+                "reason": "MP3_CONVERTER_UNAVAILABLE",
+            },
+        }
+        metadata_bytes = (
+            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n"
+        ).encode("utf-8")
+        _publish_yating_artifacts(
+            source_wav=combined_wav,
+            wav_path=wav_path,
+            srt_path=srt_path,
+            srt_bytes=srt_bytes,
+            txt_path=txt_path,
+            txt_bytes=narration_bytes,
+            metadata_path=metadata_path,
+            metadata_bytes=metadata_bytes,
+        )
+    return YatingAudioBuildResult(
+        wav_path=wav_path,
+        srt_path=srt_path,
+        txt_path=txt_path,
+        metadata_path=metadata_path,
+        wav_sha256=wav_sha256,
+        srt_sha256=srt_sha256,
+        txt_sha256=txt_sha256,
+        metadata_sha256=_sha256_file(metadata_path),
+        duration_seconds=duration_seconds,
+        sample_rate=combined_info.sample_rate,
+        channels=combined_info.channels,
+        segment_count=len(plan.segments),
+        bookmark_count=len(plan.segments) - 1,
+        narration_text_sha256=plan.text_sha256,
+    )
+
+
+_SRT_TIMING_PATTERN = re.compile(
+    r"^(\d{2}):(\d{2}):(\d{2}),(\d{3}) --> "
+    r"(\d{2}):(\d{2}):(\d{2}),(\d{3})$"
+)
+
+
+def _read_srt_timings(
+    path: Path,
+    *,
+    expected_count: int,
+) -> tuple[tuple[int, int], ...]:
+    timings: list[tuple[int, int]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = _SRT_TIMING_PATTERN.fullmatch(line)
+        if match is None:
+            continue
+        values = tuple(int(value) for value in match.groups())
+        start = _timestamp_milliseconds(*values[:4])
+        end = _timestamp_milliseconds(*values[4:])
+        timings.append((start, end))
+    if len(timings) != expected_count:
+        raise AudioSynthesisError("Yating chunk SRT does not match its segments")
+    return tuple(timings)
+
+
+def _timestamp_milliseconds(
+    hours: int,
+    minutes: int,
+    seconds: int,
+    milliseconds: int,
+) -> int:
+    return (((hours * 60) + minutes) * 60 + seconds) * 1_000 + milliseconds
 
 
 def _build_yating_ssml(plan: NarrationPlan) -> str:
@@ -618,13 +843,15 @@ def _completed_segment_ids(
 
 
 def _write_combined_wav(output: Path, wave_infos: tuple[_WaveInfo, ...]) -> None:
+    if not wave_infos:
+        raise ValueError("At least one WAV is required for concatenation")
     descriptor = os.open(output, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     os.close(descriptor)
     try:
         with wave.open(str(output), "wb") as combined:
-            combined.setnchannels(CHANNELS)
-            combined.setsampwidth(SAMPLE_WIDTH)
-            combined.setframerate(SAMPLE_RATE)
+            combined.setnchannels(wave_infos[0].channels)
+            combined.setsampwidth(wave_infos[0].sample_width)
+            combined.setframerate(wave_infos[0].sample_rate)
             for info in wave_infos:
                 with wave.open(str(info.path), "rb") as segment:
                     while frames := segment.readframes(16_384):

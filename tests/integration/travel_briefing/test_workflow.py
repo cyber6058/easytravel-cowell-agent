@@ -260,8 +260,10 @@ class SyntheticRenderBackend:
     word_calls: int = 0
     audio_calls: int = 0
     fail_word: bool = False
+    fail_word_details: bool = False
     omit_word_page: bool = False
     omit_audio_metadata: bool = False
+    omit_mp3: bool = False
     word_page_count: int = 2
 
     def render_word(
@@ -276,7 +278,18 @@ class SyntheticRenderBackend:
         self.word_calls += 1
         output_docx.write_bytes(b"synthetic verified docx")
         if self.fail_word:
-            raise WordGenerationError("Synthetic Word QA failed")
+            raise WordGenerationError(
+                "Synthetic Word QA failed",
+                {
+                    "return_code": 23,
+                    "stage": "save-output",
+                    "hresult": -1,
+                    "adapter_code": "SYNTHETIC_FAILURE",
+                    "unsafe_text": "must not be serialized",
+                }
+                if self.fail_word_details
+                else None,
+            )
         output_qa_pdf.write_bytes(b"synthetic verified pdf")
         output_qa_directory.mkdir(parents=True, exist_ok=True)
         page_hashes = []
@@ -350,12 +363,13 @@ class SyntheticRenderBackend:
         output_txt.write_text("Synthetic narration\n", encoding="utf-8")
         if not self.omit_audio_metadata:
             output_metadata.write_text('{"synthetic": true}\n', encoding="utf-8")
-        output_mp3.write_bytes(b"synthetic verified mp3")
+        if not self.omit_mp3:
+            output_mp3.write_bytes(b"synthetic verified mp3")
         return AudioRenderEvidence(
             generator_version="synthetic-yating/1",
             duration_seconds=420.0,
             segment_count=8,
-            mp3_completed=True,
+            mp3_completed=not self.omit_mp3,
         )
 
 
@@ -493,7 +507,38 @@ def test_render_keeps_safe_partial_artifacts_and_blocks_confirmation(tmp_path):
     assert recovered_backend.audio_calls == 1
 
 
-def test_render_with_unconfirmed_fields_keeps_word_draft_and_skips_audio(tmp_path):
+def test_render_error_preserves_only_private_safe_adapter_evidence(tmp_path):
+    output_root = tmp_path / "briefings"
+    manifest, script_path = ready_manifest_and_script(output_root, tmp_path)
+
+    rendered = render_briefing(
+        output_root=output_root,
+        manifest_path=manifest,
+        script_path=script_path,
+        generated_at="2026-08-12T16:00:00+08:00",
+        backend=SyntheticRenderBackend(
+            fail_word=True,
+            fail_word_details=True,
+        ),
+    )
+
+    report = json.loads(
+        (rendered.run_directory / "render-errors.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    error = next(item for item in report["errors"] if item["stage"] == "word")
+    assert error["exception_type"] == "WordGenerationError"
+    assert error["details"] == {
+        "return_code": 23,
+        "stage": "save-output",
+        "hresult": -1,
+        "adapter_code": "SYNTHETIC_FAILURE",
+    }
+    assert "unsafe_text" not in error["details"]
+
+
+def test_render_with_review_gaps_creates_word_and_audio_draft(tmp_path):
     output_root = tmp_path / "briefings"
     html = (FIXTURES / "synthetic_newamazing_groupdetail.html").read_text(
         encoding="utf-8"
@@ -508,10 +553,15 @@ def test_render_with_unconfirmed_fields_keeps_word_draft_and_skips_audio(tmp_pat
         prepared.narration_input_path.read_text(encoding="utf-8")
     )
     script_path = tmp_path / "unready-script.txt"
-    script_path.write_text(
-        "\n".join(item["marker"] for item in narration_input["sections"]) + "\n",
-        encoding="utf-8",
-    )
+    lines = []
+    for section in narration_input["sections"]:
+        lines.append(section["marker"])
+        lines.extend(
+            fact["protected_text"]
+            for fact in narration_input["required_facts"]
+            if fact["section_id"] == section["section_id"]
+        )
+    script_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     backend = SyntheticRenderBackend()
 
     rendered = render_briefing(
@@ -523,14 +573,33 @@ def test_render_with_unconfirmed_fields_keeps_word_draft_and_skips_audio(tmp_pat
     )
 
     statuses = {item.kind: item.status for item in rendered.draft.artifacts}
-    assert rendered.draft.status is DraftStatus.BLOCKED
+    assert rendered.draft.status is DraftStatus.DRAFT_READY
     assert backend.word_calls == 1
-    assert backend.audio_calls == 0
+    assert backend.audio_calls == 1
     assert statuses["word"] == "completed"
-    assert statuses["audio_wav"] == "missing"
-    assert "SCRIPT_REVIEW_REQUIRED" in (
-        rendered.run_directory / "render-errors.json"
-    ).read_text(encoding="utf-8")
+    assert statuses["audio_wav"] == "completed"
+    assert not (rendered.run_directory / "render-errors.json").exists()
+
+
+def test_render_without_ffmpeg_keeps_reviewable_draft_ready(tmp_path):
+    output_root = tmp_path / "briefings"
+    manifest, script_path = ready_manifest_and_script(output_root, tmp_path)
+    backend = SyntheticRenderBackend(omit_mp3=True)
+
+    rendered = render_briefing(
+        output_root=output_root,
+        manifest_path=manifest,
+        script_path=script_path,
+        generated_at="2026-08-12T16:00:00+08:00",
+        backend=backend,
+    )
+
+    statuses = {item.kind: item.status for item in rendered.draft.artifacts}
+    assert rendered.draft.status is DraftStatus.DRAFT_READY
+    assert statuses["word"] == "completed"
+    assert statuses["audio_wav"] == "completed"
+    assert statuses["audio_mp3"] == "missing"
+    assert not (rendered.run_directory / "render-errors.json").exists()
 
 
 def test_render_rejects_an_inconsistent_blocked_source(tmp_path):

@@ -236,6 +236,7 @@ class LocalRenderBackend:
                 output_txt=output_txt,
                 output_metadata=temporary_metadata,
                 adapter=self.speech_adapter,
+                timeout_seconds=300,
             )
             metadata = _load_audio_metadata(temporary_metadata)
             mp3_completed = False
@@ -567,14 +568,6 @@ def _render_draft(
                 required_audio_paths.append(paths["audio_mp3"])
             _require_nonempty_files(*required_audio_paths)
             audio_accepted = True
-            if not audio_evidence.mp3_completed:
-                errors.append(
-                    {
-                        "stage": "audio_mp3",
-                        "code": "MP3_CONVERTER_UNAVAILABLE",
-                        "message": "MP3 output did not complete",
-                    }
-                )
         except (BriefingCliError, OSError, ValueError) as error:
             errors.append(_safe_render_error("audio", error))
     artifacts.extend(
@@ -1071,14 +1064,60 @@ def _completed_delivery_paths(
     )
 
 
-def _safe_render_error(stage: str, error: BaseException) -> dict[str, str]:
+def _safe_render_error(stage: str, error: BaseException) -> dict[str, object]:
     code = error.code if isinstance(error, BriefingCliError) else "VALIDATION_FAILED"
     message = (
         "Word rendering or QA did not complete"
         if stage == "word"
         else "Audio rendering or QA did not complete"
     )
-    return {"stage": stage, "code": code, "message": message}
+    result: dict[str, object] = {
+        "stage": stage,
+        "code": code,
+        "message": message,
+        "exception_type": type(error).__name__,
+    }
+    if isinstance(error, BriefingCliError):
+        safe_details = _private_safe_exception_details(error.details)
+        if safe_details:
+            result["details"] = safe_details
+    return result
+
+
+def _private_safe_exception_details(
+    details: Mapping[str, object],
+) -> dict[str, object]:
+    scalar_keys = {
+        "adapter_code",
+        "chunk_count",
+        "chunk_index",
+        "fallback_attempted",
+        "hresult",
+        "owned_word_process_found",
+        "owned_word_process_stopped",
+        "retry_attempted",
+        "return_code",
+        "stage",
+        "voice",
+    }
+    result = {
+        key: value
+        for key, value in details.items()
+        if key in scalar_keys and isinstance(value, (bool, int, str))
+    }
+    for key in ("wav", "bookmarks"):
+        value = details.get(key)
+        if not isinstance(value, Mapping):
+            continue
+        status = {
+            child_key: child_value
+            for child_key, child_value in value.items()
+            if child_key in {"exists", "byte_count"}
+            and isinstance(child_value, (bool, int))
+        }
+        if status:
+            result[key] = status
+    return result
 
 
 def _incomplete_status(path: Path) -> str:

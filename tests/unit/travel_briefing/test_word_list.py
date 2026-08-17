@@ -236,9 +236,34 @@ def test_compaction_removes_only_parenthetical_detail_and_never_truncates():
         compact_route_text(("無法安全縮短的超級長景點名稱",), max_characters=4)
 
 
+def test_default_route_limit_accepts_a_wrappable_real_world_length():
+    assert compact_route_text(("x" * 59,)) == "x" * 59
+    with pytest.raises(ValueError, match="too long"):
+        compact_route_text(("x" * 65,))
+
+
 def test_patch_plan_requires_a_sha256_layout_fingerprint():
     with pytest.raises(ValueError, match="fingerprint"):
         build_list_patch_plan(draft(), expected_layout_fingerprint="unknown")
+
+
+def test_patch_plan_splits_a_long_title_at_a_visual_separator():
+    source = draft()
+    source = replace(
+        source,
+        product=replace(
+            source.product,
+            name="京阪滋賀名勝輕旅|琵琶湖密西根號遊船・Valley空中纜車五日(長榮)",
+        ),
+    ).with_recomputed_id()
+
+    plan = build_list_patch_plan(source, expected_layout_fingerprint="a" * 64)
+
+    assert plan.header_paragraph(3).text == (
+        "團體名稱：京阪滋賀名勝輕旅|琵琶湖密西根號遊船・\v"
+        "Valley空中纜車五日(長榮)"
+    )
+    assert plan.header_paragraph(4).text == ""
 
 
 class SyntheticWordAdapter:

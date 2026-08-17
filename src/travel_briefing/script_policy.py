@@ -73,6 +73,11 @@ _NOTICE_SECTIONS = {
     "weather_notice": "voltage_and_weather",
 }
 
+# Container notices preserve the source page's complete evidence in the manifest,
+# but their concrete child notices carry the narration facts. Narrating both
+# duplicates the same clauses and can more than double the audio duration.
+_NON_NARRATED_CONTAINER_CATEGORIES = frozenset({"group_notes"})
+
 _FACT_LABELS = {
     "tip": "小費",
     "group_size": "出團人數",
@@ -237,7 +242,14 @@ class NarrationInput:
 
     @property
     def ready(self) -> bool:
-        return not self.review_items
+        blocking_codes = {
+            "EMPTY_REQUIRED_FACT",
+            "FACT_SOURCE_MISSING",
+            "FACT_SOURCE_UNKNOWN",
+            "UNRESOLVED_CONFLICT",
+            "BLOCKED_DRAFT",
+        }
+        return not any(item.code in blocking_codes for item in self.review_items)
 
 
 def build_narration_input(draft: BriefingDraft) -> NarrationInput:
@@ -268,6 +280,8 @@ def build_narration_input(draft: BriefingDraft) -> NarrationInput:
 
     for notice in draft.notices:
         category = notice.category.strip().casefold()
+        if category in _NON_NARRATED_CONTAINER_CATEGORIES:
+            continue
         section_id = _NOTICE_SECTIONS.get(category)
         if section_id is None:
             reviews.append(

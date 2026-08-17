@@ -31,14 +31,16 @@ draft with an unviewed Word QA page.
 
 ## Audio
 
-Microsoft Yating (`zh-TW`) is the only automatic voice. The workflow performs
-one continuous local synthesis and uses exact SSML bookmarks for SRT timing.
-It validates PCM WAV structure, bookmark order, transcript and artifact hashes,
-and an actual duration from 360 through 480 seconds.
+Microsoft Yating (`zh-TW`) is the only automatic voice. Short narration uses one
+continuous local synthesis. Long narration retains the validated narration
+segments, sends at most two segments per local Yating SSML batch, concatenates
+only matching verified PCM WAV batches, and offsets their exact bookmark SRT
+timings. It validates PCM WAV structure, bookmark order, transcript and artifact
+hashes, and an actual duration from 360 through 480 seconds.
 
 Do not switch to Hanhan, cloud TTS, Azure, another voice, or estimated subtitle
-timing. If Yating is absent or the bookmark/audio result is unknown, keep safe
-Word, narration, and review artifacts and stop.
+timing. Never guess a failed bookmark. If Yating is absent or the bookmark/audio
+result is unknown, keep safe Word, narration, and review artifacts and stop.
 
 MP3 is derived only from the verified WAV through an already configured ffmpeg.
 Do not install ffmpeg as a side effect. If ffmpeg is missing, preserve the DRAFT

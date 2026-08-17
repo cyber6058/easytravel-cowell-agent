@@ -1,5 +1,19 @@
 # STATUS
 
+## 2026-08-17 URL-only DRAFT handoff
+
+- 一句話現況：NewAmazing URL-only 說明會功能已可建立可審閱的本機
+  `DRAFT_READY`；實際 OSA05261103E 已產出 DOCX、WAV、SRT、TXT。
+- 這次做了什麼：將缺值、無即時天氣、未確認 OP 欄位、讀音 review 與缺
+  ffmpeg 改為不阻擋 DRAFT；排除重複 `group_notes` 旁白；將 LIST 行程安全
+  上限由 56 調到 64 字並修正長團名 QR 繞排；長 Yating 稿改為每批最多兩個
+  narration segments，依真實 bookmark 串接 WAV/SRT；render error 僅保留
+  private-safe adapter evidence。完整離線回歸 100% / exit 0。
+- 下一步：OP 開啟最新 DRAFT 檢查內容並實際聆聽 WAV；若要進入
+  `CONFIRMED`，再補齊黃色 OP 欄位、缺漏事實、讀音 review 與 MP3。
+- 阻塞點：本機沒有已設定的 ffmpeg，所以 MP3 為 `missing`；這不再阻擋
+  DOCX/WAV/SRT/TXT DRAFT，但仍阻擋 `CONFIRMED`。目前未做人耳聆聽驗收。
+
 ## 一句話現況
 
 說明會產生器 0.2.0 的 Gate I 已完成；真實 OP-choice worksheet 與 blank choice artifact

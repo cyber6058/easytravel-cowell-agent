@@ -205,6 +205,7 @@ def test_narration_input_accepts_current_standard_notice_categories():
         for item in narration_input.review_items
     )
     facts = {fact.category: fact for fact in narration_input.required_facts}
+    assert "group_notes" not in facts
     assert facts["currency"].section_id == "tips_and_group_rules"
     assert facts["visa"].section_id == "passport_and_accessibility"
     assert facts["weather_notice"].section_id == "voltage_and_weather"
@@ -221,7 +222,7 @@ def test_narration_input_does_not_invent_a_missing_required_fact():
 
     narration_input = build_narration_input(without_voltage)
 
-    assert narration_input.ready is False
+    assert narration_input.ready is True
     assert not any(
         fact.category == "voltage" for fact in narration_input.required_facts
     )
@@ -344,7 +345,7 @@ def test_unknown_place_is_left_unchanged_for_review():
 
     narration_input = build_narration_input(regional)
 
-    assert narration_input.ready is False
+    assert narration_input.ready is True
     assert unknown_place not in {
         entry.written for entry in narration_input.pronunciation_entries
     }
@@ -357,6 +358,49 @@ def test_unknown_place_is_left_unchanged_for_review():
         "不舒服" not in entry.written
         for entry in narration_input.pronunciation_entries
     )
+
+
+def test_url_only_review_gaps_allow_a_source_bound_draft_script():
+    draft = sample_script_draft()
+    reviewable = replace(
+        draft,
+        notices=tuple(
+            notice
+            for notice in draft.notices
+            if notice.category not in {"insurance", "no_leaving_group"}
+        ),
+        op_fields=(
+            OpField(
+                name="meeting_time",
+                value="待 OP 確認",
+                source="OP",
+                confirmed=False,
+            ),
+        ),
+        weather=(),
+        days=(
+            replace(draft.days[0], attractions=("合成未確認景點",)),
+        ),
+    ).with_recomputed_id()
+
+    narration_input = build_narration_input(reviewable)
+    issue_codes = {item.code for item in narration_input.review_items}
+
+    assert narration_input.ready is True
+    assert {
+        "MISSING_REQUIRED_FACT",
+        "UNCONFIRMED_OP_FIELD",
+        "WEATHER_DATA_UNAVAILABLE",
+        "UNKNOWN_PRONUNCIATION_TERM",
+    } <= issue_codes
+    validation = check_script(
+        narration_input,
+        script_from_input(narration_input),
+    )
+    assert validation.ready is True
+    assert "NARRATION_INPUT_NOT_READY" not in {
+        issue.code for issue in validation.issues
+    }
 
 
 def script_from_input(narration_input) -> str:

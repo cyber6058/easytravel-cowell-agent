@@ -33,6 +33,14 @@ unrelated Cowell discovery without a new approved design.
   and/or PDF and asks to generate briefing materials authorizes one local DRAFT:
   the supplied source, canonical master, owned Word, pdftoppm, Microsoft Yating,
   and already configured ffmpeg. Do not repeat normal-stage approval prompts.
+- A URL-only DRAFT must proceed with every source-bound fact the page provides.
+  Missing facts, unavailable live weather, unconfirmed OP fields, pronunciation
+  review, and an unavailable MP3 converter remain visible review items but do
+  not block reviewable Word, WAV, TXT, or SRT artifacts. Omit missing or
+  unconfirmed values from narration and never guess them.
+- Source conflicts, untraceable facts, parser or template drift, and Word,
+  visual, speech, duration, or subtitle QA failures still block the DRAFT.
+  Every review item and a completed MP3 remain blocking for CONFIRMED.
 - That one-DRAFT boundary excludes calibration, live JMA, installation,
   CONFIRMED, LINE, upload, deploy, publish, push, and any Cowell access.
 

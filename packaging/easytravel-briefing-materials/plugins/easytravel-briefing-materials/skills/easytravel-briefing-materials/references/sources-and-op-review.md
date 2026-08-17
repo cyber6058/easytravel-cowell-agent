@@ -66,5 +66,8 @@ the workflow safely rebinds the second operation after applying the first.
 - Keep missing or disputed values out of narration. Do not use the losing side
   of a resolved conflict.
 - Treat `DRAFT_READY` as structurally reviewable, not complete or distributable.
+- For a URL-only request, generate the local DRAFT from every available
+  source-bound fact. Missing facts, unavailable weather, unconfirmed OP fields,
+  and pronunciation review remain visible and block confirmation, not DRAFT.
 - Report only draft ID, status, issue codes, safe paths, counts, and next gate.
   Do not repeat staff names, telephone values, PDF text, or full narration.

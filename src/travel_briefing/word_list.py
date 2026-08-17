@@ -31,7 +31,7 @@ from .template_contract import (
 
 WAITING_FOR_OP = "待 OP 確認"
 LIST_WORD_GENERATOR_VERSION = "list-word/2"
-DEFAULT_ROUTE_CHARACTER_LIMIT = 56
+DEFAULT_ROUTE_CHARACTER_LIMIT = 64
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _PARENTHETICAL_DETAIL = re.compile(r"\s*[（(][^）)]*[）)]\s*")
 
@@ -339,6 +339,7 @@ def build_list_patch_plan(
     _validate_document_state(draft)
     op_fields = {field.name: field for field in draft.op_fields}
     title_lines = _split_title(draft.product.name)
+    title_text = "\v".join(title_lines)
     header_paragraphs = (
         HeaderParagraphPatch(paragraph=1, text="日本精緻假期"),
         HeaderParagraphPatch(
@@ -348,12 +349,12 @@ def build_list_patch_plan(
         ),
         HeaderParagraphPatch(
             paragraph=3,
-            text=f"團體名稱：{title_lines[0]}",
+            text=f"團體名稱：{title_text}",
             highlight_text=(WAITING_FOR_OP if title_lines[0] == WAITING_FOR_OP else ""),
         ),
         HeaderParagraphPatch(
             paragraph=4,
-            text=title_lines[1] if len(title_lines) > 1 else "",
+            text="",
         ),
     )
     cells: list[CellPatch] = []
@@ -718,7 +719,10 @@ def _split_title(value: str) -> tuple[str, ...]:
         return (WAITING_FOR_OP,)
     if len(title) <= 28:
         return (title,)
-    break_at = max(title.rfind("～", 0, 32), title.rfind("~", 0, 32))
+    break_at = max(
+        title.rfind(separator, 0, 29)
+        for separator in ("～", "~", "|", "｜", "・")
+    )
     if break_at <= 0:
         break_at = 28
     else:
