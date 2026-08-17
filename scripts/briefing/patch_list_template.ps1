@@ -20,6 +20,7 @@ $WdAlertsNone = 0
 $WdFormatDocumentDefault = 16
 $WdHeaderFooterPrimary = 1
 $WdHeaderFooterFirstPage = 2
+$WdLineSpaceExactly = 4
 $WdStatisticPages = 2
 $WdYellow = 7
 $script:GateC5992Checkpoint = $null
@@ -1415,6 +1416,47 @@ function Add-ContinuationGroupHeader {
     }
 }
 
+function Set-ListPaginationGuards {
+    param([Parameter(Mandatory = $true)]$Document)
+
+    $labels = @(
+        ([string][char]0x5404 + [char]0x5730 + [char]0x7DCA + [char]0x6025 +
+            [char]0x9023 + [char]0x7D61 + [char]0x8655),
+        ([string][char]0x5718 + [char]0x9AD4 + [char]0x65C5 + [char]0x904A +
+            [char]0x6CE8 + [char]0x610F + [char]0x4E8B + [char]0x9805)
+    )
+    foreach ($label in $labels) {
+        $matchCount = 0
+        $paragraph = $null
+        foreach ($candidate in $Document.Paragraphs) {
+            $visibleText = ([string]$candidate.Range.Text).Trim(
+                [char[]]@([char]13, [char]7, [char]32, [char]9)
+            )
+            if ($visibleText -ceq $label) {
+                $matchCount += 1
+                $paragraph = $candidate
+            }
+        }
+        if ($matchCount -ne 1) {
+            throw "LIST_PAGINATION_LABEL_CHANGED"
+        }
+        $paragraph.Range.ParagraphFormat.KeepWithNext = $true
+    }
+
+    $trailing = $Document.Paragraphs.Item($Document.Paragraphs.Count)
+    $trailingText = ([string]$trailing.Range.Text).Trim(
+        [char[]]@([char]13, [char]7, [char]32, [char]9)
+    )
+    if (-not [string]::IsNullOrEmpty($trailingText)) {
+        throw "LIST_TRAILING_PARAGRAPH_CHANGED"
+    }
+    $trailing.Range.Font.Size = 1.0
+    $trailing.Range.ParagraphFormat.SpaceBefore = 0.0
+    $trailing.Range.ParagraphFormat.SpaceAfter = 0.0
+    $trailing.Range.ParagraphFormat.LineSpacingRule = $WdLineSpaceExactly
+    $trailing.Range.ParagraphFormat.LineSpacing = 1.0
+}
+
 function Get-DayPageMap {
     param(
         [Parameter(Mandatory = $true)]$DailyTable,
@@ -2136,6 +2178,7 @@ function Invoke-Patch {
             [string]$Job.plan.header_paragraphs[2].text
         )
         Add-ContinuationGroupHeader -Document $document -GroupText $groupText
+        Set-ListPaginationGuards -Document $document
         $outputInspection = Get-ListInspection `
             -Document $document `
             -AnchorChecks $Job.plan.anchor_checks

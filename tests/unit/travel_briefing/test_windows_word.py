@@ -337,6 +337,24 @@ def test_day_page_map_probes_before_the_row_end_marker():
     assert retreat < collapse
 
 
+def test_patch_applies_footer_pagination_guards_before_paginating():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    guard = script.split("function Set-ListPaginationGuards {", 1)[1].split(
+        "function Get-DayPageMap {", 1
+    )[0]
+    patch = script.split("function Invoke-Patch {", 1)[1].split(
+        "function Invoke-Action {", 1
+    )[0]
+
+    assert "$paragraph.Range.ParagraphFormat.KeepWithNext = $true" in guard
+    assert 'throw "LIST_PAGINATION_LABEL_CHANGED"' in guard
+    assert 'throw "LIST_TRAILING_PARAGRAPH_CHANGED"' in guard
+    assert "$trailing.Range.Font.Size = 1.0" in guard
+    assert patch.index("Set-ListPaginationGuards") < patch.index(
+        "$document.Repaginate()"
+    )
+
+
 def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
     job_path = job(tmp_path)
     (tmp_path / "word-owner.json").write_text(

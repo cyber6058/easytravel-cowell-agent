@@ -96,7 +96,7 @@ def test_calibrated_master_renders_gate_v_day_counts(tmp_path, day_count):
     assert (output / "LIST.docx").stat().st_size > 0
     assert (output / "LIST-qa.pdf").stat().st_size > 0
     assert evidence.page_count == index["page_count"]
-    if day_count == 4:
+    if day_count in (4, 5):
         assert evidence.page_count == 1
     if day_count >= 8:
         assert evidence.page_count >= 2
