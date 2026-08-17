@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import secrets
 import shutil
 import subprocess
@@ -192,14 +193,20 @@ def inspect_list_pdf(
                     or not 1 <= item.start_page <= document.page_count
                 ):
                     raise ValueError("LIST QA day page mapping is invalid")
+                token_pattern = re.compile(
+                    rf"(?<!\d){re.escape(token)}(?!\d)"
+                )
+                page_occurrence_counts = [
+                    len(token_pattern.findall(text)) for text in page_texts
+                ]
                 occurrences = [
                     number
-                    for number, text in enumerate(page_texts, start=1)
-                    if token in text
+                    for number, count in enumerate(
+                        page_occurrence_counts, start=1
+                    )
+                    if count
                 ]
-                occurrence_count = sum(
-                    text.count(token) for text in page_texts
-                )
+                occurrence_count = sum(page_occurrence_counts)
                 if (
                     occurrences != [item.start_page]
                     or occurrence_count != 1

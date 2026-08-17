@@ -182,6 +182,31 @@ def test_pdf_inspection_allows_identity_only_on_non_daily_continuation_page(
     assert inspection.page_count == 2
 
 
+def test_pdf_day_tokens_do_not_prefix_match_two_digit_days(tmp_path):
+    pdf = tmp_path / "two-digit-days.pdf"
+    document = fitz.open()
+    page = document.new_page(width=595.28, height=841.89)
+    page.insert_text((72, 72), "OSA-SYN-260901 JX820 JX821 9/1 9/10")
+    image = Image.new("RGB", (16, 16), color="black")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    page.insert_image(fitz.Rect(72, 90, 104, 122), stream=buffer.getvalue())
+    document.save(pdf)
+    document.close()
+
+    inspection = inspect_list_pdf(
+        pdf,
+        required_text=("OSA-SYN-260901", "JX820", "JX821"),
+        day_page_map=(
+            DayPagePlacement(1, 1, 1),
+            DayPagePlacement(10, 1, 1),
+        ),
+        day_tokens={1: "9/1", 10: "9/10"},
+    )
+
+    assert inspection.page_count == 1
+
+
 def test_pdf_inspection_requires_one_a4_page_text_and_an_image(tmp_path):
     pdf = tmp_path / "list.pdf"
     write_pdf(pdf)

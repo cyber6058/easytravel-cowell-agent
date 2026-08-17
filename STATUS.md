@@ -13,6 +13,15 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 真實 header token 修正後的正式 `final-v4` 已有 4／5／6／7／8 天通過，
+  只剩 12 天 `day page mapping does not match PDF`。根因是 QA 以 substring 搜尋 `9/1`，
+  因而誤命中 `9/10`、`9/11`、`9/12`；不是 Word 版面錯誤。已保留 private `final-v4`
+  事證、不覆寫；先以 `9/1`／`9/10` 同頁紅測重現，再改為日期 token 前後不得接數字的
+  regex 邊界比對，仍要求每個 token 只在 report 指定頁精確出現一次。完整 Word QA unit
+  suite 為 `18 passed`，全新短 private basetemp 完整回歸為
+  `512 passed, 8 skipped in 8.74s`，compileall 與 `git diff --check` 通過。修正後正式六例
+  尚未重跑。
+
 - 2026-08-17 day-page 邊界修正後的正式 `final-v3` 仍是 4／5／6／7 通過、8／12
   失敗，但已進到 PDF continuation token 檢查。使用既有 8／12 DOCX raw render（沒有再
   patch Word）並逐頁檢視 4 張 PNG，確認兩例都是 2 頁：續頁有團號／團名、daily header
