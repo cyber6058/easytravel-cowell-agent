@@ -1,5 +1,22 @@
 # STATUS
 
+## 2026-08-17 flight datetime diagnostic GET handoff
+
+- 一句話現況：一次航班日期時間格式唯讀診斷 GET 已消耗，但因一次性診斷器
+  自己的欄名契約過窄而未取得日期格式證據；沒有重試，也沒有修改 parser。
+- 這次做了什麼：診斷 GET 使用既有 allowlisted、no-retry gateway，原始 HTML
+  僅存在 OS temporary directory 並已隨程序清除。失敗點是診斷器只接受
+  「出發時間」，未重用正式 parser 已支援「出發時間／起飛時間」的 alias
+  mapping，因此回傳 `diagnostic contract missing unique departure field`。之後只用
+  合成 fixture 離線修正：直接重用 `_live_header_indexes()`；完整遮罩流程與
+  「起飛時間／到達時間」alias index 均通過。一次性檔案與 pycache 已刪除。
+- 下一步：若 OP 同意一次 replacement 航班日期時間格式唯讀診斷 GET，重建已
+  離線驗證的診斷器，只輸出字元類型遮罩、數字段長度、標點 code point 與現行
+  regex 判定；取得證據後再提出窄幅 parser 設計。
+- 阻塞點：目前仍不知道真實日期時間字串的形狀，不得猜測修正。replacement
+  診斷 GET、後續 parser 實作及正式 DRAFT GET 都尚未獲新授權；沒有來源或
+  DRAFT 產物留存，公開 remote 仍未獲 push 例外。
+
 ## 2026-08-17 live flight datetime parser handoff
 
 - 一句話現況：缺少 `.departure_date` 的 NewAmazing live-card fallback 已完成
