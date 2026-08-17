@@ -1,5 +1,19 @@
 # STATUS
 
+## 2026-08-17 missing departure-date parser design handoff
+
+- 一句話現況：已完成 NewAmazing live-card 缺少明確出發日節點時的窄幅
+  parser 修正設計；實作停在書面規格確認關卡前。
+- 這次做了什麼：唯讀盤點確認產品卡仍有天數、航班與每日行程，只有
+  `.departure_date` 缺漏；OP 已選擇方案 A。規格限定以同頁第一段航班日期
+  作為缺節點時的來源，並保留產品代碼、正整數天數、首末航班及每日行程
+  一致性驗證；禁止由團號、抓取日期或自由文字猜日期。設計文件已自審並
+  於本機 commit `655056a`。
+- 下一步：OP 確認書面規格後，從公開 `parse_newamazing_html()` seam 加入
+  去識別紅測，再做最小 parser 修正並跑 focused 與完整離線 suite。
+- 阻塞點：等待 OP 確認書面規格；尚未修改 parser，也尚未使用已另行授權的
+  最後一次正式 DRAFT GET。公開 remote 未獲 push 例外，因此只做本機 commit。
+
 ## 2026-08-17 Word 內容修正 handoff
 
 - 一句話現況：NewAmazing URL-only 說明會功能已依真實
