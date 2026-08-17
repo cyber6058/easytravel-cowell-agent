@@ -74,6 +74,54 @@ def test_newamazing_parser_supports_the_live_card_contract_without_guessing_city
     }
 
 
+def test_live_card_parser_uses_first_flight_when_departure_node_is_absent():
+    changed = live_cards_html().replace(
+        '<li class="departure_date">2026/09/01</li>',
+        "",
+        1,
+    )
+
+    parsed = parse_newamazing_html(
+        changed,
+        source_url=(
+            "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+            "prodCd=OSA-SYN-260901"
+        ),
+        retrieved_at="2026-08-17T12:00:00+08:00",
+    )
+
+    assert parsed.product.day_count == 5
+    assert parsed.product.departure_date == "2026-09-01"
+    assert parsed.product.return_date == "2026-09-05"
+    assert parsed.flights[0].date == parsed.product.departure_date
+    assert parsed.flights[-1].date == parsed.product.return_date
+
+
+def test_live_card_departure_fallback_rejects_a_last_flight_date_mismatch():
+    changed = (
+        live_cards_html()
+        .replace(
+            '<li class="departure_date">2026/09/01</li>',
+            "",
+            1,
+        )
+        .replace("2026/09/05 13:20", "2026/09/06 13:20", 1)
+    )
+
+    with pytest.raises(ParseContractChangedError) as captured:
+        parse_newamazing_html(
+            changed,
+            source_url=(
+                "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+                "prodCd=OSA-SYN-260901"
+            ),
+            retrieved_at="2026-08-17T12:00:00+08:00",
+        )
+
+    assert captured.value.code == "PARSE_CONTRACT_CHANGED"
+    assert captured.value.details == {"anchor": "航班日期"}
+
+
 def test_live_card_parser_extracts_explicit_facts_from_compound_notice():
     source_url = (
         "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
@@ -236,7 +284,7 @@ def test_newamazing_parser_returns_source_bound_structured_fields():
 
     assert parsed.source.kind == "newamazing_html"
     assert parsed.source.location == SOURCE_URL
-    assert parsed.source.parser_version == "newamazing-html/5"
+    assert parsed.source.parser_version == "newamazing-html/6"
     assert len(parsed.source.sha256) == 64
     assert parsed.product.code == "OSA-SYN-260901"
     assert parsed.product.name == "合成大阪五日"

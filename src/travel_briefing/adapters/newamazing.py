@@ -14,7 +14,7 @@ from ..input_validation import validate_newamazing_url
 from ..models import Flight, ItineraryDay, Notice, Product, SourceEvidence
 
 
-PARSER_VERSION = "newamazing-html/5"
+PARSER_VERSION = "newamazing-html/6"
 
 _NOTICE_CATEGORIES = {
     "小費": "tip",
@@ -214,15 +214,20 @@ def _parse_live_card_page(
         _contract_changed("產品資訊")
     departure_node = product_info.select_one(".departure_date")
     duration_node = product_info.select_one(".return_date")
-    if not isinstance(departure_node, Tag) or not isinstance(duration_node, Tag):
+    if not isinstance(duration_node, Tag):
         _contract_changed("產品資訊")
-    departure_date = _parse_date(_text(departure_node))
     day_count = _parse_day_count(_text(duration_node))
+
+    flights = _parse_live_flights(root, source_ids)
+    departure_date = (
+        _parse_date(_text(departure_node))
+        if isinstance(departure_node, Tag)
+        else flights[0].date
+    )
     return_date = (
         date.fromisoformat(departure_date) + timedelta(days=day_count - 1)
     ).isoformat()
 
-    flights = _parse_live_flights(root, source_ids)
     if flights[0].date != departure_date or flights[-1].date != return_date:
         _contract_changed("航班日期")
     days = _parse_live_days(
