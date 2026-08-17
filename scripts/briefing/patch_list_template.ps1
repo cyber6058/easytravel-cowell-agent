@@ -1306,6 +1306,15 @@ function Set-DailyRowCount {
         $newRow = $Table.Rows.Add()
         $newRow.Range.FormattedText = $prototype.Range.FormattedText
     }
+    # Assigning a complete Word row's FormattedText may copy its row marker and
+    # append one extra row. Reconcile after growth so the patch contract sees
+    # exactly one header row plus the requested number of day rows.
+    while ($Table.Rows.Count -gt $targetRows) {
+        $Table.Rows.Item($Table.Rows.Count).Delete()
+    }
+    if ([int]$Table.Rows.Count -ne $targetRows) {
+        throw "LIST_DAILY_ROW_RESIZE_FAILED"
+    }
 }
 
 function Set-ListLayoutProfile {

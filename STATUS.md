@@ -13,6 +13,15 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 只重跑已核准集合內的 4 天 fixture 取得 private-safe 固定錯誤
+  `LIST_DAY_COUNT_MISMATCH`（stage `run-action`、return code 30）；後驗仍為零產物、
+  WINWORD 0、master hash 不變。manifest 與 master DOCX XML 都證明第 3 表正確為 2 列，
+  根因是 `Set-DailyRowCount` 將完整原型列 `FormattedText` 指派給新列時，Word 會連同列
+  終止標記附加額外列，而函式沒有在擴列後再次收斂。已先以紅測重現缺少 post-growth
+  reconciliation，再加入最小的尾列校正與明確 `LIST_DAILY_ROW_RESIZE_FAILED` postcondition；
+  targeted test、PowerShell parser、compileall、`git diff --check` 與完整離線回歸均通過，
+  精確結果為 `505 passed, 8 skipped in 8.79s`。尚未在 Word 重跑修正後案例。
+
 - 2026-08-17 首次真實 Gate V 六例（4／5／6／7／8／12 天）均在 Word patch action
   回傳通用 `WordGenerationError`，尚未進入 PDF／PNG 驗證；唯讀後驗確認 private 輸出
   根目錄為空、DOCX／PDF／PNG 均為 0、WINWORD 0、master SHA-256 不變且工作樹無產物

@@ -256,6 +256,18 @@ def test_word_scripts_bind_owned_pid_through_a_temporary_word_window():
         assert "$ownershipDocument.Close($false)" in script
 
 
+def test_daily_row_resize_reconciles_formatted_text_row_side_effect():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split("function Set-DailyRowCount {", 1)[1].split(
+        "function Set-ListLayoutProfile {", 1
+    )[0]
+
+    assert function.count(
+        "while ($Table.Rows.Count -gt $targetRows)"
+    ) == 2
+    assert 'throw "LIST_DAILY_ROW_RESIZE_FAILED"' in function
+
+
 def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
     job_path = job(tmp_path)
     (tmp_path / "word-owner.json").write_text(
