@@ -9,9 +9,23 @@
 整合已通過完整離線回歸；manifest evidence 接線錯誤修正後的新正式 Gate C 已成功，
 sample-001 normalization、SaveAs2、master validation、manifest 與 exclusive publish 全部
 通過。正式 `LIST-master.docx` 與 `calibration-manifest.json` 已建立並完成 identity 後驗；
-Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端可用驗收。
+Gate C 與 Gate V Word 視覺 QA 均已完成，下一關是 Gate E 真實端到端本機 DRAFT。
 
 ## 這次做了什麼
+
+- 2026-08-17 Gate V `final-v6` 已正式通過。先以人工檢出的 5 天空白續頁、6 天孤立
+  注意事項標題及 7 天孤立緊急聯絡標題建立紅測，再加入 fail-closed pagination guards：
+  兩個固定標題必須各精確命中一次並與後續內容同頁，文件尾端必須是可壓縮的空 paragraph；
+  5 天 fixture 也正式要求單頁。完整離線回歸為
+  `513 passed, 8 skipped in 98.65s`，PowerShell parser、compileall 與
+  `git diff --check` 均通過。以既有校準 master 在全新 private `final-v6` 執行
+  4／5／6／7／8／12 天真實 Word integration，結果為 `6 passed in 54.70s`；頁數依序
+  1／1／2／2／2／2，共 10 張 PNG 已全部逐頁人工檢查，未見空白續頁、孤立標題、裁切、
+  重疊或 QR 重複，續頁團體識別與日程表頭正確。產物保留於
+  `C:\Users\user\Documents\EasyTravel-Private\gate-v-word-qa-20260817-final-v6`；master 與
+  manifest SHA-256 仍分別為 `6b4fbf74fb10af0bf00e1c00841deea8d80546db60698b8152457873fcc041a5`
+  及 `9fa1b84d5a566c000105b0bdd7f3caefee22cc04a26890b4f953925baabd8701`，WINWORD 0，
+  未發布、未傳送。
 
 - 2026-08-17 真實 header token 修正後的正式 `final-v4` 已有 4／5／6／7／8 天通過，
   只剩 12 天 `day page mapping does not match PDF`。根因是 QA 以 substring 搜尋 `9/1`，
@@ -1170,9 +1184,8 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 真實 worksheet、OP-selected artifact、sample-001 欄寬決策與 fail-closed Gate C 整合均已
 完成並通過離線回歸。read-only comparison 與 diagnostic-only working-copy normalization
 也已各執行一次並通過；manifest evidence 修正後的新正式 Gate C 已成功建立並驗證
-master／manifest。下一步是另行取得 Gate V 核准，以 4／5／6／7／8／12 天 synthetic
-fixtures 執行 Word 視覺 QA；通過後再取得 Gate E
-（真實 URL／PDF 到語音 DRAFT）的當次核准。
+master／manifest。Gate V 亦已用 4／5／6／7／8／12 天 synthetic fixtures 完成真實
+Word 視覺 QA。下一步是取得 Gate E（真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
 明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
 立益公司電腦 clone、
@@ -1189,8 +1202,8 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 
 Gate I 已完成，沒有剩餘安裝阻塞。OP 已用 hash-bound choices 解決既有八個 schema-2
 field conflicts；manifest evidence 修正已經新正式 Gate C 實證通過，master／manifest
-均已建立並完成 hash／fingerprint 後驗，Gate C 不再阻塞。目前產品阻塞在尚未執行 Gate V
-多天數 Word 視覺 QA 與 Gate E 真實端到端 DRAFT；兩者仍需各自的明確核准。
+均已建立並完成 hash／fingerprint 後驗，Gate C 不再阻塞。Gate V 多天數 Word 視覺 QA
+亦已正式通過；目前產品只阻塞在尚未執行 Gate E 真實端到端 DRAFT，仍需明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
@@ -1198,7 +1211,8 @@ URL-only 正式頁已
 驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
 `product_region`，不能跳過此人工欄位。完整
 6–8 分鐘正式版本尚未產生；Task 6 JMA parser、離線選擇與 Task 9 orchestration 已
-完成，但正式資料取得及 LIST Word COM／私有範本／視覺驗證仍未實跑或端對端驗證。
+完成；LIST Word COM／私有範本／多天數視覺驗證已實跑通過，但正式資料取得與 Gate E
+端對端 DRAFT 仍未執行。
 第一批 alias 只有 synthetic 大阪
 案例；仙台、札幌等城市必須取得 JMA 預報區證據與測試後才能加入。掃描型無文字
 PDF 會明確
