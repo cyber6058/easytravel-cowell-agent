@@ -1,5 +1,24 @@
 # STATUS
 
+## 2026-08-17 time-only live flight diagnosis handoff
+
+- 一句話現況：replacement 唯讀診斷 GET 已成功證明目前 NewAmazing live-card
+  的四個航班「日期時間」值全部只有 `HH:MM`；頁面沒有可供 departure fallback
+  的航班日期，因此先前方案 A 的來源前提不成立。
+- 這次做了什麼：以正式 `_live_header_indexes()` 重建 alias-safe 一次性診斷器，
+  先用合成 live-card 與「起飛時間／到達時間」alias 離線驗證，再執行唯一一次
+  allowlisted、no-retry replacement GET。兩列 departure／arrival 共四值均為
+  length 5、token `Dx2 U+003A Dx2`、digit runs `[2,2]`，現行 datetime regex
+  全部拒絕；沒有輸出原始值，原始 HTML 未保留。一次性 script、pycache 均已
+  刪除，WINWORD 0，repo 在記錄本段前為 clean。
+- 下一步：請 OP 選擇書面設計方向。建議 A 是接受來源明確提供的 time-only
+  航班，但將 product／flight／day dates 保持空白，加入來源缺日 warning，Word
+  顯示黃色「待 OP 確認」，旁白只保留產品名稱並排除空白日期，且不得進入
+  CONFIRMED；B 是不改 parser，要求 OP 提供本機行程 PDF，以 PDF 日期完成 DRAFT。
+- 阻塞點：本次只獲診斷授權，尚未獲跨 parser／merge review／narration 的設計與
+  實作同意。不得從產品代碼、抓取日期或其他文字猜日期；正式 DRAFT GET 仍需
+  修正驗證完成後的另一個單次授權。公開 remote 未獲 push 例外。
+
 ## 2026-08-17 flight datetime diagnostic GET handoff
 
 - 一句話現況：一次航班日期時間格式唯讀診斷 GET 已消耗，但因一次性診斷器
