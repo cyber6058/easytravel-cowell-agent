@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -92,6 +93,18 @@ def schema_two_job(tmp_path, *, action="inspect-v2", extra=None):
                 str((tmp_path / f"working-{index}.doc").resolve())
                 for index in range(1, 4)
             ]
+    elif action == "diagnose-normalized-copy-v2":
+        source = tmp_path / "sample.doc"
+        source.write_bytes(b"synthetic")
+        payload |= {
+            "source_path": str(source.resolve()),
+            "source_sha256": hashlib.sha256(
+                source.read_bytes()
+            ).hexdigest(),
+            "working_copy_path": str(
+                (tmp_path / "working.doc").resolve()
+            ),
+        }
     else:
         source = tmp_path / "sample.doc"
         source.write_bytes(b"synthetic")
@@ -282,6 +295,7 @@ def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
         "diagnose-components-v2",
         "diagnose-5992-v2",
         "diagnose-gate-c-v3",
+        "diagnose-normalized-copy-v2",
         "calibrate",
     ],
 )

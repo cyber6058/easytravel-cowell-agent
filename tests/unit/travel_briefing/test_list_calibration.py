@@ -28,6 +28,7 @@ from travel_briefing.list_calibration import (
     diagnose_gate_c_5992,
     diagnose_gate_c_v3,
     diagnose_list_components,
+    diagnose_normalized_working_copy,
     diagnose_list_header_contract,
     load_component_diagnosis_artifact,
     load_component_normalization_decision_table,
@@ -1468,6 +1469,87 @@ def test_gate_c_v3_diagnosis_is_generic_hash_bound_and_private_safe(tmp_path):
     assert "LIST-" not in serialized
     assert "source_path" not in serialized
     assert all(not path.exists() for path in adapter.working_copy_paths)
+
+
+class SyntheticNormalizedCopyAdapter:
+    def __init__(self, *, mutate_source: bool = False) -> None:
+        self.mutate_source = mutate_source
+        self.actions: list[str] = []
+        self.working_copy: Path | None = None
+
+    def run(self, job_path: Path, *, timeout_seconds: int) -> None:
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        self.actions.append(job["action"])
+        assert job["action"] == "diagnose-normalized-copy-v2"
+        assert timeout_seconds == 180
+        source = Path(job["source_path"])
+        assert hashlib.sha256(source.read_bytes()).hexdigest() == job[
+            "source_sha256"
+        ]
+        self.working_copy = Path(job["working_copy_path"])
+        assert self.working_copy.parent == job_path.parent
+        assert not self.working_copy.exists()
+        if self.mutate_source:
+            source.write_bytes(b"changed")
+        Path(job["report_path"]).write_text(
+            json.dumps({
+                "schema_version": 2,
+                "action": "diagnose-normalized-copy-v2",
+                "word_version": "16.0-synthetic",
+                "classification": "NOT_REPRODUCED",
+                "completed_source_inspections": 0,
+                "selected_base_sample_id": "sample-001",
+                "checkpoint": {
+                    "phase": "complete",
+                    "sample_id": "sample-000",
+                    "operation": "complete",
+                    "field_id": "diagnostic",
+                    "table_number": 0,
+                    "row_number": 0,
+                    "column_number": 0,
+                    "paragraph_number": 0,
+                },
+                "error": {
+                    "hresult": 0,
+                    "hresult_hex": "0x00000000",
+                    "low_word_error_number": 0,
+                    "adapter_code": "NONE",
+                },
+            }),
+            encoding="utf-8",
+        )
+
+
+def test_normalized_working_copy_diagnosis_is_hash_bound_and_cleans_temp(
+    tmp_path,
+):
+    source = tmp_path / "sample.doc"
+    source.write_bytes(b"synthetic source")
+    adapter = SyntheticNormalizedCopyAdapter()
+
+    result = diagnose_normalized_working_copy(source, adapter=adapter)
+
+    assert adapter.actions == ["diagnose-normalized-copy-v2"]
+    assert result["classification"] == "NOT_REPRODUCED"
+    assert result["source_hash_unchanged"] is True
+    assert result["working_copy_cleaned"] is True
+    assert adapter.working_copy is not None
+    assert not adapter.working_copy.exists()
+
+
+def test_normalized_working_copy_diagnosis_detects_source_mutation(tmp_path):
+    source = tmp_path / "sample.doc"
+    source.write_bytes(b"synthetic source")
+
+    with pytest.raises(ValueError) as captured:
+        diagnose_normalized_working_copy(
+            source,
+            adapter=SyntheticNormalizedCopyAdapter(mutate_source=True),
+        )
+
+    assert getattr(captured.value, "code", "") == (
+        "CALIBRATION_SOURCE_CHANGED"
+    )
 
 
 def test_calibration_inspects_before_building_and_publishes_private_safe_files(

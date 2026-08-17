@@ -189,6 +189,15 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
             "--private-dir", "gate-c-diagnosis",
         ]
     )
+    working_copy_diagnosed = parser.parse_args(
+        [
+            "diagnose-sample-001-working-copy",
+            "--sample", "one.doc",
+            "--decision-table", "decision-table.json",
+            "--normalization-choices", "choices.json",
+            "--private-dir", "working-copy-diagnosis",
+        ]
+    )
 
     assert prepared.command == "prepare"
     assert checked.command == "check-script"
@@ -203,6 +212,10 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
         "diagnose-normalized-gate-c-failure"
     )
     assert not hasattr(gate_c_diagnosed, "pdftoppm")
+    assert working_copy_diagnosed.command == (
+        "diagnose-sample-001-working-copy"
+    )
+    assert not hasattr(working_copy_diagnosed, "pdftoppm")
     assert not hasattr(planned, "sample")
     assert not hasattr(choice_prepared, "sample")
     assert not hasattr(diagnosed, "pdftoppm")
@@ -922,6 +935,87 @@ def test_prepare_cli_returns_needs_review_without_exposing_source_content(
     assert "source_html" not in payload
     assert captured["source_url"].startswith("https://www.newamazing.com.tw/")
     assert captured["output_root"] == Path(tmp_path / "briefings")
+
+
+def test_working_copy_diagnosis_writes_only_private_safe_report(
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    sample = tmp_path / "private-sample-name.doc"
+    sample.write_bytes(b"synthetic sample")
+    source_hash = hashlib.sha256(sample.read_bytes()).hexdigest()
+    decision_table = tmp_path / "decision-table.json"
+    decision_table.write_text("{}", encoding="utf-8")
+    choices_path = tmp_path / "choices.json"
+    choices_path.write_text("{}", encoding="utf-8")
+    private = tmp_path / "private-report"
+
+    monkeypatch.setattr(
+        cli,
+        "load_component_normalization_decision_table",
+        lambda _: {
+            "source_sha256": [source_hash, "b" * 64, "c" * 64],
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "validate_component_normalization_choices",
+        lambda _table, _choices: {
+            "choices": [
+                {"selected_source_sha256": source_hash},
+                {"selected_source_sha256": source_hash},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "diagnose_normalized_working_copy",
+        lambda *_args, **_kwargs: {
+            "word_version": "16.0",
+            "source_sha256": source_hash,
+            "classification": "NOT_REPRODUCED",
+            "checkpoint": {
+                "phase": "calibrate-copy",
+                "operation": "complete",
+            },
+            "error": None,
+            "source_hash_unchanged": True,
+            "working_copy_cleaned": True,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "calibrate_list_templates",
+        lambda *_args, **_kwargs: pytest.fail("must not calibrate or publish"),
+    )
+
+    exit_code = cli.main(
+        [
+            "diagnose-sample-001-working-copy",
+            "--sample",
+            str(sample),
+            "--decision-table",
+            str(decision_table),
+            "--normalization-choices",
+            str(choices_path),
+            "--private-dir",
+            str(private),
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    report_path = private / "sample-001-working-copy-diagnosis.json"
+    report_text = report_path.read_text(encoding="utf-8")
+    assert exit_code == 20
+    assert payload["classification"] == "NOT_REPRODUCED"
+    assert list(private.iterdir()) == [report_path]
+    assert not tuple(private.rglob("*.doc*"))
+    assert "manifest" not in report_text.casefold()
+    assert sample.name not in report_text
+    assert str(sample) not in report_text
 
 
 def test_cli_unexpected_error_never_prints_traceback_or_private_exception_text(

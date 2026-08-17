@@ -12,6 +12,16 @@ calibration／validation／publish 路徑；仍無 master／manifest／config，
 
 ## 這次做了什麼
 
+- 2026-08-17 已依核准範圍完成 `diagnose-sample-001-working-copy` 的離線實作，尚未消耗
+  唯一一次真實 Word 診斷。命令嚴格綁定 decision table 的 sample-001 hash、36 個已完成
+  choices 全選同一來源，且 schema-2 Word job 只建立 temporary working copy、沿用既有
+  normalization mutation 並在 `SaveAs2` 前返回；`finally` 必須刪除 working copy，來源 hash
+  若變更或 working copy 殘留均 fail closed。CLI 只允許在全新 private 目錄 exclusive-create
+  一份 private-safe checkpoint／HRESULT report，不存在 master／manifest 參數或 publish 路徑。
+- 新增 adapter、helper 與 CLI 邊界測試，包括 exact job schema、單次呼叫、來源異動拒絕、
+  working-copy cleanup，以及 calibration fail sentinel。targeted suite 全綠；完整離線 suite
+  全綠，PowerShell parser、compileall 與 `git diff --check` 均通過。
+
 - 2026-08-17 唯一一次 `diagnose-normalized-gate-c-failure` 已執行且沒有 retry；命令以預期
   `needs_review`／exit 20 結束，classification 為 `PRE_MUTATION_PATH_CLEAR`、stage 為
   `compare-normalized-layout`。這證明真實 `inspect-v2`、source／choice binding、八欄位

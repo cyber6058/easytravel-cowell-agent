@@ -37,6 +37,7 @@ from .list_calibration import (
     compare_calibration_samples_with_normalization,
     diagnose_calibration_conflicts,
     diagnose_list_components,
+    diagnose_normalized_working_copy,
     inspect_list_templates_v2,
     load_component_diagnosis_artifact,
     load_component_normalization_decision_table,
@@ -183,6 +184,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gate_c_failure.set_defaults(
         handler=run_diagnose_normalized_gate_c_failure
+    )
+
+    working_copy = subparsers.add_parser(
+        "diagnose-sample-001-working-copy",
+        help="Run diagnostic-only normalization on a temporary working copy",
+    )
+    working_copy.add_argument("--sample", type=Path, required=True)
+    working_copy.add_argument(
+        "--decision-table", type=Path, required=True
+    )
+    working_copy.add_argument(
+        "--normalization-choices", type=Path, required=True
+    )
+    working_copy.add_argument("--private-dir", type=Path, required=True)
+    working_copy.add_argument(
+        "--format", choices=("text", "json"), default="text"
+    )
+    working_copy.set_defaults(
+        handler=run_diagnose_sample_001_working_copy
     )
 
     prepare = subparsers.add_parser("prepare", help="Create a reviewable manifest")
@@ -773,6 +793,81 @@ def _safe_normalization_diagnosis_error(error: Exception) -> dict[str, Any]:
         "exception_type": type(error).__name__,
         "error_code": "UNEXPECTED_COMPARISON_ERROR",
         "field_paths": [],
+    }
+
+
+def run_diagnose_sample_001_working_copy(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    source = args.sample.expanduser().resolve()
+    if (
+        not source.is_file()
+        or source.suffix.casefold() not in {".doc", ".docx"}
+    ):
+        raise BriefingInputError(
+            "sample-001 working-copy diagnosis requires one Word file"
+        )
+    private = args.private_dir.expanduser().resolve()
+    if private.exists():
+        raise BriefingInputError(
+            "sample-001 working-copy diagnosis private directory must not exist"
+        )
+    source_hash = _sha256_file(source)
+    try:
+        table = load_component_normalization_decision_table(
+            args.decision_table
+        )
+        choices = validate_component_normalization_choices(
+            table,
+            _read_json_object(
+                args.normalization_choices,
+                label="normalization choices",
+            ),
+        )
+    except (OSError, UnicodeError, ValueError) as error:
+        raise BriefingInputError(
+            "sample-001 working-copy diagnosis inputs are invalid"
+        ) from error
+    selected_sources = {
+        item["selected_source_sha256"] for item in choices["choices"]
+    }
+    if (
+        table["source_sha256"][0] != source_hash
+        or selected_sources != {source_hash}
+    ):
+        raise BriefingInputError(
+            "sample-001 working-copy diagnosis source is not fully approved"
+        )
+    try:
+        private.mkdir(parents=True)
+        result = diagnose_normalized_working_copy(
+            source,
+            adapter=WindowsWordAdapter(
+                script_path=(
+                    _briefing_scripts_root() / "patch_list_template.ps1"
+                )
+            ),
+            timeout_seconds=180,
+        )
+        report = {
+            "schema_version": SCHEMA_VERSION,
+            "status": "DIAGNOSED",
+            "command": "diagnose-sample-001-working-copy",
+            "stage": "working-copy-calibration",
+            **result,
+        }
+        report_path = private / "sample-001-working-copy-diagnosis.json"
+        _write_json_exclusive(report_path, report)
+    except Exception:
+        _remove_empty_directory(private)
+        raise
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": "needs_review",
+        "command": "diagnose-sample-001-working-copy",
+        "classification": result["classification"],
+        "stage": "working-copy-calibration",
+        "report": str(report_path),
     }
 
 

@@ -245,6 +245,37 @@ function Assert-WordJobShape {
                 }
             }
         }
+        "diagnose-normalized-copy-v2" {
+            Assert-ExactProperties -Value $Job -Expected (
+                $common + @(
+                    "source_path",
+                    "source_sha256",
+                    "working_copy_path"
+                )
+            )
+            $source = [IO.Path]::GetFullPath([string]$Job.source_path)
+            $workingCopy = [IO.Path]::GetFullPath(
+                [string]$Job.working_copy_path
+            )
+            $sourceHash = [string]$Job.source_sha256
+            $jobDirectory = [IO.Path]::GetDirectoryName(
+                [IO.Path]::GetFullPath($JobPath)
+            )
+            if (
+                -not [IO.File]::Exists($source) -or
+                [IO.Path]::GetExtension($source).ToLowerInvariant() -notin @(".doc", ".docx") -or
+                $sourceHash -cnotmatch '^[0-9a-f]{64}$' -or
+                (Get-FileHash -LiteralPath $source -Algorithm SHA256).
+                    Hash.ToLowerInvariant() -cne $sourceHash -or
+                [IO.File]::Exists($workingCopy) -or
+                [IO.Path]::GetDirectoryName($workingCopy) -cne $jobDirectory -or
+                [IO.Path]::GetExtension($workingCopy).ToLowerInvariant() -cne
+                    [IO.Path]::GetExtension($source).ToLowerInvariant() -or
+                $workingCopy -ceq $source
+            ) {
+                throw "WORD_JOB_SCHEMA_INVALID"
+            }
+        }
         "calibrate" {
             Assert-ExactProperties -Value $Job -Expected (
                 $common +
@@ -1867,6 +1898,91 @@ function Invoke-Calibrate {
     }
 }
 
+function Invoke-DiagnoseNormalizedCopy {
+    param(
+        [Parameter(Mandatory = $true)]$Job,
+        [Parameter(Mandatory = $true)]$Word
+    )
+    $checkpoint = [ordered]@{
+        phase = "calibrate-copy"
+        sample_id = "sample-001"
+        operation = "open-document"
+        field_id = "document"
+        table_number = 0
+        row_number = 0
+        column_number = 0
+        paragraph_number = 0
+    }
+    $script:GateC5992Checkpoint = $checkpoint
+    $classification = "NOT_REPRODUCED"
+    $hresult = 0
+    $adapterCode = "NONE"
+    $checkpointSnapshot = $null
+    try {
+        $diagnosticDirectory = [IO.Path]::GetDirectoryName(
+            [IO.Path]::GetFullPath([string]$Job.report_path)
+        )
+        $diagnosticJob = [pscustomobject]@{
+            source_path = [string]$Job.source_path
+            working_copy_path = [string]$Job.working_copy_path
+            output_docx = [IO.Path]::Combine(
+                $diagnosticDirectory,
+                "diagnostic-master-not-created.docx"
+            )
+        }
+        [void](Invoke-Calibrate `
+            -Job $diagnosticJob `
+            -Word $Word `
+            -DiagnosticOnly)
+        Set-GateC5992Scope -Phase "complete" -SampleId "sample-000"
+        Set-GateC5992Checkpoint `
+            -Operation "complete" `
+            -FieldId "diagnostic"
+    }
+    catch {
+        $classification = "ERROR_OBSERVED"
+        $hresult = [int]$_.Exception.HResult
+        $exceptionMessage = [string]$_.Exception.Message
+        if ($exceptionMessage -cmatch '^[A-Z][A-Z0-9_]{1,79}$') {
+            $adapterCode = $exceptionMessage
+        }
+    }
+    finally {
+        $checkpointSnapshot = [ordered]@{
+            phase = [string]$checkpoint.phase
+            sample_id = [string]$checkpoint.sample_id
+            operation = [string]$checkpoint.operation
+            field_id = [string]$checkpoint.field_id
+            table_number = [int]$checkpoint.table_number
+            row_number = [int]$checkpoint.row_number
+            column_number = [int]$checkpoint.column_number
+            paragraph_number = [int]$checkpoint.paragraph_number
+        }
+        $script:GateC5992Checkpoint = $null
+    }
+    $unsignedHresult = if ($hresult -lt 0) {
+        [uint32]([int64]$hresult + 4294967296)
+    }
+    else {
+        [uint32]$hresult
+    }
+    Write-JsonExclusive -Value ([ordered]@{
+        schema_version = 2
+        action = "diagnose-normalized-copy-v2"
+        word_version = [string]$Word.Version
+        classification = $classification
+        completed_source_inspections = 0
+        selected_base_sample_id = "sample-001"
+        checkpoint = $checkpointSnapshot
+        error = [ordered]@{
+            hresult = $hresult
+            hresult_hex = "0x$('{0:X8}' -f $unsignedHresult)"
+            low_word_error_number = [int]($hresult -band 0xFFFF)
+            adapter_code = $adapterCode
+        }
+    }) -Path ([string]$Job.report_path)
+}
+
 function Invoke-Patch {
     param(
         [Parameter(Mandatory = $true)]$Job,
@@ -2064,6 +2180,9 @@ try {
         }
         "diagnose-gate-c-v3" {
             Invoke-DiagnoseGateC -Job $job -Word $word
+        }
+        "diagnose-normalized-copy-v2" {
+            Invoke-DiagnoseNormalizedCopy -Job $job -Word $word
         }
         "calibrate" { Invoke-Calibrate -Job $job -Word $word }
         "patch" { Invoke-Patch -Job $job -Word $word }

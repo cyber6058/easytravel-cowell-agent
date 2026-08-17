@@ -176,6 +176,7 @@ def _read_job_metadata(path: Path) -> dict[str, str | Path]:
         "diagnose-components-v2",
         "diagnose-5992-v2",
         "diagnose-gate-c-v3",
+        "diagnose-normalized-copy-v2",
         "calibrate",
     }:
         raise WordGenerationError("Word automation job action is unsupported")
@@ -264,7 +265,9 @@ def _validate_schema_two_job(
             raise WordGenerationError(
                 "Word automation job does not match schema version 2"
             )
-        sample_paths = tuple(Path(item).expanduser().resolve() for item in samples)
+        sample_paths = tuple(
+            Path(item).expanduser().resolve() for item in samples
+        )
         working_paths = tuple(
             Path(item).expanduser().resolve() for item in working_copies
         )
@@ -283,6 +286,35 @@ def _validate_schema_two_job(
                 or item.suffix.lower() != sample_paths[index].suffix.lower()
                 for index, item in enumerate(working_paths)
             )
+        ):
+            raise WordGenerationError(
+                "Word automation job does not match schema version 2"
+            )
+    elif action == "diagnose-normalized-copy-v2":
+        expected = common | {
+            "source_path",
+            "source_sha256",
+            "working_copy_path",
+        }
+        if set(payload) != expected or any(
+            not isinstance(payload.get(key), str) or not payload[key]
+            for key in ("source_path", "source_sha256", "working_copy_path")
+        ):
+            raise WordGenerationError(
+                "Word automation job does not match schema version 2"
+            )
+        source = Path(payload["source_path"]).expanduser().resolve()
+        working = Path(payload["working_copy_path"]).expanduser().resolve()
+        source_hash = payload["source_sha256"]
+        if (
+            not source.is_file()
+            or source.suffix.lower() not in {".doc", ".docx"}
+            or working.parent != job_directory
+            or working.exists()
+            or working.suffix.lower() != source.suffix.lower()
+            or source == working
+            or len(source_hash) != 64
+            or any(character not in "0123456789abcdef" for character in source_hash)
         ):
             raise WordGenerationError(
                 "Word automation job does not match schema version 2"

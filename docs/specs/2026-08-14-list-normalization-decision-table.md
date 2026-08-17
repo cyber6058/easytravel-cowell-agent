@@ -115,6 +115,17 @@ source hashes, Word version, selected-base/fingerprint evidence, and an
 allowlisted exception type/code/field list. It never records exception text,
 source paths, filenames, document content, or a master artifact.
 
+`diagnose-sample-001-working-copy` is the next, separately approved diagnostic
+boundary. It accepts exactly one current Word source whose SHA-256 is both the
+decision table's `sample-001` source and the selected source for every completed
+component choice. One Word job copies that source to its temporary job
+directory, runs the existing normalization mutation in diagnostic-only mode,
+and returns before `SaveAs2`. The adapter's `finally` removes the working copy;
+the caller rejects a leftover copy or any source-hash change. The command never
+creates a master or manifest and exclusively writes one private-safe JSON report
+containing hashes, fixed checkpoint coordinates, allowlisted error evidence,
+Word version, and cleanup status. It performs no retry.
+
 ## Gate boundary
 
 The decision table is offline evidence only. Calibration remains blocked until:

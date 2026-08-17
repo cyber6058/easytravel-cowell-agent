@@ -1873,6 +1873,62 @@ def diagnose_gate_c_v3(
     )
 
 
+def diagnose_normalized_working_copy(
+    source_path: Path,
+    *,
+    adapter: WordCalibrationAdapter,
+    timeout_seconds: int = 180,
+) -> dict[str, Any]:
+    source = source_path.expanduser().resolve()
+    if (
+        not source.is_file()
+        or source.suffix.casefold() not in {".doc", ".docx"}
+    ):
+        raise ValueError("working-copy diagnosis source must be a Word file")
+    if timeout_seconds <= 0:
+        raise ValueError("working-copy diagnosis timeout must be positive")
+    before = _sha256_file(source)
+    action = "diagnose-normalized-copy-v2"
+    with tempfile.TemporaryDirectory(
+        prefix="easytravel-list-diagnose-normalized-copy-"
+    ) as temp:
+        work_dir = Path(temp)
+        job_path = work_dir / "word-job.json"
+        report_path = work_dir / "diagnostic-report.json"
+        working_copy = work_dir / f"working{source.suffix.lower()}"
+        job = {
+            "schema_version": 2,
+            "action": action,
+            "ownership_nonce": secrets.token_hex(16),
+            "word_pid_path": str(work_dir / "word-owner.json"),
+            "report_path": str(report_path),
+            "source_path": str(source),
+            "source_sha256": before,
+            "working_copy_path": str(working_copy),
+        }
+        _write_json_exclusive(job_path, job)
+        adapter.run(job_path, timeout_seconds=timeout_seconds)
+        report = _read_gate_c_diagnostic_report(
+            report_path,
+            expected_action=action,
+            single_copy=True,
+        )
+        if working_copy.exists():
+            raise ValueError("working-copy diagnosis did not clean up")
+    after = _sha256_file(source)
+    if after != before:
+        raise CalibrationSourceChangedError()
+    return {
+        "word_version": report["word_version"],
+        "source_sha256": before,
+        "classification": report["classification"],
+        "checkpoint": GateC5992Checkpoint(**report["checkpoint"]).to_dict(),
+        "error": dict(report["error"]),
+        "source_hash_unchanged": True,
+        "working_copy_cleaned": True,
+    }
+
+
 def _diagnose_gate_c(
     sample_paths: tuple[Path, ...],
     *,
@@ -2863,6 +2919,7 @@ def _read_gate_c_diagnostic_report(
     path: Path,
     *,
     expected_action: str,
+    single_copy: bool = False,
 ) -> dict[str, Any]:
     payload = _read_json_object(path, "Gate C diagnostic")
     expected = {
@@ -2959,20 +3016,41 @@ def _read_gate_c_diagnostic_report(
         },
         "error": dict(error),
     }
-    GateC5992DiagnosticResult(
-        word_version=result["word_version"],
-        source_sha256=("1" * 64, "2" * 64, "3" * 64),
-        classification=result["classification"],
-        completed_source_inspections=result[
-            "completed_source_inspections"
-        ],
-        selected_base_sample_id=result["selected_base_sample_id"],
-        checkpoint=normalized_checkpoint,
-        hresult=result["error"]["hresult"],
-        hresult_hex=result["error"]["hresult_hex"],
-        low_word_error_number=result["error"]["low_word_error_number"],
-        adapter_code=result["error"]["adapter_code"],
-    )
+    if single_copy:
+        if count != 0 or selected != "sample-001":
+            raise ValueError(
+                "Word working-copy report does not match its bounded scope"
+            )
+        if result["classification"] == "NOT_REPRODUCED" and (
+            hresult != 0
+            or error["adapter_code"] != "NONE"
+            or normalized_checkpoint.phase != "complete"
+        ):
+            raise ValueError(
+                "Word working-copy report does not match its bounded scope"
+            )
+        if result["classification"] == "ERROR_OBSERVED" and (
+            normalized_checkpoint.phase == "complete"
+            or (hresult == 0 and error["adapter_code"] == "NONE")
+        ):
+            raise ValueError(
+                "Word working-copy report does not match its bounded scope"
+            )
+    else:
+        GateC5992DiagnosticResult(
+            word_version=result["word_version"],
+            source_sha256=("1" * 64, "2" * 64, "3" * 64),
+            classification=result["classification"],
+            completed_source_inspections=result[
+                "completed_source_inspections"
+            ],
+            selected_base_sample_id=result["selected_base_sample_id"],
+            checkpoint=normalized_checkpoint,
+            hresult=result["error"]["hresult"],
+            hresult_hex=result["error"]["hresult_hex"],
+            low_word_error_number=result["error"]["low_word_error_number"],
+            adapter_code=result["error"]["adapter_code"],
+        )
     return result
 
 
