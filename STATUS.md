@@ -9,9 +9,21 @@
 整合已通過完整離線回歸；manifest evidence 接線錯誤修正後的新正式 Gate C 已成功，
 sample-001 normalization、SaveAs2、master validation、manifest 與 exclusive publish 全部
 通過。正式 `LIST-master.docx` 與 `calibration-manifest.json` 已建立並完成 identity 後驗；
-Gate C 與 Gate V Word 視覺 QA 均已完成，下一關是 Gate E 真實端到端本機 DRAFT。
+Gate C 與 Gate V Word 視覺 QA 均已完成；首次 Gate E 真實 URL 已建立可審核 manifest，
+但在 narration／render 前因資料 review 與本機缺少 Microsoft Yating 正確阻塞。
 
 ## 這次做了什麼
+
+- 2026-08-17 首次 Gate E 使用 OP 提供的 NewAmazing URL 執行 one-request local DRAFT。
+  `doctor` 確認 Word、schema-2 master、manifest hash 與 pdftoppm 正常，但 Microsoft Yating
+  不可用且 ffmpeg 未設定；沒有安裝或改用 Hanhan。單次 allowlisted GET 成功，於 private
+  `gate-e-drafts/OSA05261103E/20260817T123515+0800` 建立 `DRAFT_READY` manifest，draft ID
+  `24ce2d9f0b6e20a6aaed588f6f1ef9bdbe0f6eb3a93404a1de77c26ea1c04e42`，來源解析為 5 天且
+  無 conflict。narration input 為 `ready: false`，共 39 個 review items：10 個未確認 OP
+  欄位、7 個必要事實缺漏、7 個未知 notice category、1 個 weather unavailable、14 個
+  unknown pronunciation terms。因此依 Skill 在 check-script／Word／audio render 前停止；
+  實際只保留 manifest、manifest hash、review 與 narration input，未建立 DOCX／PDF／PNG／
+  WAV／MP3，WINWORD 0，未 retry、未發布、未傳送。臨時 config 已移除。
 
 - 2026-08-17 Gate V `final-v6` 已正式通過。先以人工檢出的 5 天空白續頁、6 天孤立
   注意事項標題及 7 天孤立緊急聯絡標題建立紅測，再加入 fail-closed pagination guards：
@@ -1185,7 +1197,9 @@ Gate C 與 Gate V Word 視覺 QA 均已完成，下一關是 Gate E 真實端到
 完成並通過離線回歸。read-only comparison 與 diagnostic-only working-copy normalization
 也已各執行一次並通過；manifest evidence 修正後的新正式 Gate C 已成功建立並驗證
 master／manifest。Gate V 亦已用 4／5／6／7／8／12 天 synthetic fixtures 完成真實
-Word 視覺 QA。下一步是取得 Gate E（真實 URL／PDF 到語音 DRAFT）的當次核准。
+Word 視覺 QA。首次 Gate E 已獲核准並完成來源 prepare；下一步需另行核准處理真實頁
+揭露的 source-to-narration mapping review，並由 OP 提供 10 個當次欄位值；Microsoft Yating
+恢復或安裝亦屬獨立核准，完成後才能對同一 reviewed source 建立新的 DRAFT。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
 明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
 立益公司電腦 clone、
@@ -1203,26 +1217,27 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 Gate I 已完成，沒有剩餘安裝阻塞。OP 已用 hash-bound choices 解決既有八個 schema-2
 field conflicts；manifest evidence 修正已經新正式 Gate C 實證通過，master／manifest
 均已建立並完成 hash／fingerprint 後驗，Gate C 不再阻塞。Gate V 多天數 Word 視覺 QA
-亦已正式通過；目前產品只阻塞在尚未執行 Gate E 真實端到端 DRAFT，仍需明確核准。
+亦已正式通過。首次 Gate E 已執行但在 render 前 fail closed：narration review 未清、10 個
+OP 欄位未確認，且本機 Microsoft Yating capability probe 不可用。
 
-說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
-Word plan、workflow 或 packaging 技術阻塞；
+說明會產生器 0.2.0 的 calibration、Word plan、workflow 與 packaging 沒有已知技術阻塞；
+首次真實 Gate E 揭露 source-to-narration mapping 仍有必要事實與 notice category review；
 URL-only 正式頁已
 驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
 `product_region`，不能跳過此人工欄位。完整
 6–8 分鐘正式版本尚未產生；Task 6 JMA parser、離線選擇與 Task 9 orchestration 已
-完成；LIST Word COM／私有範本／多天數視覺驗證已實跑通過，但正式資料取得與 Gate E
-端對端 DRAFT 仍未執行。
+完成；LIST Word COM／私有範本／多天數視覺驗證已實跑通過，正式資料取得亦已成功，
+但 Gate E 端對端 render 尚未越過 narration readiness gate。
 第一批 alias 只有 synthetic 大阪
 案例；仙台、札幌等城市必須取得 JMA 預報區證據與測試後才能加入。掃描型無文字
 PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
 自動 LINE 傳送仍是獨立核准關卡。
 
-本機 capability probe 與真實 integration 顯示 Yating 可用且正式管線可合成，
-`pdftoppm` 可用、Hanhan 僅供舊比較、Word COM 已註冊且 Gate C hidden owned probe
-已以 Word `16.0` 實跑通過，但 `ffmpeg` 尚未找到；私人 master、PDF render 與逐頁
-視覺 QA 因校準契約阻擋仍未驗證。
+本次 Gate E capability probe 顯示 Microsoft Yating 不可用，與較早的真實 integration
+結果不一致，必須另行診斷或在明確核准後恢復／安裝；不得 fallback 到 Hanhan。
+`pdftoppm` 可用、Word COM 已註冊且 Gate C hidden owned probe 已以 Word `16.0` 實跑，
+私人 master、PDF render 與逐頁視覺 QA 均已在 Gate V 驗證；`ffmpeg` 仍未設定。
 Task 11 隔離安裝已證明新 `briefing.exe` 可啟動，且顯式 config 可載入外部
 `pdftoppm`；私有範本契約及 Word 實機 render 仍未驗證。
 0.2.0 的任意天數與安全續頁邏輯已在 synthetic／mock 離線測試完成，但尚未代表
