@@ -2166,12 +2166,16 @@ function Invoke-Patch {
                 $pageCount = [int]$document.ComputeStatistics($WdStatisticPages)
             }
         }
-        if ($pageCount -le 0) { throw "LIST_PAGE_COUNT_INVALID" }
-        $dayPageMap = Get-DayPageMap -DailyTable $dailyTable -DayCount $dayCount
         $document.SaveAs2($outputDocx, $WdFormatDocumentDefault)
         if (-not [IO.File]::Exists($outputDocx)) {
             throw "LIST_DOCX_NOT_CREATED"
         }
+        # SaveAs2 can finalize first-page header pagination. Measure the saved
+        # document, not the pre-save in-memory layout, for all report evidence.
+        $document.Repaginate()
+        $pageCount = [int]$document.ComputeStatistics($WdStatisticPages)
+        if ($pageCount -le 0) { throw "LIST_PAGE_COUNT_INVALID" }
+        $dayPageMap = Get-DayPageMap -DailyTable $dailyTable -DayCount $dayCount
         $report = [ordered]@{
             schema_version = 2
             action = "patch"

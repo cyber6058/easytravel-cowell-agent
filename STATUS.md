@@ -13,6 +13,15 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 日期顯示修正後的 4 天案例證明儲存後 PDF 已為 1 頁，但 patch report 仍為
+  2 頁，固定失敗於 `Word, PDF, and expected LIST page count do not match`；其
+  day-page map 亦是 SaveAs2 前值。根因是 Word 在 SaveAs2 才完成首頁不同 header 的最終
+  pagination，而 adapter 先量測再儲存。已先用紅測鎖住順序，再保留原 profile 選擇但將
+  正式 `computed_page_count` 與 `day_page_map` 改為 SaveAs2 後重新 Repaginate／量測；
+  targeted test、PowerShell parser、compileall、`git diff --check` 與全新短 private
+  basetemp 的完整回歸均通過，結果為 `509 passed, 8 skipped in 8.60s`。尚未在 Word
+  重跑此修正。
+
 - 2026-08-17 原生 continuation header 修正後，4 天 QA 仍為 2 頁；最新版 build-only
   diagnostic 成功保留 DOCX，最終列印因診斷程式誤用不存在的 `DayPagePlacement.to_dict()`
   失敗，但沒有 unknown Word result。直接讀該 DOCX OpenXML 顯示每日列 line spacing 仍為

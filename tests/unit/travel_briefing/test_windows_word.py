@@ -304,6 +304,21 @@ def test_continuation_header_uses_first_page_header_policy_not_if_fields():
     assert ".Fields.Add(" not in function
 
 
+def test_patch_report_measures_pagination_after_save_as():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split("function Invoke-Patch {", 1)[1].split(
+        "function Invoke-Action {", 1
+    )[0]
+    save = function.index("$document.SaveAs2($outputDocx")
+    day_map = function.index("$dayPageMap = Get-DayPageMap")
+    final_repaginate = function.rindex("$document.Repaginate()", save, day_map)
+    final_page_count = function.rindex(
+        "$pageCount = [int]$document.ComputeStatistics", save, day_map
+    )
+
+    assert save < final_repaginate < final_page_count < day_map
+
+
 def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
     job_path = job(tmp_path)
     (tmp_path / "word-owner.json").write_text(
