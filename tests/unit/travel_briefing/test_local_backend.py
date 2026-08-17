@@ -144,6 +144,16 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
         value.calibration_manifest_sha256
     )
     assert calls["qa"][1]["required_text"] == ("SYN-OSA-260901", "SY100")
+    assert calls["qa"][1]["continuation_required_text"] == (
+        "SYN-OSA-260901",
+        "日期",
+        "行程簡介",
+        "飯店名稱",
+        "飯店電話",
+        "早",
+        "午",
+        "晚",
+    )
     assert calls["qa"][1]["pdftoppm_path"] == value.pdftoppm_path
 
 

@@ -181,11 +181,12 @@ class LocalRenderBackend:
             continuation_required_text=(
                 draft.product.code,
                 "日期",
-                "行程",
-                "住宿",
-                "早餐",
-                "午餐",
-                "晚餐",
+                "行程簡介",
+                "飯店名稱",
+                "飯店電話",
+                "早",
+                "午",
+                "晚",
             ),
             day_page_map=built.day_page_map,
             day_tokens={

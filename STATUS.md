@@ -13,6 +13,16 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 day-page 邊界修正後的正式 `final-v3` 仍是 4／5／6／7 通過、8／12
+  失敗，但已進到 PDF continuation token 檢查。使用既有 8／12 DOCX raw render（沒有再
+  patch Word）並逐頁檢視 4 張 PNG，確認兩例都是 2 頁：續頁有團號／團名、daily header
+  已重複、QR 只在首頁、所有 day rows 完整且無裁切／跨頁。唯一錯誤是 workflow QA token
+  用概念詞「行程／住宿／早餐／午餐／晚餐」，而校準 master 真實欄名為
+  「行程簡介／飯店名稱／飯店電話／早／午／晚」。已先加 backend 紅測，再將 token 精確
+  綁定真實 master labels；targeted test、compileall、`git diff --check` 與全新短 private
+  basetemp 完整回歸均通過，結果為 `511 passed, 8 skipped in 8.77s`。`final-v3` 與 raw
+  diagnosis 均保留；修正後正式六例尚未重跑。
+
 - 2026-08-17 修正後持久化正式 `final-v2` 六例結果為 4／5／6／7 天全通過，8／12 天
   仍固定 `LIST_DAY_ROW_TOO_TALL`。正常短列仍被判跨頁的根因是 `Get-DayPageMap` 將
   row range 的 end collapse 到列終止標記後方；剛好換頁時會落到下一頁，誤判上一列。
