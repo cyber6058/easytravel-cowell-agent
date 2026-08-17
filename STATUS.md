@@ -1,5 +1,24 @@
 # STATUS
 
+## 2026-08-17 live flight datetime parser handoff
+
+- 一句話現況：缺少 `.departure_date` 的 NewAmazing live-card fallback 已完成
+  並通過完整離線回歸；唯一一次正式 DRAFT GET 已安全停止在新的
+  `日期時間格式` parser anchor，未產生 DRAFT。
+- 這次做了什麼：以公開 `parse_newamazing_html()` seam 加入兩個去識別紅測，
+  先證明缺節點與末航班不符的既有失敗，再將 parser 升為
+  `newamazing-html/6`：缺節點時只採同頁第一段航班日期，並保留天數、首末
+  航班與每日行程一致性檢查。focused suite 為 `13 passed`；完整離線 suite
+  為 `525 passed, 8 skipped in 20.21s`，compileall、diff check、63-entry
+  package build 均通過。程式已於本機 commit `02b8cca`，已安裝 parser 與 repo
+  SHA-256 同為 `34856b3e0493d4061889b5d36345243c479059c4ba8bfb6ffdef7c72987c39f2`。
+- 下一步：取得 OP 對「一次航班日期時間格式唯讀診斷 GET」的新明確授權後，
+  只盤點去識別的格式形狀；重新設計、紅測、修正與完整驗證後，正式 DRAFT
+  GET 仍需另一個新的單次授權。
+- 阻塞點：本次正式 GET 已消耗且回傳 `PARSE_CONTRACT_CHANGED`／
+  `日期時間格式`，依 no-retry 契約不得重試。沒有新 run、沒有啟動 Word；
+  ffmpeg 仍未設定。公開 remote 未獲 push 例外，因此目前只保留本機 commits。
+
 ## 2026-08-17 missing departure-date parser design handoff
 
 - 一句話現況：已完成 NewAmazing live-card 缺少明確出發日節點時的窄幅
