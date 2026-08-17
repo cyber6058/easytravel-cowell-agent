@@ -13,6 +13,15 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 修正後持久化正式 `final-v2` 六例結果為 4／5／6／7 天全通過，8／12 天
+  仍固定 `LIST_DAY_ROW_TOO_TALL`。正常短列仍被判跨頁的根因是 `Get-DayPageMap` 將
+  row range 的 end collapse 到列終止標記後方；剛好換頁時會落到下一頁，誤判上一列。
+  已保留 private `final-v2` 事證、不覆寫；先以紅測鎖住 end probe 必須退一個字元，再於
+  collapse 前將 end 移回列自身 marker。真正跨頁列的 start/end 仍會不同並被擋。
+  targeted test、PowerShell parser、compileall、`git diff --check` 與全新短 private
+  basetemp 的完整回歸均通過，結果為 `511 passed, 8 skipped in 8.77s`。修正後正式六例
+  尚未重跑。
+
 - 2026-08-17 首次持久化正式六例結果為 4 天通過、5／6／7／8／12 天失敗：5–7 的
   第 2 頁是非日程的注意事項頁，已有團體 identity，但既有 QA 誤要求 daily header；
   8／12 的 synthetic 單列長文則正確觸發 `LIST_DAY_ROW_TOO_TALL`，沒有形成安全多列續頁。

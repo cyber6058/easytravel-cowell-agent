@@ -326,6 +326,17 @@ def test_patch_report_measures_pagination_after_save_as():
     assert save < reopen < final_repaginate < final_page_count < day_map
 
 
+def test_day_page_map_probes_before_the_row_end_marker():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split("function Get-DayPageMap {", 1)[1].split(
+        "function Invoke-Probe {", 1
+    )[0]
+    retreat = function.index("$endRange.End = [int]$endRange.End - 1")
+    collapse = function.index("$endRange.Collapse(0)")
+
+    assert retreat < collapse
+
+
 def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):
     job_path = job(tmp_path)
     (tmp_path / "word-owner.json").write_text(

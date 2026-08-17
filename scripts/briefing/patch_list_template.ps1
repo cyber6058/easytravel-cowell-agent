@@ -1427,6 +1427,7 @@ function Get-DayPageMap {
         $startRange.Collapse(1)
         $startPage = [int]$startRange.Information(3)
         $endRange = $range.Duplicate
+        $endRange.End = [int]$endRange.End - 1
         $endRange.Collapse(0)
         $endPage = [int]$endRange.Information(3)
         if ($startPage -ne $endPage) {
