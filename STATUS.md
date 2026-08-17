@@ -6,9 +6,21 @@
 已由既有兩份 private-safe reports 純離線產生並驗證，decision table 仍為
 `BLOCKED_MIXED_VALUE`；OP 已明確指定 13 組全部選 sample-001，36 個 hash-bound choices
 已填妥並通過 strict validation；欄寬亦明確選 sample-001，Gate C 單一來源 normalization
-整合已通過完整離線回歸，正待執行已核准的唯一真實 Gate C，仍無 master／manifest／config。
+整合已通過完整離線回歸；已核准的唯一真實 Gate C 回傳 `INTERNAL_ERROR` 且未留下輸出，
+來源不變、WINWORD 0，仍無 master／manifest／config，禁止無核准重試。
 
 ## 這次做了什麼
+
+- 2026-08-17 真實 Gate C preflight 通過：三份來源依 decision-table 順序各唯一匹配，
+  hash 與 `77,824／81,408／86,016` bytes 不變；decision table SHA-256 為
+  `995130a3b8e5a27c0a52b629ef53e3c1d79761bbd58ff43ee415eca7cccdfb27`，completed choices
+  SHA-256 為 `55946dad8d35fad300e1a48245f899263609a7ebc4995406a8e5c297e344b970`；
+  pdftoppm 可用、新目標不存在、WINWORD 0。
+- 唯一一次 `calibrate-list` 隨後執行且沒有 retry，19.3 秒後回傳
+  `{"status":"error","error":{"code":"INTERNAL_ERROR","message":"Unexpected internal error"}}`。
+  後驗新目標目錄不存在、master／manifest 皆 0，三份來源仍各唯一匹配原 hash／size，
+  WINWORD 0；因此沒有未知寫入，但 CLI 已折疊原始 Python 例外，本回合證據不足以判定
+  根因。不得把此結果宣稱為 Gate C 成功，也不得在沒有新核准時重試 Word。
 
 - 2026-08-17 OP 明確確認欄寬也選 sample-001。新增 fail-closed Gate C 單一來源 normalization
   整合：`calibrate-list` 的 decision table、completed choices 與 width-base sample 必須一起
@@ -943,8 +955,10 @@
 ## 下一步
 
 真實 worksheet、OP-selected artifact、sample-001 欄寬決策與 fail-closed Gate C 整合均已
-完成並通過離線回歸。下一步執行本次已核准的唯一真實 Gate C，以 sample-001 完整 layout
-建立並驗證 master；若成功，再分別取得 Gate V 與 Gate E 核准。沒有新核准
+完成並通過離線回歸，但唯一真實 Gate C 已以 `INTERNAL_ERROR` 結束且無輸出。下一步需另行
+核准一次新的 read-only Gate C failure diagnosis：重新做一次 inspect-v2，但只保留 exact-schema
+private-safe stage／exception evidence，不建立 master、不執行 calibration mutation、不 retry；
+定位並離線修正後，才另行核准新的真實 Gate C。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
