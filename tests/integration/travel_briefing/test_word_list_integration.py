@@ -1,10 +1,11 @@
+import json
 import os
 import sys
 from pathlib import Path
 
 import pytest
 
-from travel_briefing.adapters.windows_word import WindowsWordAdapter
+from travel_briefing.config import parse_config
 from travel_briefing.models import (
     BriefingDraft,
     DraftStatus,
@@ -13,22 +14,19 @@ from travel_briefing.models import (
     Product,
 )
 from travel_briefing.op_values import build_missing_op_fields
-from travel_briefing.word_list import (
-    build_list_word,
-    inspect_list_template,
-    probe_word_capability,
-)
-from travel_briefing.word_qa import render_list_word_for_qa
+from travel_briefing.workflow import LocalRenderBackend
 
 
 _TEMPLATE = os.environ.get("EASYTRAVEL_LIST_TEMPLATE_PATH", "")
-_FINGERPRINT = os.environ.get("EASYTRAVEL_LIST_TEMPLATE_FINGERPRINT", "")
+_MANIFEST = os.environ.get(
+    "EASYTRAVEL_LIST_CALIBRATION_MANIFEST_PATH", ""
+)
 _PDFTOPPM = os.environ.get("EASYTRAVEL_PDFTOPPM_PATH", "")
 _OPTED_IN = (
     sys.platform == "win32"
     and os.environ.get("RUN_BRIEFING_WORD_INTEGRATION") == "1"
     and bool(_TEMPLATE)
-    and bool(_FINGERPRINT)
+    and bool(_MANIFEST)
     and bool(_PDFTOPPM)
 )
 
@@ -36,66 +34,85 @@ pytestmark = pytest.mark.skipif(
     not _OPTED_IN,
     reason=(
         "set RUN_BRIEFING_WORD_INTEGRATION=1 plus explicit private LIST "
-        "template, approved fingerprint, and pdftoppm paths"
+        "master, calibration manifest, and pdftoppm paths"
     ),
 )
 
 
-def test_private_list_template_patches_and_renders_one_page(tmp_path):
+@pytest.mark.parametrize("day_count", [4, 5, 6, 7, 8, 12])
+def test_calibrated_master_renders_gate_v_day_counts(tmp_path, day_count):
     project_root = Path(__file__).parents[3]
-    patch_adapter = WindowsWordAdapter(
-        script_path=project_root
-        / "scripts"
-        / "briefing"
-        / "patch_list_template.ps1"
+    config = parse_config(
+        {
+            "output": {"root": str(tmp_path)},
+            "template": {
+                "master_path": _TEMPLATE,
+                "calibration_manifest": _MANIFEST,
+            },
+            "tools": {
+                "ffmpeg": None,
+                "pdftoppm": _PDFTOPPM,
+            },
+        }
     )
-    render_adapter = WindowsWordAdapter(
-        script_path=project_root
-        / "scripts"
-        / "briefing"
-        / "render_list_template.ps1"
+    backend = LocalRenderBackend.from_config(
+        config,
+        scripts_root=project_root / "scripts" / "briefing",
     )
-    capability = probe_word_capability(patch_adapter)
-    assert capability.available is True
-    template = inspect_list_template(
-        Path(_TEMPLATE),
-        adapter=patch_adapter,
-        expected_layout_fingerprint=_FINGERPRINT,
-    )
-    source = synthetic_draft(template.day_count)
-    docx = tmp_path / "DRAFT_SYN-LIST-260901_說明會資料.docx"
-    built = build_list_word(
+    source = synthetic_draft(day_count)
+    output = tmp_path / f"day-{day_count:03d}"
+
+    evidence = backend.render_word(
         source,
-        template_path=Path(_TEMPLATE),
-        output_docx=docx,
-        expected_layout_fingerprint=_FINGERPRINT,
-        adapter=patch_adapter,
+        output_docx=output / "LIST.docx",
+        output_qa_pdf=output / "LIST-qa.pdf",
+        output_qa_directory=output / "pages",
+        output_qa_index=output / "pages" / "index.json",
     )
 
-    qa = render_list_word_for_qa(
-        built.docx_path,
-        output_pdf=tmp_path / "qa.pdf",
-        output_png=tmp_path / "qa.png",
-        required_text=("SYN-LIST-260901", "JX820", "JX821"),
-        adapter=render_adapter,
-        pdftoppm_path=Path(_PDFTOPPM),
+    index = json.loads(
+        (output / "pages" / "index.json").read_text(encoding="utf-8")
     )
-
-    assert built.byte_count > 0
-    assert qa.pdf_inspection.page_count == 1
-    assert qa.pdf_inspection.image_count >= 1
-    assert qa.png_path.stat().st_size > 0
+    assert (output / "LIST.docx").stat().st_size > 0
+    assert (output / "LIST-qa.pdf").stat().st_size > 0
+    assert evidence.page_count == index["page_count"]
+    if day_count < 8:
+        assert evidence.page_count == 1
+    else:
+        assert evidence.page_count >= 2
+    assert evidence.qr_image_count >= 1
+    assert len(evidence.page_sha256s) == evidence.page_count
+    assert len(index["day_page_map"]) == day_count
+    assert [item["day_number"] for item in index["day_page_map"]] == list(
+        range(1, day_count + 1)
+    )
 
 
 def synthetic_draft(day_count: int) -> BriefingDraft:
+    long_continuation_fixture = day_count >= 8
     days = tuple(
         ItineraryDay(
             number=number,
             date=f"2026-09-{number:02d}",
             city="大阪",
-            attractions=(f"合成景點{number}A", f"合成景點{number}B"),
+            attractions=(
+                (
+                    f"合成大阪城與庭園深度參觀行程{number}A"
+                    if long_continuation_fixture
+                    else f"合成景點{number}A"
+                ),
+                (
+                    f"合成歷史街區文化散策與展望台{number}B"
+                    if long_continuation_fixture
+                    else f"合成景點{number}B"
+                ),
+            ),
             meals=("早餐", "午餐", "晚餐"),
-            hotel=f"合成飯店{number}",
+            hotel=(
+                f"合成大阪灣景觀住宿飯店{number}"
+                if long_continuation_fixture
+                else f"合成飯店{number}"
+            ),
             source_ids=("synthetic",),
         )
         for number in range(1, day_count + 1)

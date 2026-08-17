@@ -13,6 +13,16 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 經使用者明確核准 Gate V 後，先將既有 opt-in Word integration test 從單一
+  legacy fingerprint／單頁案例改為正式 schema-2 master＋calibration manifest 路徑，並固定
+  參數化 4／5／6／7／8／12 天。4–7 天使用一般長度 synthetic 內容且必須單頁；8／12 天
+  使用較長但受 route limit 約束的 synthetic 內容且必須觸發至少兩頁。每例都驗證 DOCX／
+  PDF／PNG page set、QR、required text、day-page map 與 hash-bound QA index；不含額外的
+  too-tall case、發布或傳送。
+- 真實 Word 尚未執行；完整離線 suite 為 `504 passed, 8 skipped`（共 512 tests），
+  compileall 與 `git diff --check` 通過。待本變更先 commit，再以全新 private basetemp 執行
+  核准的六個 Gate V cases 並依 `pdf` skill 逐張檢視最新 PNG。
+
 - 2026-08-17 使用者明確核准一次新的正式 Gate C；preflight 確認三份來源 hash、36 choices
   全選 sample-001、欄寬 base、decision table／choices hashes、全新輸出目錄、WINWORD 0、
   修正 commit `515bdd7` 與乾淨工作樹全部符合。正式 `calibrate-list` 隨後執行且只執行
