@@ -1,5 +1,29 @@
 # STATUS
 
+## 2026-08-17 unknown-date DRAFT implementation handoff
+
+- 一句話現況：A「日期未知 DRAFT」已依核准規格完成 TDD 實作、完整離線驗證、
+  package 驗證與 installed runtime 同步；尚未使用新的正式 DRAFT GET。
+- 這次做了什麼：parser 升為 `newamazing-html/7`，接受全頁一致的 full-datetime
+  或精確 `HH:MM`；無 published departure 且 time-only 時，product／flight／day
+  dates 全部留白，混用格式 fail closed。merge 加單一 `SOURCE_DATE_MISSING`，
+  PDF 有日期時把 blank web dates 視為缺漏而非衝突；narration 改為產品名稱句與
+  nonblocking missing-date review；Word 的 product／flight／day 黃色 placeholder
+  已由公開 patch-plan test 鎖定；CONFIRMED 對空白 product 或 day dates fail
+  closed。程式 commit 為 `dcf7f2d`。
+- 驗證：focused seams `126 passed in 3.48s`；完整 suite `534 passed, 8 skipped
+  in 20.58s`；compileall 與 diff check 通過。0.2.0 package 為 63 entries，
+  SHA-256 `7ceaee0a3ccf93bef1895979447579a1fc32b9e7fbe46643d8b2ec206faf0d06`。
+  四個 changed installed modules 與 repo SHA-256 全部相符；doctor 的 Yating、
+  Word、pdftoppm、schema-2 calibration 均 `ok`，WINWORD 0。
+- 下一步：取得 OP 對同一產品「一次正式日期未知 DRAFT GET」的新明確授權後，
+  執行 one-shot `prepare`；若 narration input ready，再依 one-DRAFT workflow 建稿、
+  check-script、render、逐頁 Word QA 與人耳音訊驗收，不自動重試。
+- 阻塞點：正式 DRAFT GET 尚未獲新授權。ffmpeg 仍未設定，因此可建立
+  DOCX/WAV/SRT/TXT DRAFT，但 MP3 會 missing；日期未知與 MP3 missing 都阻擋
+  CONFIRMED。沒有 LINE、upload、publish、push 或 Cowell 動作，公開 remote 未獲
+  push 例外。
+
 ## 2026-08-17 unknown-date DRAFT design handoff
 
 - 一句話現況：OP 已選擇 A「日期未知 DRAFT」方向；跨 parser、merge review、
