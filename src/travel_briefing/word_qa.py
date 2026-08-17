@@ -157,14 +157,26 @@ def inspect_list_pdf(
         whole_text = "\n".join(page_texts)
         if any(value not in whole_text for value in required_text):
             raise ValueError("LIST QA PDF is missing required text")
-        for text in page_texts[1:]:
-            if any(
-                value not in text
-                for value in continuation_required_text
-            ):
-                raise ValueError(
-                    "LIST QA PDF continuation page is missing identity or header"
-                )
+        if continuation_required_text:
+            identity_text = continuation_required_text[0]
+            daily_header_text = continuation_required_text[1:]
+            daily_continuation_pages = (
+                {
+                    item.start_page
+                    for item in day_page_map
+                    if item.start_page > 1
+                }
+                if day_page_map
+                else set(range(2, document.page_count + 1))
+            )
+            for page_number, text in enumerate(page_texts[1:], start=2):
+                if identity_text not in text or (
+                    page_number in daily_continuation_pages
+                    and any(value not in text for value in daily_header_text)
+                ):
+                    raise ValueError(
+                        "LIST QA PDF continuation page is missing identity or header"
+                    )
         if day_page_map or day_tokens:
             tokens = day_tokens or {}
             if (

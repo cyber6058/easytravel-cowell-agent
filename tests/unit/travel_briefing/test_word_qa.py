@@ -141,6 +141,47 @@ def test_pdf_inspection_blocks_missing_continuation_identity_or_wrong_day_page(
         )
 
 
+def test_pdf_inspection_allows_identity_only_on_non_daily_continuation_page(
+    tmp_path,
+):
+    pdf = tmp_path / "notes-continuation.pdf"
+    document = fitz.open()
+    first = document.new_page(width=595.28, height=841.89)
+    first.insert_text(
+        (72, 72),
+        "OSA-SYN-260901 JX820 JX821 DATE ROUTE HOTEL BREAKFAST LUNCH "
+        "DINNER 2026-09-01",
+    )
+    image = Image.new("RGB", (16, 16), color="black")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    first.insert_image(fitz.Rect(72, 90, 104, 122), stream=buffer.getvalue())
+    second = document.new_page(width=595.28, height=841.89)
+    second.insert_text(
+        (72, 72), "OSA-SYN-260901 GROUP TRAVEL NOTES CONTINUATION PAGE"
+    )
+    document.save(pdf)
+    document.close()
+
+    inspection = inspect_list_pdf(
+        pdf,
+        required_text=("OSA-SYN-260901", "JX820", "JX821"),
+        continuation_required_text=(
+            "OSA-SYN-260901",
+            "DATE",
+            "ROUTE",
+            "HOTEL",
+            "BREAKFAST",
+            "LUNCH",
+            "DINNER",
+        ),
+        day_page_map=(DayPagePlacement(1, 1, 1),),
+        day_tokens={1: "2026-09-01"},
+    )
+
+    assert inspection.page_count == 2
+
+
 def test_pdf_inspection_requires_one_a4_page_text_and_an_image(tmp_path):
     pdf = tmp_path / "list.pdf"
     write_pdf(pdf)

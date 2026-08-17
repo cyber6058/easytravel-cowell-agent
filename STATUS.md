@@ -13,6 +13,17 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 首次持久化正式六例結果為 4 天通過、5／6／7／8／12 天失敗：5–7 的
+  第 2 頁是非日程的注意事項頁，已有團體 identity，但既有 QA 誤要求 daily header；
+  8／12 的 synthetic 單列長文則正確觸發 `LIST_DAY_ROW_TOO_TALL`，沒有形成安全多列續頁。
+  已保留 private `final-v1` 事證、不覆寫。依 Gate V 契約新增紅測後，QA 改為所有續頁
+  必須有 identity，只有 day-page map 實際指向的日程續頁才強制 daily header；沒有 map 的
+  舊呼叫仍維持每頁全檢查。8／12 fixture 改為正常單列長度，靠 8／12 列本身觸發續頁；
+  4 天仍固定單頁，8／12 固定多頁，5–7 依真實 master pagination 驗收。Word QA targeted
+  suite 為 `17 passed`，全新短 private basetemp 的完整回歸為
+  `510 passed, 8 skipped in 8.70s`，compileall 與 `git diff --check` 通過。修正後正式六例
+  尚未重跑。
+
 - 2026-08-17 reopened-artifact 修正後，真實 4 天 Gate V 單例正式通過：
   `1 passed in 6.62s`，DOCX、1 頁 PDF、1 張 PNG、QR、日期映射與 QA index 一致；
   master hash 不變、WINWORD 0。另確認 pytest 結束會清除 basetemp，為使正式六例 PNG

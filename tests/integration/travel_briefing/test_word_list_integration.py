@@ -96,9 +96,9 @@ def test_calibrated_master_renders_gate_v_day_counts(tmp_path, day_count):
     assert (output / "LIST.docx").stat().st_size > 0
     assert (output / "LIST-qa.pdf").stat().st_size > 0
     assert evidence.page_count == index["page_count"]
-    if day_count < 8:
+    if day_count == 4:
         assert evidence.page_count == 1
-    else:
+    if day_count >= 8:
         assert evidence.page_count >= 2
     assert evidence.qr_image_count >= 1
     assert len(evidence.page_sha256s) == evidence.page_count
@@ -109,30 +109,17 @@ def test_calibrated_master_renders_gate_v_day_counts(tmp_path, day_count):
 
 
 def synthetic_draft(day_count: int) -> BriefingDraft:
-    long_continuation_fixture = day_count >= 8
     days = tuple(
         ItineraryDay(
             number=number,
             date=f"2026-09-{number:02d}",
             city="大阪",
             attractions=(
-                (
-                    f"合成大阪城與庭園深度參觀行程{number}A"
-                    if long_continuation_fixture
-                    else f"合成景點{number}A"
-                ),
-                (
-                    f"合成歷史街區文化散策與展望台{number}B"
-                    if long_continuation_fixture
-                    else f"合成景點{number}B"
-                ),
+                f"合成景點{number}A",
+                f"合成景點{number}B",
             ),
             meals=("早餐", "午餐", "晚餐"),
-            hotel=(
-                f"合成大阪灣景觀住宿飯店{number}"
-                if long_continuation_fixture
-                else f"合成飯店{number}"
-            ),
+            hotel=f"合成飯店{number}",
             source_ids=("synthetic",),
         )
         for number in range(1, day_count + 1)
