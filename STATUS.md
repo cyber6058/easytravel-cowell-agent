@@ -13,6 +13,15 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 首次真實 Gate V 六例（4／5／6／7／8／12 天）均在 Word patch action
+  回傳通用 `WordGenerationError`，尚未進入 PDF／PNG 驗證；唯讀後驗確認 private 輸出
+  根目錄為空、DOCX／PDF／PNG 均為 0、WINWORD 0、master SHA-256 不變且工作樹無產物
+  異動，因此不是 unknown write，沒有盲目重跑。opt-in integration test 已改為在錯誤時
+  只顯示既有 private-safe `code`／`stage`／`hresult`／`adapter_code` details，避免 pytest
+  traceback 隱藏根因；完整離線 suite 再次通過（`504 passed, 8 skipped`，共 512 tests），
+  compileall 與 `git diff --check` 通過。下一步只執行已核准集合內的 4 天 fixture 受控定位，
+  找到共同根因後才恢復六例驗收。
+
 - 2026-08-17 經使用者明確核准 Gate V 後，先將既有 opt-in Word integration test 從單一
   legacy fingerprint／單頁案例改為正式 schema-2 master＋calibration manifest 路徑，並固定
   參數化 4／5／6／7／8／12 天。4–7 天使用一般長度 synthetic 內容且必須單頁；8／12 天

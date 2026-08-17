@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from travel_briefing.config import parse_config
+from travel_briefing.errors import BriefingCliError
 from travel_briefing.models import (
     BriefingDraft,
     DraftStatus,
@@ -62,13 +63,26 @@ def test_calibrated_master_renders_gate_v_day_counts(tmp_path, day_count):
     source = synthetic_draft(day_count)
     output = tmp_path / f"day-{day_count:03d}"
 
-    evidence = backend.render_word(
-        source,
-        output_docx=output / "LIST.docx",
-        output_qa_pdf=output / "LIST-qa.pdf",
-        output_qa_directory=output / "pages",
-        output_qa_index=output / "pages" / "index.json",
-    )
+    try:
+        evidence = backend.render_word(
+            source,
+            output_docx=output / "LIST.docx",
+            output_qa_pdf=output / "LIST-qa.pdf",
+            output_qa_directory=output / "pages",
+            output_qa_index=output / "pages" / "index.json",
+        )
+    except BriefingCliError as error:
+        pytest.fail(
+            json.dumps(
+                {
+                    "code": error.code,
+                    "details": error.details,
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+            ),
+            pytrace=False,
+        )
 
     index = json.loads(
         (output / "pages" / "index.json").read_text(encoding="utf-8")
