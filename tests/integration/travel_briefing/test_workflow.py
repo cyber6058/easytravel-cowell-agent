@@ -462,6 +462,34 @@ def test_render_builds_a_new_draft_then_confirms_without_rerunning_generators(
     ).read_text(encoding="utf-8")
 
 
+def test_confirmation_rejects_a_draft_with_unresolved_source_dates(tmp_path):
+    output_root = tmp_path / "briefings"
+    manifest, script_path = ready_manifest_and_script(
+        output_root,
+        tmp_path,
+        unknown_dates=True,
+    )
+    backend = SyntheticRenderBackend()
+    rendered = render_briefing(
+        output_root=output_root,
+        manifest_path=manifest,
+        script_path=script_path,
+        generated_at="2026-08-12T16:00:00+08:00",
+        backend=backend,
+    )
+
+    assert rendered.draft.status is DraftStatus.DRAFT_READY
+    with pytest.raises(BriefingInputError, match="unresolved source dates"):
+        render_briefing(
+            output_root=output_root,
+            manifest_path=rendered.manifest_path,
+            script_path=script_path,
+            generated_at="2026-08-12T16:01:00+08:00",
+            confirm_draft_id=rendered.draft.draft_id,
+            backend=backend,
+        )
+
+
 def test_render_keeps_safe_partial_artifacts_and_blocks_confirmation(tmp_path):
     output_root = tmp_path / "briefings"
     manifest, script_path = ready_manifest_and_script(output_root, tmp_path)
@@ -824,7 +852,12 @@ def test_prepare_revision_clears_prior_render_artifacts_and_script_binding(tmp_p
     assert statuses["word"] == "missing"
     assert statuses["audio_wav"] == "missing"
 
-def ready_manifest_and_script(output_root: Path, tmp_path: Path):
+def ready_manifest_and_script(
+    output_root: Path,
+    tmp_path: Path,
+    *,
+    unknown_dates: bool = False,
+):
     source_id = "synthetic-source"
     days = tuple(
         ItineraryDay(
@@ -924,6 +957,14 @@ def ready_manifest_and_script(output_root: Path, tmp_path: Path):
             for day in days
         ),
     )
+    if unknown_dates:
+        draft = replace(
+            draft,
+            product=replace(draft.product, departure_date="", return_date=""),
+            flights=tuple(replace(flight, date="") for flight in draft.flights),
+            days=tuple(replace(day, date="") for day in draft.days),
+            weather=tuple(replace(item, date="") for item in draft.weather),
+        ).with_recomputed_id()
     run = create_run_directory(
         output_root,
         product_code=draft.product.code,

@@ -105,6 +105,19 @@ def merge_briefing_sources(
             ),
         )
 
+    if web is not None and (
+        not web.product.departure_date.strip()
+        or not web.product.return_date.strip()
+    ):
+        warnings = (
+            *warnings,
+            DraftWarning(
+                code="SOURCE_DATE_MISSING",
+                message="官網未明確提供可追溯的行程日期，需由 OP 確認",
+                source_ids=(web.source.source_id,),
+            ),
+        )
+
     return BriefingDraft.create(
         status=status_for_conflicts(conflicts),
         generated_at=generated_at,
@@ -152,11 +165,16 @@ def _source_differences(
             ),
         )
     for attribute in ("code", "departure_date", "return_date", "day_count"):
+        web_value = getattr(web.product, attribute)
+        if attribute in {"departure_date", "return_date"} and not str(
+            web_value
+        ).strip():
+            continue
         _add_conflict(
             conflicts,
             field=f"product.{attribute}",
             value_a=getattr(pdf.product, attribute),
-            value_b=getattr(web.product, attribute),
+            value_b=web_value,
             source_a=_source_id(pdf.product.source_ids, pdf.sources[0].source_id),
             source_b=_source_id(web.product.source_ids, web.source.source_id),
         )
@@ -183,11 +201,14 @@ def _source_differences(
                 "departure_time",
                 "arrival_time",
             ):
+                web_value = getattr(web_flight, attribute)
+                if attribute == "date" and not web_value.strip():
+                    continue
                 _add_conflict(
                     conflicts,
                     field=f"flights[{index}].{attribute}",
                     value_a=getattr(pdf_flight, attribute),
-                    value_b=getattr(web_flight, attribute),
+                    value_b=web_value,
                     source_a=_source_id(
                         pdf_flight.source_ids,
                         pdf.sources[0].source_id,
@@ -214,20 +235,21 @@ def _source_differences(
         for number in sorted(pdf_days):
             pdf_day = pdf_days[number]
             web_day = web_days[number]
-            _add_conflict(
-                conflicts,
-                field=f"days[{number}].date",
-                value_a=pdf_day.date,
-                value_b=web_day.date,
-                source_a=_source_id(
-                    pdf_day.source_ids,
-                    pdf.sources[0].source_id,
-                ),
-                source_b=_source_id(
-                    web_day.source_ids,
-                    web.source.source_id,
-                ),
-            )
+            if web_day.date.strip():
+                _add_conflict(
+                    conflicts,
+                    field=f"days[{number}].date",
+                    value_a=pdf_day.date,
+                    value_b=web_day.date,
+                    source_a=_source_id(
+                        pdf_day.source_ids,
+                        pdf.sources[0].source_id,
+                    ),
+                    source_b=_source_id(
+                        web_day.source_ids,
+                        web.source.source_id,
+                    ),
+                )
             for attribute in ("city", "hotel", "attractions"):
                 value_a = getattr(pdf_day, attribute)
                 value_b = getattr(web_day, attribute)

@@ -661,6 +661,12 @@ def _confirm_render(
         or not source_draft.product.region
     ):
         raise BriefingInputError("Confirmation contains unresolved OP fields")
+    if (
+        not source_draft.product.departure_date.strip()
+        or not source_draft.product.return_date.strip()
+        or any(not day.date.strip() for day in source_draft.days)
+    ):
+        raise BriefingInputError("Confirmation contains unresolved source dates")
     static_required_kinds = {
         "word",
         "word_evidence",

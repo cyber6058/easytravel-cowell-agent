@@ -14,7 +14,7 @@ from ..input_validation import validate_newamazing_url
 from ..models import Flight, ItineraryDay, Notice, Product, SourceEvidence
 
 
-PARSER_VERSION = "newamazing-html/6"
+PARSER_VERSION = "newamazing-html/7"
 
 _NOTICE_CATEGORIES = {
     "小費": "tip",
@@ -224,11 +224,15 @@ def _parse_live_card_page(
         if isinstance(departure_node, Tag)
         else flights[0].date
     )
-    return_date = (
-        date.fromisoformat(departure_date) + timedelta(days=day_count - 1)
-    ).isoformat()
+    return_date = ""
+    if departure_date:
+        return_date = (
+            date.fromisoformat(departure_date) + timedelta(days=day_count - 1)
+        ).isoformat()
 
-    if flights[0].date != departure_date or flights[-1].date != return_date:
+    if flights[0].date and (
+        flights[0].date != departure_date or flights[-1].date != return_date
+    ):
         _contract_changed("航班日期")
     days = _parse_live_days(
         root,
@@ -277,6 +281,7 @@ def _parse_live_flights(
     indexes = _live_header_indexes(header_cells)
 
     flights: list[Flight] = []
+    date_presence: set[bool] = set()
     for row in section.select(".flight_content"):
         cells = row.find_all("li", recursive=False)
         if len(cells) != len(header_cells):
@@ -287,9 +292,10 @@ def _parse_live_flights(
         departure_date, departure_time = _parse_datetime(
             values["departure_datetime"]
         )
-        _arrival_date, arrival_time = _parse_datetime(
+        arrival_date, arrival_time = _parse_datetime(
             values["arrival_datetime"]
         )
+        date_presence.update((bool(departure_date), bool(arrival_date)))
         flights.append(
             Flight(
                 date=departure_date,
@@ -304,6 +310,8 @@ def _parse_live_flights(
         )
     if not flights:
         _contract_changed("航班資料")
+    if len(date_presence) != 1:
+        _contract_changed("航班日期")
     return tuple(flights)
 
 
@@ -332,7 +340,7 @@ def _parse_live_days(
     section = root.select_one("#DailyItinerary")
     if not isinstance(section, Tag):
         _contract_changed("每日行程")
-    start = date.fromisoformat(departure_date)
+    start = date.fromisoformat(departure_date) if departure_date else None
     days: list[ItineraryDay] = []
     for card in section.select(".every_day"):
         number = _parse_live_day_number(card)
@@ -351,7 +359,11 @@ def _parse_live_days(
         days.append(
             ItineraryDay(
                 number=number,
-                date=(start + timedelta(days=number - 1)).isoformat(),
+                date=(
+                    (start + timedelta(days=number - 1)).isoformat()
+                    if start is not None
+                    else ""
+                ),
                 city="",
                 attractions=(route,),
                 meals=_parse_live_meals(card, number),
@@ -468,13 +480,18 @@ def _extract_explicit_notice_facts(
 
 def _parse_datetime(value: str) -> tuple[str, str]:
     normalized = unicodedata.normalize("NFKC", value).strip()
-    match = re.fullmatch(
+    datetime_match = re.fullmatch(
         r"(\d{4}[./-]\d{1,2}[./-]\d{1,2})\s+(\d{1,2}:\d{2})",
         normalized,
     )
-    if match is None:
-        _contract_changed("日期時間格式")
-    return _parse_date(match.group(1)), _parse_time(match.group(2))
+    if datetime_match is not None:
+        return (
+            _parse_date(datetime_match.group(1)),
+            _parse_time(datetime_match.group(2)),
+        )
+    if re.fullmatch(r"\d{2}:\d{2}", normalized) is not None:
+        return "", _parse_time(normalized)
+    _contract_changed("日期時間格式")
 
 
 def _strip_brackets(value: str) -> str:

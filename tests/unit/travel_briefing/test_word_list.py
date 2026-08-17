@@ -157,6 +157,39 @@ def test_patch_plan_maps_any_positive_trip_to_dynamic_daily_rows(day_count):
     assert plan.cell(4, 1, 2).highlight_text == WAITING_FOR_OP
 
 
+def test_patch_plan_highlights_every_unknown_source_date():
+    source = draft()
+    source = replace(
+        source,
+        product=replace(source.product, departure_date="", return_date=""),
+        flights=tuple(replace(flight, date="") for flight in source.flights),
+        days=tuple(replace(day, date="") for day in source.days),
+    ).with_recomputed_id()
+
+    plan = build_list_patch_plan(
+        source,
+        expected_layout_fingerprint="a" * 64,
+    )
+
+    assert plan.cell(1, 2, 1).text == f"出發日期：{WAITING_FOR_OP}"
+    assert plan.cell(1, 2, 1).highlight_text == WAITING_FOR_OP
+    assert [plan.cell(2, row, 1).text for row in (2, 3)] == [
+        WAITING_FOR_OP,
+        WAITING_FOR_OP,
+    ]
+    assert [plan.cell(3, row, 1).text for row in range(2, 7)] == [
+        WAITING_FOR_OP,
+        WAITING_FOR_OP,
+        WAITING_FOR_OP,
+        WAITING_FOR_OP,
+        WAITING_FOR_OP,
+    ]
+    assert all(
+        plan.cell(3, row, 1).highlight_text == WAITING_FOR_OP
+        for row in range(2, 7)
+    )
+
+
 def test_patch_plan_requires_complete_sequential_days_and_at_most_two_flights():
     source = draft()
     with pytest.raises(ValueError, match="day records"):

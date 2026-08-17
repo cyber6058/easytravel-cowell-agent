@@ -277,6 +277,62 @@ def test_merge_warns_when_url_only_source_has_no_explicit_lodging_city():
     assert draft.warnings[0].source_ids == (WEB_SOURCE.source_id,)
 
 
+def test_merge_warns_without_blocking_when_web_dates_are_missing():
+    web = web_source()
+    web = replace(
+        web,
+        product=replace(web.product, departure_date="", return_date=""),
+        flights=tuple(replace(flight, date="") for flight in web.flights),
+        days=tuple(replace(day, date="") for day in web.days),
+    )
+
+    draft = merge_briefing_sources(
+        generated_at="2026-08-09T11:10:00+08:00",
+        web=web,
+    )
+
+    assert draft.status is DraftStatus.DRAFT_READY
+    assert [warning.code for warning in draft.warnings] == [
+        "SOURCE_DATE_MISSING"
+    ]
+    assert draft.warnings[0].source_ids == (WEB_SOURCE.source_id,)
+
+
+def test_merge_keeps_pdf_dates_when_web_dates_are_missing():
+    web = web_source()
+    web = replace(
+        web,
+        product=replace(web.product, departure_date="", return_date=""),
+        flights=tuple(replace(flight, date="") for flight in web.flights),
+        days=tuple(replace(day, date="") for day in web.days),
+    )
+
+    draft = merge_briefing_sources(
+        generated_at="2026-08-09T11:10:00+08:00",
+        pdf=pdf_source(),
+        web=web,
+    )
+
+    assert draft.status is DraftStatus.DRAFT_READY
+    assert draft.conflicts == ()
+    assert draft.product.departure_date == "2026-09-01"
+    assert draft.product.return_date == "2026-09-05"
+    assert [flight.date for flight in draft.flights] == [
+        "2026-09-01",
+        "2026-09-05",
+    ]
+    assert [day.date for day in draft.days] == [
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+    ]
+    assert [warning.code for warning in draft.warnings] == [
+        "SOURCE_DATE_MISSING"
+    ]
+
+
 def test_merge_uses_pdf_city_when_live_web_contract_does_not_publish_one():
     web = web_source()
     web = replace(

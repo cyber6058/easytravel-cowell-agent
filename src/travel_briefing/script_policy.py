@@ -261,21 +261,36 @@ def build_narration_input(draft: BriefingDraft) -> NarrationInput:
         )
         for section_id in SECTION_ORDER
     )
+    departure_date = draft.product.departure_date.strip()
+    product_fact_text = f"本團產品為{draft.product.name}。"
+    product_critical_values = (draft.product.name,)
+    if departure_date:
+        formatted_departure_date = _format_date(departure_date)
+        product_fact_text = (
+            f"本團產品為{draft.product.name}，"
+            f"出發日期為{formatted_departure_date}。"
+        )
+        product_critical_values = (formatted_departure_date,)
     facts: list[RequiredFact] = [
         RequiredFact(
             fact_id="product_date-001",
             category="product_date",
             section_id="product_date",
             label="產品與出發日期",
-            protected_text=(
-                f"本團產品為{draft.product.name}，"
-                f"出發日期為{_format_date(draft.product.departure_date)}。"
-            ),
+            protected_text=product_fact_text,
             source_ids=draft.product.source_ids,
-            critical_values=(_format_date(draft.product.departure_date),),
+            critical_values=product_critical_values,
         )
     ]
     reviews: list[ReviewItem] = []
+    if not departure_date:
+        reviews.append(
+            ReviewItem(
+                code="MISSING_REQUIRED_FACT",
+                message="Required narration fact is absent; do not infer a value.",
+                field="product.departure_date",
+            )
+        )
     category_counts: dict[str, int] = {}
 
     for notice in draft.notices:

@@ -97,6 +97,104 @@ def test_live_card_parser_uses_first_flight_when_departure_node_is_absent():
     assert parsed.flights[-1].date == parsed.product.return_date
 
 
+def test_live_card_parser_preserves_unknown_dates_for_time_only_flights():
+    changed = (
+        live_cards_html()
+        .replace(
+            '<li class="departure_date">2026/09/01</li>',
+            "",
+            1,
+        )
+        .replace("2026/09/01 08:30", "08:30", 1)
+        .replace("2026/09/01 12:10", "12:10", 1)
+        .replace("2026/09/05 13:20", "13:20", 1)
+        .replace("2026/09/05 15:25", "15:25", 1)
+    )
+
+    parsed = parse_newamazing_html(
+        changed,
+        source_url=(
+            "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+            "prodCd=OSA-SYN-260901"
+        ),
+        retrieved_at="2026-08-17T12:00:00+08:00",
+    )
+
+    assert parsed.source.parser_version == "newamazing-html/7"
+    assert parsed.product.departure_date == ""
+    assert parsed.product.return_date == ""
+    assert [flight.date for flight in parsed.flights] == ["", ""]
+    assert [flight.departure_time for flight in parsed.flights] == [
+        "08:30",
+        "13:20",
+    ]
+    assert [day.date for day in parsed.days] == ["", "", "", "", ""]
+
+
+def test_live_card_parser_rejects_mixed_dated_and_time_only_flights():
+    changed = live_cards_html().replace("2026/09/01 12:10", "12:10", 1)
+
+    with pytest.raises(ParseContractChangedError) as captured:
+        parse_newamazing_html(
+            changed,
+            source_url=(
+                "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+                "prodCd=OSA-SYN-260901"
+            ),
+            retrieved_at="2026-08-17T12:00:00+08:00",
+        )
+
+    assert captured.value.code == "PARSE_CONTRACT_CHANGED"
+    assert captured.value.details == {"anchor": "航班日期"}
+
+
+def test_live_card_parser_keeps_explicit_product_dates_with_time_only_flights():
+    changed = (
+        live_cards_html()
+        .replace("2026/09/01 08:30", "08:30", 1)
+        .replace("2026/09/01 12:10", "12:10", 1)
+        .replace("2026/09/05 13:20", "13:20", 1)
+        .replace("2026/09/05 15:25", "15:25", 1)
+    )
+
+    parsed = parse_newamazing_html(
+        changed,
+        source_url=(
+            "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+            "prodCd=OSA-SYN-260901"
+        ),
+        retrieved_at="2026-08-17T12:00:00+08:00",
+    )
+
+    assert parsed.product.departure_date == "2026-09-01"
+    assert parsed.product.return_date == "2026-09-05"
+    assert [flight.date for flight in parsed.flights] == ["", ""]
+    assert [day.date for day in parsed.days] == [
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+    ]
+
+
+def test_live_card_parser_rejects_a_non_hhmm_time_only_value():
+    changed = live_cards_html().replace("2026/09/01 08:30", "8:30", 1)
+
+    with pytest.raises(ParseContractChangedError) as captured:
+        parse_newamazing_html(
+            changed,
+            source_url=(
+                "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+                "prodCd=OSA-SYN-260901"
+            ),
+            retrieved_at="2026-08-17T12:00:00+08:00",
+        )
+
+    assert captured.value.code == "PARSE_CONTRACT_CHANGED"
+    assert captured.value.details == {"anchor": "日期時間格式"}
+
+
 def test_live_card_departure_fallback_rejects_a_last_flight_date_mismatch():
     changed = (
         live_cards_html()
@@ -284,7 +382,7 @@ def test_newamazing_parser_returns_source_bound_structured_fields():
 
     assert parsed.source.kind == "newamazing_html"
     assert parsed.source.location == SOURCE_URL
-    assert parsed.source.parser_version == "newamazing-html/6"
+    assert parsed.source.parser_version == "newamazing-html/7"
     assert len(parsed.source.sha256) == 64
     assert parsed.product.code == "OSA-SYN-260901"
     assert parsed.product.name == "合成大阪五日"

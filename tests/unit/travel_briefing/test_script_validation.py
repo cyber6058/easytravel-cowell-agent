@@ -233,6 +233,37 @@ def test_narration_input_does_not_invent_a_missing_required_fact():
     assert "100V" not in dumps_narration_input(narration_input)
 
 
+def test_narration_input_keeps_product_but_omits_an_unknown_departure_date():
+    draft = sample_script_draft()
+    unknown_dates = replace(
+        draft,
+        product=replace(draft.product, departure_date="", return_date=""),
+        flights=tuple(replace(flight, date="") for flight in draft.flights),
+        days=tuple(replace(day, date="") for day in draft.days),
+    ).with_recomputed_id()
+
+    narration_input = build_narration_input(unknown_dates)
+
+    product_fact = next(
+        fact
+        for fact in narration_input.required_facts
+        if fact.fact_id == "product_date-001"
+    )
+    assert product_fact.protected_text == "本團產品為合成大阪五日。"
+    assert product_fact.critical_values == ("合成大阪五日",)
+    assert any(
+        item.code == "MISSING_REQUIRED_FACT"
+        and item.field == "product.departure_date"
+        for item in narration_input.review_items
+    )
+    assert narration_input.ready is True
+    assert not any(
+        entry.kind == "date"
+        for entry in narration_input.pronunciation_entries
+    )
+    assert "出發日期為" not in dumps_narration_input(narration_input)
+
+
 def test_narration_input_prohibits_unresolved_and_unconfirmed_values():
     draft = sample_script_draft()
     blocked = replace(
