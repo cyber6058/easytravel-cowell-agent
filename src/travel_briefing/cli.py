@@ -24,11 +24,14 @@ from .errors import (
     BriefingCliError,
     BriefingInputError,
     CalibrationContractConflictError,
+    CalibrationPipelineFailureError,
 )
 from .exit_codes import INTERNAL_ERROR, NEEDS_REVIEW, SUCCESS
 from .config import load_config
 from .list_calibration import (
     CalibrationContractError,
+    CalibrationPipelineError,
+    CalibrationSourceChangedError,
     calibrate_list_templates,
     build_blank_component_normalization_choices,
     build_component_normalization_choice_worksheet,
@@ -420,6 +423,25 @@ def run_calibrate_list(args: argparse.Namespace) -> dict[str, Any]:
         raise CalibrationContractConflictError(
             stage=stage,
             field_paths=error.field_paths,
+            review_path=str(review_path),
+        ) from error
+    except (CalibrationPipelineError, CalibrationSourceChangedError) as error:
+        error_code = error.code
+        error_stage = getattr(error, "stage", stage)
+        review_path = private / "calibration-review.json"
+        _write_json_exclusive(
+            review_path,
+            {
+                "schema_version": SCHEMA_VERSION,
+                "status": "needs_review",
+                "error_code": error_code,
+                "stage": error_stage,
+                "source_sha256": source_hashes,
+            },
+        )
+        raise CalibrationPipelineFailureError(
+            error_code=error_code,
+            stage=error_stage,
             review_path=str(review_path),
         ) from error
     except Exception:

@@ -10,7 +10,10 @@ import pytest
 
 from travel_briefing import cli
 from travel_briefing import capabilities
-from travel_briefing.list_calibration import CalibrationContractError
+from travel_briefing.list_calibration import (
+    CalibrationContractError,
+    CalibrationPipelineError,
+)
 from travel_briefing.models import DraftStatus
 from tests.unit.travel_briefing.test_list_calibration import (
     component_artifact,
@@ -840,6 +843,72 @@ def test_calibrate_list_contract_conflict_writes_safe_exclusive_review(
         ],
         "field_paths": ["margins_points", "style_digest"],
         "conflict_matrix": conflict_matrix,
+    }
+    serialized = json.dumps(review)
+    assert all(sample.name not in serialized for sample in samples)
+    assert not (private / "LIST-master.docx").exists()
+    assert not (private / "calibration-manifest.json").exists()
+
+
+def test_calibrate_list_pipeline_failure_writes_safe_stage_review(
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    samples = tuple(
+        tmp_path / f"private-source-{number}.doc"
+        for number in range(3)
+    )
+    for number, sample in enumerate(samples):
+        sample.write_bytes(f"synthetic-{number}".encode())
+    pdftoppm = tmp_path / "pdftoppm.exe"
+    pdftoppm.write_bytes(b"synthetic")
+    private = tmp_path / "new-private"
+
+    def fail(_paths, **kwargs):
+        kwargs["on_stage"]("calibrate-master")
+        kwargs["on_stage"]("validate-master")
+        raise CalibrationPipelineError("CALIBRATION_REPORT_INVALID")
+
+    monkeypatch.setattr(cli, "calibrate_list_templates", fail)
+    exit_code = cli.main(
+        [
+            "calibrate-list",
+            *sum(([
+                "--sample", str(path)
+            ] for path in samples), []),
+            "--private-dir",
+            str(private),
+            "--pdftoppm",
+            str(pdftoppm),
+            "--generated-at",
+            "2026-08-17T12:00:00+08:00",
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    review_path = private / "calibration-review.json"
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    assert exit_code == 20
+    assert payload["error"] == {
+        "code": "CALIBRATION_REPORT_INVALID",
+        "message": "LIST calibration stopped at a bounded pipeline check",
+        "details": {
+            "stage": "validate-master",
+            "review": str(review_path),
+        },
+    }
+    assert review == {
+        "schema_version": 1,
+        "status": "needs_review",
+        "error_code": "CALIBRATION_REPORT_INVALID",
+        "stage": "validate-master",
+        "source_sha256": [
+            hashlib.sha256(sample.read_bytes()).hexdigest()
+            for sample in samples
+        ],
     }
     serialized = json.dumps(review)
     assert all(sample.name not in serialized for sample in samples)

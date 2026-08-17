@@ -107,6 +107,16 @@ must still reproduce the selected source's normalized structure fingerprint,
 and all existing dynamic-token, source-mutation, exclusive-create, and manifest
 checks remain unchanged.
 
+The formal calibration path maps post-Word validation and publication failures
+to fixed private-safe codes. An invalid Word report, missing or size-mismatched
+temporary master, retained dynamic content, hashing failure, invalid manifest,
+or publication failure exclusively creates `calibration-review.json` with only
+the fixed code, stage, and source hashes. It removes any partially published
+master and never exposes exception text, paths, filenames, or document content.
+This safety evidence is part of the formal Gate C attempt: a successful attempt
+still publishes the verified master and manifest directly, without requiring an
+extra diagnostic Word round.
+
 `diagnose-normalized-gate-c-failure` is a separate read-only diagnostic. It
 performs exactly one schema-2 inspection and the pure normalized comparison,
 then stops before working-copy creation or the `calibrate` Word action. Its

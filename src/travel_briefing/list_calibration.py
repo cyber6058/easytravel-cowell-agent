@@ -118,6 +118,25 @@ class CalibrationSourceChangedError(ValueError):
         )
 
 
+class CalibrationPipelineError(ValueError):
+    _ALLOWED = {
+        "CALIBRATION_REPORT_INVALID": "validate-master",
+        "CALIBRATION_MASTER_MISSING": "validate-master",
+        "CALIBRATION_MASTER_SIZE_MISMATCH": "validate-master",
+        "CALIBRATION_MASTER_DYNAMIC_CONTENT": "validate-master",
+        "CALIBRATION_MASTER_HASH_FAILED": "validate-master",
+        "CALIBRATION_MANIFEST_INVALID": "validate-master",
+        "CALIBRATION_PUBLISH_FAILED": "publish",
+    }
+
+    def __init__(self, code: str) -> None:
+        if code not in self._ALLOWED:
+            raise ValueError("unsupported calibration pipeline error")
+        self.code = code
+        self.stage = self._ALLOWED[code]
+        super().__init__(f"{code}: LIST calibration pipeline stopped")
+
+
 class WordCalibrationAdapter(Protocol):
     def run(self, job_path: Path, *, timeout_seconds: int) -> None: ...
 
@@ -2143,7 +2162,12 @@ def calibrate_list_templates(
         _write_json_exclusive(job_path, job)
         adapter.run(job_path, timeout_seconds=timeout_seconds)
         _report_calibration_stage(on_stage, "validate-master")
-        report = _read_calibration_report(report_path)
+        try:
+            report = _read_calibration_report(report_path)
+        except (OSError, UnicodeError, ValueError) as error:
+            raise CalibrationPipelineError(
+                "CALIBRATION_REPORT_INVALID"
+            ) from error
         after_calibration = tuple(_sha256_file(path) for path in samples)
         if after_calibration != before_calibration:
             raise CalibrationSourceChangedError()
@@ -2151,18 +2175,21 @@ def calibrate_list_templates(
             not temporary_master.is_file()
             or temporary_master.stat().st_size == 0
         ):
-            raise ValueError(
-                "calibration completed without a master document"
-            )
+            raise CalibrationPipelineError("CALIBRATION_MASTER_MISSING")
         if report["output_bytes"] != temporary_master.stat().st_size:
-            raise ValueError(
-                "calibrated master size does not match report"
+            raise CalibrationPipelineError(
+                "CALIBRATION_MASTER_SIZE_MISMATCH"
             )
         if report["forbidden_dynamic_token_types"]:
-            raise ValueError(
-                "calibrated master retains forbidden dynamic tokens"
+            raise CalibrationPipelineError(
+                "CALIBRATION_MASTER_DYNAMIC_CONTENT"
             )
-        master_hash = _sha256_file(temporary_master)
+        try:
+            master_hash = _sha256_file(temporary_master)
+        except OSError as error:
+            raise CalibrationPipelineError(
+                "CALIBRATION_MASTER_HASH_FAILED"
+            ) from error
         master_fingerprint = normalized_structure_fingerprint(
             report["master_inspection"]
         )
@@ -2173,25 +2200,36 @@ def calibrate_list_templates(
             raise CalibrationContractError(
                 ("master_structure_fingerprint",)
             )
-        calibration_manifest = build_calibration_manifest(
-            comparison,
-            master_sha256=master_hash,
-            master_structure_fingerprint=master_fingerprint,
-            created_at=created_at,
-            word_version=report["word_version"],
-            calibration_report_sha256=_sha256_file(report_path),
-        )
+        try:
+            calibration_manifest = build_calibration_manifest(
+                comparison,
+                master_sha256=master_hash,
+                master_structure_fingerprint=master_fingerprint,
+                created_at=created_at,
+                word_version=report["word_version"],
+                calibration_report_sha256=_sha256_file(report_path),
+            )
+        except (OSError, ValueError) as error:
+            raise CalibrationPipelineError(
+                "CALIBRATION_MANIFEST_INVALID"
+            ) from error
         _report_calibration_stage(on_stage, "publish")
-        master.parent.mkdir(parents=True, exist_ok=True)
-        manifest_destination.parent.mkdir(parents=True, exist_ok=True)
         master_created = False
         try:
+            master.parent.mkdir(parents=True, exist_ok=True)
+            manifest_destination.parent.mkdir(parents=True, exist_ok=True)
             _copy_exclusive(temporary_master, master)
             master_created = True
             _write_text_exclusive(
                 manifest_destination,
                 calibration_manifest.to_canonical_json() + "\n",
             )
+        except Exception as error:
+            if master_created:
+                master.unlink(missing_ok=True)
+            raise CalibrationPipelineError(
+                "CALIBRATION_PUBLISH_FAILED"
+            ) from error
         except BaseException:
             if master_created:
                 master.unlink(missing_ok=True)

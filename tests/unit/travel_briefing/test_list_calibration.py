@@ -10,6 +10,7 @@ import pytest
 
 from travel_briefing.list_calibration import (
     CalibrationContractError,
+    CalibrationPipelineError,
     ListCalibrationManifest,
     ListCalibrationSample,
     ListComponentDiagnosisResult,
@@ -534,6 +535,18 @@ class SyntheticCalibrationAdapter:
             json.dumps(report, ensure_ascii=False),
             encoding="utf-8",
         )
+
+
+class MalformedCalibrationReportAdapter(SyntheticCalibrationAdapter):
+    def run(self, job_path: Path, *, timeout_seconds: int) -> None:
+        super().run(job_path, timeout_seconds=timeout_seconds)
+        job = json.loads(job_path.read_text(encoding="utf-8"))
+        if job["action"] != "calibrate":
+            return
+        report_path = Path(job["report_path"])
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        report.pop("output_bytes")
+        report_path.write_text(json.dumps(report), encoding="utf-8")
 
 
 def source_files(tmp_path) -> tuple[Path, ...]:
@@ -1632,6 +1645,32 @@ def test_calibration_detects_source_mutation_and_never_builds_master(
     )
     assert adapter.actions == ["inspect-v2"]
     assert not (tmp_path / "master.docx").exists()
+
+
+def test_calibration_maps_invalid_word_report_to_safe_pipeline_checkpoint(
+    tmp_path,
+):
+    samples = source_files(tmp_path)
+    adapter = MalformedCalibrationReportAdapter(
+        (inspection(5), inspection(6), inspection(7))
+    )
+    stages = []
+
+    with pytest.raises(CalibrationPipelineError) as captured:
+        calibrate_list_templates(
+            samples,
+            master_path=tmp_path / "master.docx",
+            manifest_path=tmp_path / "manifest.json",
+            adapter=adapter,
+            created_at="2026-08-17T12:00:00+08:00",
+            on_stage=stages.append,
+        )
+
+    assert captured.value.code == "CALIBRATION_REPORT_INVALID"
+    assert captured.value.stage == "validate-master"
+    assert stages[-1] == "validate-master"
+    assert not (tmp_path / "master.docx").exists()
+    assert not (tmp_path / "manifest.json").exists()
 
 
 def test_calibration_conflict_and_existing_destinations_fail_before_mutation(

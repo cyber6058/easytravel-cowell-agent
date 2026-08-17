@@ -64,6 +64,27 @@ class CalibrationContractConflictError(BriefingCliError):
         )
 
 
+class CalibrationPipelineFailureError(BriefingCliError):
+    def __init__(
+        self,
+        *,
+        error_code: str,
+        stage: str,
+        review_path: str,
+    ) -> None:
+        from .exit_codes import NEEDS_REVIEW
+
+        super().__init__(
+            code=error_code,
+            message="LIST calibration stopped at a bounded pipeline check",
+            exit_code=NEEDS_REVIEW,
+            details={
+                "stage": stage,
+                "review": review_path,
+            },
+        )
+
+
 class BriefingSourceError(BriefingCliError):
     def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         from .exit_codes import SOURCE_ERROR

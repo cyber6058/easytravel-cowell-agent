@@ -13,6 +13,17 @@ publish 路徑；仍無 master／manifest／config，禁止無核准重試。
 
 ## 這次做了什麼
 
+- 2026-08-17 為避免再做一輪只診斷不交付的 Word 回合，已把正式 `calibrate-list` 的
+  post-Word validation／publish 路徑改為 fail-safe：成功時仍直接建立經驗證的 master 與
+  manifest；失敗時只 exclusive-create private-safe `calibration-review.json`。固定錯誤碼涵蓋
+  invalid calibration report、master missing／size mismatch／dynamic content／hash failure、
+  manifest invalid 與 publish failed；不記 raw exception、來源路徑／檔名或內容，partial
+  master 仍會回滾。
+- 新增 core 與 CLI 防回歸測試，證明 malformed Word report 會定位在 `validate-master`、
+  回傳 `needs_review`、只保留 source hashes 與固定 code／stage，且不建立 master／manifest。
+  Targeted suite 全綠；完整離線 suite 為 `503 passed, 3 skipped`；compileall、
+  `git diff --check`、長行檢查通過。
+
 - 2026-08-17 唯一一次 `diagnose-sample-001-working-copy` 已執行且沒有 retry；命令回傳
   `needs_review`、classification `NOT_REPRODUCED`，checkpoint phase／operation 均為
   `complete`，HRESULT `0x00000000`、adapter code `NONE`。這證明 sample-001 的既有
@@ -1003,9 +1014,9 @@ publish 路徑；仍無 master／manifest／config，禁止無核准重試。
 真實 worksheet、OP-selected artifact、sample-001 欄寬決策與 fail-closed Gate C 整合均已
 完成並通過離線回歸。read-only comparison 與 diagnostic-only working-copy normalization
 也已各執行一次並通過；唯一真實 Gate C 的 `INTERNAL_ERROR` 現已縮小到 SaveAs2、master
-validation 或 publish。下一步是先純離線設計一個 bounded SaveAs2／post-validation
-diagnostic，再另行取得真實 Word 執行核准。沒有新核准不得再次讀取真實 LIST、啟動 Word、
-執行 diagnosis 或 calibration。只有 Gate C
+validation 或 publish。正式 Gate C 已改成成功即交付 master／manifest、失敗即留下固定
+private-safe stage evidence，不再需要先消耗額外診斷回合。下一步只需另行核准一次正式
+Gate C；沒有新核准不得再次讀取真實 LIST、啟動 Word 或執行 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
