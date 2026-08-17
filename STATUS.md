@@ -9,10 +9,28 @@
 整合已通過完整離線回歸；manifest evidence 接線錯誤修正後的新正式 Gate C 已成功，
 sample-001 normalization、SaveAs2、master validation、manifest 與 exclusive publish 全部
 通過。正式 `LIST-master.docx` 與 `calibration-manifest.json` 已建立並完成 identity 後驗；
-Gate C 與 Gate V Word 視覺 QA 均已完成；首次 Gate E 真實 URL 已建立可審核 manifest，
-但在 narration／render 前因資料 review 與本機缺少 Microsoft Yating 正確阻塞。
+Gate C 與 Gate V Word 視覺 QA 均已完成；首次 Gate E 真實 URL 的 live notice mapping
+已修正並建立新版 review，Yating 證實只是 sandbox 偽陰性；目前在 render 前只剩真實
+來源／OP／天氣與發音 review，不是主機缺少語音套件。
 
 ## 這次做了什麼
+
+- 2026-08-17 依 OP「換主機、搞清楚卡在哪並修正」完成 Gate E blocker diagnosis 與
+  專案內可修部分。Yating 登錄、語音檔與繁中 language pack 均存在；sandbox 內 WinRT
+  `AllVoices` 會回 `Internal Speech Error`，但 sandbox 外同一 probe 正確列出 Yating 並回
+  `YATING_AVAILABLE`，因此不需安裝，也沒有 fallback。新主機缺少的
+  `%LOCALAPPDATA%\EasyTravelBriefing\config.toml` 已以既有 master／manifest／pdftoppm 與
+  private output 路徑建立；sandbox 外 `doctor` 顯示 Yating、Word、pdftoppm、calibration
+  全部 `ok`，只剩未設定 ffmpeg warning。程式面確認 live `出團備註` 是含三個巢狀段落的
+  compound notice，舊 parser 把它壓成 `other`。以去識別 fixture 先紅測，再升級
+  `newamazing-html/4`：對有明文證據的句子拆出來源綁定 facts，並認得官網七種標準 notice
+  headings；頁面未提供的內容仍不推測。targeted 為 `39 passed`，完整離線回歸為
+  `516 passed, 8 skipped in 98.86s`，compileall 與 `git diff --check` 通過。修正後同一 URL
+  在全新 private run `20260817T130627+0800` 建立 draft ID
+  `f7f73fd01446210356788d7c292bb1f769ebbe93fef45d51ab5442637642727f`；parser version 4、
+  5 天、0 conflicts、19 required facts，review items 從 39 降至 27：unknown notice 7→0、
+  missing required facts 7→2。剩餘為 2 個來源真缺漏、10 個 OP 欄位、1 個不可用天氣與
+  14 個待 review 發音項目；依契約未進行 check-script／Word／audio render。
 
 - 2026-08-17 首次 Gate E 使用 OP 提供的 NewAmazing URL 執行 one-request local DRAFT。
   `doctor` 確認 Word、schema-2 master、manifest hash 與 pdftoppm 正常，但 Microsoft Yating
@@ -1197,9 +1215,10 @@ Gate C 與 Gate V Word 視覺 QA 均已完成；首次 Gate E 真實 URL 已建�
 完成並通過離線回歸。read-only comparison 與 diagnostic-only working-copy normalization
 也已各執行一次並通過；manifest evidence 修正後的新正式 Gate C 已成功建立並驗證
 master／manifest。Gate V 亦已用 4／5／6／7／8／12 天 synthetic fixtures 完成真實
-Word 視覺 QA。首次 Gate E 已獲核准並完成來源 prepare；下一步需另行核准處理真實頁
-揭露的 source-to-narration mapping review，並由 OP 提供 10 個當次欄位值；Microsoft Yating
-恢復或安裝亦屬獨立核准，完成後才能對同一 reviewed source 建立新的 DRAFT。
+Word 視覺 QA。首次 Gate E 已獲核准，source-to-narration mapping 與新主機 config／Yating
+diagnosis 已完成。下一步由 OP 提供同產品行程 PDF 或其他已核准來源以補「不可脫隊規範」
+與「保險內容」，並提供 10 個當次 OP 欄位值；天氣與 14 個發音項目仍須 review。資料齊備
+後才能建立新的 manifest、check-script 與本機 DRAFT render。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
 明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
 立益公司電腦 clone、
@@ -1217,11 +1236,12 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 Gate I 已完成，沒有剩餘安裝阻塞。OP 已用 hash-bound choices 解決既有八個 schema-2
 field conflicts；manifest evidence 修正已經新正式 Gate C 實證通過，master／manifest
 均已建立並完成 hash／fingerprint 後驗，Gate C 不再阻塞。Gate V 多天數 Word 視覺 QA
-亦已正式通過。首次 Gate E 已執行但在 render 前 fail closed：narration review 未清、10 個
-OP 欄位未確認，且本機 Microsoft Yating capability probe 不可用。
+亦已正式通過。首次 Gate E 已執行但在 render 前 fail closed：修正後仍有 2 個來源必要
+事實缺漏、10 個 OP 欄位、1 個不可用天氣與 14 個發音 review。Yating 在 sandbox 外可用，
+不再是主機阻塞。
 
 說明會產生器 0.2.0 的 calibration、Word plan、workflow 與 packaging 沒有已知技術阻塞；
-首次真實 Gate E 揭露 source-to-narration mapping 仍有必要事實與 notice category review；
+首次真實 Gate E 揭露的 compound notice 與標準 headings mapping 已修正；
 URL-only 正式頁已
 驗證可建立 `DRAFT_READY` 草稿，但該產品仍須 OP 從大阪／東北／北海道明確確認
 `product_region`，不能跳過此人工欄位。完整
@@ -1234,10 +1254,10 @@ PDF 會明確
 阻塞並要求另行 OCR review。Azure 已移出第一階段自動流程；任何未來雲端 TTS 與
 自動 LINE 傳送仍是獨立核准關卡。
 
-本次 Gate E capability probe 顯示 Microsoft Yating 不可用，與較早的真實 integration
-結果不一致，必須另行診斷或在明確核准後恢復／安裝；不得 fallback 到 Hanhan。
-`pdftoppm` 可用、Word COM 已註冊且 Gate C hidden owned probe 已以 Word `16.0` 實跑，
-私人 master、PDF render 與逐頁視覺 QA 均已在 Gate V 驗證；`ffmpeg` 仍未設定。
+本次 Gate E capability diagnosis 證實 Microsoft Yating 只在 sandbox 內偽陰性；sandbox 外
+正式 probe 為 `ok`，不需恢復／安裝且不得 fallback 到 Hanhan。`pdftoppm` 可用、Word COM
+已註冊且 Gate C hidden owned probe 已以 Word `16.0` 實跑，私人 master、PDF render 與逐頁
+視覺 QA 均已在 Gate V 驗證；`ffmpeg` 仍未設定。
 Task 11 隔離安裝已證明新 `briefing.exe` 可啟動，且顯式 config 可載入外部
 `pdftoppm`；私有範本契約及 Word 實機 render 仍未驗證。
 0.2.0 的任意天數與安全續頁邏輯已在 synthetic／mock 離線測試完成，但尚未代表

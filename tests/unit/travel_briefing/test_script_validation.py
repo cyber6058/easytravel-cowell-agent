@@ -179,6 +179,37 @@ def test_narration_input_builds_source_bound_required_facts():
     assert pronunciations[("大阪城", "japanese_place")] == "大阪城"
 
 
+def test_narration_input_accepts_current_standard_notice_categories():
+    draft = sample_script_draft()
+    extra = tuple(
+        Notice(category=category, text=text, source_ids=("url-1",))
+        for category, text in (
+            ("group_notes", "合成團務提醒。"),
+            ("general_notice", "合成一般提醒。"),
+            ("time_difference", "合成時差提醒。"),
+            ("communications", "合成通訊提醒。"),
+            ("visa", "合成簽證提醒。"),
+            ("currency", "合成幣值提醒。"),
+            ("weather_notice", "合成一般天氣提醒。"),
+        )
+    )
+    with_standard_notices = replace(
+        draft,
+        notices=draft.notices + extra,
+    ).with_recomputed_id()
+
+    narration_input = build_narration_input(with_standard_notices)
+
+    assert not any(
+        item.code == "UNKNOWN_NOTICE_CATEGORY"
+        for item in narration_input.review_items
+    )
+    facts = {fact.category: fact for fact in narration_input.required_facts}
+    assert facts["currency"].section_id == "tips_and_group_rules"
+    assert facts["visa"].section_id == "passport_and_accessibility"
+    assert facts["weather_notice"].section_id == "voltage_and_weather"
+
+
 def test_narration_input_does_not_invent_a_missing_required_fact():
     draft = sample_script_draft()
     without_voltage = replace(

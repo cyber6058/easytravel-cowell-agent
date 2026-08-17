@@ -14,7 +14,7 @@ from ..input_validation import validate_newamazing_url
 from ..models import Flight, ItineraryDay, Notice, Product, SourceEvidence
 
 
-PARSER_VERSION = "newamazing-html/3"
+PARSER_VERSION = "newamazing-html/4"
 
 _NOTICE_CATEGORIES = {
     "小費": "tip",
@@ -35,7 +35,34 @@ _NOTICE_CATEGORIES = {
     "單人房差": "single_room_supplement",
     "素食": "vegetarian",
     "電壓": "voltage",
+    "出團備註": "group_notes",
+    "注意事項": "general_notice",
+    "時差": "time_difference",
+    "電話通訊": "communications",
+    "簽證護照": "visa",
+    "幣值": "currency",
+    "天氣": "weather_notice",
 }
+
+_EXPLICIT_NOTICE_FACT_PATTERNS = {
+    "group_size": re.compile(
+        r"(?:出團|團體|成團)人數|\d+\s*人\s*(?:至|到|[-~～])\s*\d+\s*人"
+    ),
+    "no_leaving_group": re.compile(
+        r"(?:不可|不得|禁止).{0,8}脫隊|脫隊.{0,8}(?:不可|不得|禁止)"
+    ),
+    "bus_hours": re.compile(
+        r"(?:巴士|遊覽車|行車).{0,16}(?:小時|時間)"
+    ),
+    "insurance": re.compile(r"保險"),
+    "passport_validity": re.compile(
+        r"護照.{0,16}(?:效期|有效)|(?:效期|有效).{0,16}護照"
+    ),
+    "room_type": re.compile(r"房型|兩人一室|雙人房"),
+    "vegetarian": re.compile(r"素食|素餐"),
+}
+
+_NOTICE_SENTENCES = re.compile(r"[^。！？!?；;]+(?:[。！？!?；;]+|$)")
 
 _FLIGHT_HEADERS = {
     "date": ("日期", "航班日期"),
@@ -390,16 +417,45 @@ def _parse_live_notices(
         )
         if not label or not content:
             _contract_changed("其他說明內容")
+        category = _NOTICE_CATEGORIES.get(label, "other")
         notices.append(
-            Notice(
-                category=_NOTICE_CATEGORIES.get(label, "other"),
-                text=content,
+            Notice(category=category, text=content, source_ids=source_ids)
+        )
+        notices.extend(
+            _extract_explicit_notice_facts(
+                content,
                 source_ids=source_ids,
+                excluded_category=category,
             )
         )
     if not notices:
         _contract_changed("其他說明內容")
     return tuple(notices)
+
+
+def _extract_explicit_notice_facts(
+    text: str,
+    *,
+    source_ids: tuple[str, ...],
+    excluded_category: str,
+) -> tuple[Notice, ...]:
+    matched: dict[str, list[str]] = {}
+    for sentence_match in _NOTICE_SENTENCES.finditer(text):
+        sentence = sentence_match.group(0).strip()
+        if not sentence:
+            continue
+        for category, pattern in _EXPLICIT_NOTICE_FACT_PATTERNS.items():
+            if category == excluded_category or pattern.search(sentence) is None:
+                continue
+            matched.setdefault(category, []).append(sentence)
+    return tuple(
+        Notice(
+            category=category,
+            text=" ".join(sentences),
+            source_ids=source_ids,
+        )
+        for category, sentences in matched.items()
+    )
 
 
 def _parse_datetime(value: str) -> tuple[str, str]:

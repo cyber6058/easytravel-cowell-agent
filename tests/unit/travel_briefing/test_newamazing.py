@@ -70,6 +70,85 @@ def test_newamazing_parser_supports_the_live_card_contract_without_guessing_city
     }
 
 
+def test_live_card_parser_extracts_explicit_facts_from_compound_notice():
+    source_url = (
+        "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+        "prodCd=OSA-SYN-260901"
+    )
+    compound = live_cards_html().replace(
+        "<li><h4>出團人數</h4><p>本團共 30 人。</p></li>",
+        (
+            "<li><h4>出團備註</h4><p>"
+            "本團出團人數為 30 人。旅客不得脫隊。"
+            "巴士每日行車時間為 4 小時。本行程已投保旅遊保險。"
+            "護照有效效期須有 6 個月。房型為兩人一室。"
+            "素食旅客須於出發前告知。"
+            "</p></li>"
+        ),
+    )
+
+    parsed = parse_newamazing_html(
+        compound,
+        source_url=source_url,
+        retrieved_at="2026-08-17T12:00:00+08:00",
+    )
+
+    assert {notice.category for notice in parsed.notices} == {
+        "tip",
+        "group_size",
+        "no_leaving_group",
+        "bus_hours",
+        "insurance",
+        "passport_validity",
+        "room_type",
+        "vegetarian",
+        "voltage",
+        "group_notes",
+    }
+    group_size = next(
+        notice for notice in parsed.notices if notice.category == "group_size"
+    )
+    assert group_size.text == "本團出團人數為 30 人。"
+
+
+def test_live_card_parser_maps_current_standard_notice_headings():
+    source_url = (
+        "https://www.newamazing.com.tw/EW/GO/GroupDetail.asp?"
+        "prodCd=OSA-SYN-260901"
+    )
+    standard = live_cards_html().replace(
+        "<li><h4>電壓</h4><p>日本電壓為 100V。</p></li>",
+        (
+            "<li><h4>電壓</h4><p>日本電壓為 100V。</p></li>"
+            "<li><h4>出團備註</h4><p>合成團務提醒。</p></li>"
+            "<li><h4>注意事項</h4><p>合成一般提醒。</p></li>"
+            "<li><h4>時差</h4><p>合成時差提醒。</p></li>"
+            "<li><h4>電話通訊</h4><p>合成通訊提醒。</p></li>"
+            "<li><h4>簽證護照</h4><p>合成簽證提醒。</p></li>"
+            "<li><h4>幣值</h4><p>合成幣值提醒。</p></li>"
+            "<li><h4>天氣</h4><p>合成一般天氣提醒。</p></li>"
+        ),
+    )
+
+    parsed = parse_newamazing_html(
+        standard,
+        source_url=source_url,
+        retrieved_at="2026-08-17T12:00:00+08:00",
+    )
+
+    categories = {notice.category for notice in parsed.notices}
+    assert {
+        "group_notes",
+        "general_notice",
+        "time_difference",
+        "communications",
+        "visa",
+        "currency",
+        "weather_notice",
+    } <= categories
+    assert "other" not in categories
+
+
 def test_live_card_parser_keeps_region_blank_when_the_source_does_not_publish_it():
     changed = live_cards_html().replace("合成大阪五日", "合成關西五日")
 
@@ -153,7 +232,7 @@ def test_newamazing_parser_returns_source_bound_structured_fields():
 
     assert parsed.source.kind == "newamazing_html"
     assert parsed.source.location == SOURCE_URL
-    assert parsed.source.parser_version == "newamazing-html/3"
+    assert parsed.source.parser_version == "newamazing-html/4"
     assert len(parsed.source.sha256) == 64
     assert parsed.product.code == "OSA-SYN-260901"
     assert parsed.product.name == "合成大阪五日"

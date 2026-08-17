@@ -65,6 +65,12 @@ _NOTICE_SECTIONS = {
     "single_room_supplement": "diet_and_rooms",
     "vegetarian": "diet_and_rooms",
     "voltage": "voltage_and_weather",
+    "group_notes": "tips_and_group_rules",
+    "general_notice": "closing",
+    "time_difference": "closing",
+    "communications": "closing",
+    "currency": "tips_and_group_rules",
+    "weather_notice": "voltage_and_weather",
 }
 
 _FACT_LABELS = {
@@ -84,6 +90,12 @@ _FACT_LABELS = {
     "single_room_supplement": "單人房差",
     "vegetarian": "素食",
     "voltage": "電壓",
+    "group_notes": "出團備註",
+    "general_notice": "注意事項",
+    "time_difference": "時差",
+    "communications": "電話通訊",
+    "currency": "幣值",
+    "weather_notice": "一般天氣提醒",
 }
 
 _WEATHER_REMINDER = (
