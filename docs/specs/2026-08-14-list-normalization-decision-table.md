@@ -107,6 +107,13 @@ must still reproduce the selected source's normalized structure fingerprint,
 and all existing dynamic-token, source-mutation, exclusive-create, and manifest
 checks remain unchanged.
 
+Each manifest sample-evidence entry preserves its own source SHA-256 and day
+count, but its `normalized_structure_fingerprint` records the single approved
+target fingerprint represented by the normalized comparison and master. It must
+not record the three pre-normalization fingerprints after OP normalization;
+those are intentionally different and cannot satisfy the manifest's common
+normalized-target invariant.
+
 The formal calibration path maps post-Word validation and publication failures
 to fixed private-safe codes. An invalid Word report, missing or size-mismatched
 temporary master, retained dynamic content, hashing failure, invalid manifest,

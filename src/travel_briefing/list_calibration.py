@@ -2566,7 +2566,7 @@ def build_calibration_manifest(
             source_sha256=item.source_sha256,
             day_count=item.day_count,
             normalized_structure_fingerprint=(
-                item.normalized_structure_fingerprint
+                comparison.normalized_structure_fingerprint
             ),
         )
         for item in sorted(

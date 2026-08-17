@@ -1046,6 +1046,43 @@ def test_normalized_comparison_uses_one_fully_approved_source_layout():
     )
 
 
+def test_normalized_manifest_records_the_approved_target_fingerprint():
+    table = decision_table_with_one_font_choice()
+    samples = (
+        sample("a" * 64, inspection(5)),
+        sample(
+            "b" * 64,
+            replace(inspection(6), font_digest=digest("font-b")),
+        ),
+        sample(
+            "c" * 64,
+            replace(inspection(7), font_digest=digest("font-c")),
+        ),
+    )
+    compared = compare_calibration_samples_with_normalization(
+        samples,
+        table=table,
+        choices=valid_choice_artifact(table),
+        width_base_source_sha256="a" * 64,
+    )
+
+    calibrated = build_calibration_manifest(
+        compared,
+        master_sha256="d" * 64,
+        master_structure_fingerprint=(
+            compared.normalized_structure_fingerprint
+        ),
+        created_at="2026-08-17T12:00:00+08:00",
+        word_version="16.0",
+        calibration_report_sha256="e" * 64,
+    )
+
+    assert {
+        item.normalized_structure_fingerprint
+        for item in calibrated.sample_evidence
+    } == {compared.normalized_structure_fingerprint}
+
+
 def test_normalized_comparison_rejects_mixed_or_uncovered_selection():
     table = decision_table_with_one_font_choice()
     choices = valid_choice_artifact(table)

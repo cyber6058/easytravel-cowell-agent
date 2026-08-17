@@ -7,11 +7,24 @@
 `BLOCKED_MIXED_VALUE`；OP 已明確指定 13 組全部選 sample-001，36 個 hash-bound choices
 已填妥並通過 strict validation；欄寬亦明確選 sample-001，Gate C 單一來源 normalization
 整合已通過完整離線回歸；唯一真實 Gate C 回傳 `INTERNAL_ERROR` 且未留下輸出，而後續
-read-only 與 diagnostic-only working-copy diagnosis 已分別證明 pre-mutation comparison
-及 sample-001 normalization mutation 全通，故錯誤已縮小到 SaveAs2／master validation／
-publish 路徑；仍無 master／manifest／config，禁止無核准重試。
+read-only、working-copy diagnosis 與最新正式 Gate C 已證明 comparison、sample-001
+normalization、SaveAs2、temporary-master validation 與 fingerprint 全通；最新失敗已精確定位
+並離線修正為 manifest evidence 使用錯誤的 pre-normalization fingerprints。仍無正式
+master／manifest／config；修正已測試，但需新的正式 Gate C 核准才能驗證與交付。
 
 ## 這次做了什麼
+
+- 2026-08-17 經明確核准執行且只執行一次正式 Gate C，沒有 retry。結果為
+  `CALIBRATION_MANIFEST_INVALID`、stage `validate-master`；這同時證明真實 Word SaveAs2、
+  temporary master 建立／size／dynamic-token／hash 檢查及 master fingerprint comparison
+  均已通過。全新 private 目錄只含 373-byte `calibration-review.json`，SHA-256
+  `7d3780bf68f5932eab8272aee8f1a85fadceed8f4c8e0eecdf0bcf7e5101c3fa`；unsafe token 0、
+  master／manifest 0、WINWORD 0，三份來源依 decision table SHA-256 後驗全部不變。
+- 離線根因為 `build_calibration_manifest()` 把三份彼此不同的 pre-normalization fingerprints
+  寫入 sample evidence，違反 manifest 要求三份 normalized fingerprints 必須等於已驗證
+  master target 的 invariant。新增紅測重現相同錯誤後，改為每份 evidence 保留各自 source
+  SHA／day count，但共同記錄核准的 target fingerprint；targeted suite 已全綠，完整離線
+  suite 為 `504 passed, 3 skipped`，compileall 與 `git diff --check` 通過。
 
 - 2026-08-17 為避免再做一輪只診斷不交付的 Word 回合，已把正式 `calibrate-list` 的
   post-Word validation／publish 路徑改為 fail-safe：成功時仍直接建立經驗證的 master 與
@@ -1013,10 +1026,10 @@ publish 路徑；仍無 master／manifest／config，禁止無核准重試。
 
 真實 worksheet、OP-selected artifact、sample-001 欄寬決策與 fail-closed Gate C 整合均已
 完成並通過離線回歸。read-only comparison 與 diagnostic-only working-copy normalization
-也已各執行一次並通過；唯一真實 Gate C 的 `INTERNAL_ERROR` 現已縮小到 SaveAs2、master
-validation 或 publish。正式 Gate C 已改成成功即交付 master／manifest、失敗即留下固定
-private-safe stage evidence，不再需要先消耗額外診斷回合。下一步只需另行核准一次正式
-Gate C；沒有新核准不得再次讀取真實 LIST、啟動 Word 或執行 calibration。只有 Gate C
+也已各執行一次並通過；最新正式 Gate C 更證明 SaveAs2 與 temporary-master validation
+全通，manifest evidence 的離線根因已修正並通過回歸。下一步只需另行核准一次新的正式
+Gate C，成功即建立 master／manifest；沒有新核准不得再次讀取真實 LIST、啟動 Word 或
+執行 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
@@ -1034,9 +1047,10 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
 Gate I 已完成，沒有剩餘安裝阻塞。OP 已用 hash-bound choices 解決既有八個 schema-2
-field conflicts；最新診斷證實 normalized comparison 與 sample-001 working-copy mutation
-都可通過，但正式 Gate C 仍阻塞於 SaveAs2、master validation 或 publish 的未定位
-`INTERNAL_ERROR`。不得自行放寬契約或把 diagnostic-only 成功宣稱為 Gate C 完成。
+field conflicts；最新正式 Gate C 已證實 normalized comparison、sample-001 mutation、
+SaveAs2 與 temporary-master validation 都可通過。manifest evidence 接線錯誤已離線修正，
+目前唯一阻塞是需要一次新的正式 Gate C 核准來驗證修正並建立 master／manifest；修正
+尚未經真實 Word 重跑，不得提前宣稱 Gate C 完成。
 既有 private artifacts 與最新 reports 都不能覆蓋或刪除；新的 Word 回合、再次讀取
 三份 LIST、診斷或 calibration 都需要新的明確核准。
 
