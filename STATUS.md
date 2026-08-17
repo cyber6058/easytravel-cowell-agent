@@ -1,5 +1,22 @@
 # STATUS
 
+## 2026-08-17 unknown-date DRAFT design handoff
+
+- 一句話現況：OP 已選擇 A「日期未知 DRAFT」方向；跨 parser、merge review、
+  narration 與 CONFIRMED guard 的完整書面規格已自審並提交，實作尚未開始。
+- 這次做了什麼：規格限定 live flight 全頁只能一致採 full-datetime 或
+  time-only；無 published departure 且 time-only 時，product／flight／day dates
+  全部留白，不猜值。merge 加單一 `SOURCE_DATE_MISSING` warning，Word 沿用黃色
+  `待 OP 確認`，旁白只保留來源綁定產品名稱且加入 nonblocking missing-date
+  review，CONFIRMED 對空白 product 或 day dates fail closed。PDF 日期仍優先，
+  blank web dates 視為缺漏而非衝突。設計 commit 為 `feede57`。
+- 下一步：OP 審閱
+  `docs/specs/2026-08-17-newamazing-time-only-flight-design.md` 並明確同意後，
+  才建立 implementation plan，再依 TDD 從公開 seams 加紅測與最小修正。
+- 阻塞點：等待書面規格 review；尚未修改程式或 installed runtime。正式 DRAFT
+  GET 仍未獲新的單次授權；沒有 CONFIRMED、LINE、upload、publish、push 或
+  Cowell 動作，公開 remote 未獲 push 例外。
+
 ## 2026-08-17 time-only live flight diagnosis handoff
 
 - 一句話現況：replacement 唯讀診斷 GET 已成功證明目前 NewAmazing live-card
