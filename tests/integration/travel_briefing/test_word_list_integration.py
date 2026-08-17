@@ -23,6 +23,7 @@ _MANIFEST = os.environ.get(
     "EASYTRAVEL_LIST_CALIBRATION_MANIFEST_PATH", ""
 )
 _PDFTOPPM = os.environ.get("EASYTRAVEL_PDFTOPPM_PATH", "")
+_GATE_V_OUTPUT_ROOT = os.environ.get("EASYTRAVEL_GATE_V_OUTPUT_ROOT", "")
 _OPTED_IN = (
     sys.platform == "win32"
     and os.environ.get("RUN_BRIEFING_WORD_INTEGRATION") == "1"
@@ -43,9 +44,14 @@ pytestmark = pytest.mark.skipif(
 @pytest.mark.parametrize("day_count", [4, 5, 6, 7, 8, 12])
 def test_calibrated_master_renders_gate_v_day_counts(tmp_path, day_count):
     project_root = Path(__file__).parents[3]
+    qa_root = (
+        Path(_GATE_V_OUTPUT_ROOT).expanduser().resolve()
+        if _GATE_V_OUTPUT_ROOT
+        else tmp_path
+    )
     config = parse_config(
         {
-            "output": {"root": str(tmp_path)},
+            "output": {"root": str(qa_root)},
             "template": {
                 "master_path": _TEMPLATE,
                 "calibration_manifest": _MANIFEST,
@@ -61,7 +67,7 @@ def test_calibrated_master_renders_gate_v_day_counts(tmp_path, day_count):
         scripts_root=project_root / "scripts" / "briefing",
     )
     source = synthetic_draft(day_count)
-    output = tmp_path / f"day-{day_count:03d}"
+    output = qa_root / f"day-{day_count:03d}"
 
     try:
         evidence = backend.render_word(

@@ -13,6 +13,14 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 reopened-artifact 修正後，真實 4 天 Gate V 單例正式通過：
+  `1 passed in 6.62s`，DOCX、1 頁 PDF、1 張 PNG、QR、日期映射與 QA index 一致；
+  master hash 不變、WINWORD 0。另確認 pytest 結束會清除 basetemp，為使正式六例 PNG
+  能依 Gate V 保留並逐頁人工檢查，opt-in integration harness 新增可選的明確
+  `EASYTRAVEL_GATE_V_OUTPUT_ROOT`；設定時寫入該全新 private 根目錄，未設定仍用 tmp_path，
+  產品流程與所有驗收斷言不變。完整離線回歸為
+  `509 passed, 8 skipped in 8.65s`，compileall 與 `git diff --check` 通過。正式六例尚未執行。
+
 - 2026-08-17 SaveAs2 後在原 COM document 重算仍回報舊的 2 頁，而重新開啟輸出 DOCX
   的 PDF render 為 1 頁，證明 Word current document 保留 pre-save pagination cache。
   已先把回歸測試加嚴為必須 reopen output artifact，再於 adapter 中 SaveAs2 後關閉並釋放
