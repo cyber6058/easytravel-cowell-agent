@@ -24,6 +24,12 @@ table, anchor, merged-cell, QR, section, A4 portrait, calibration hash, and
 layout contracts. Word decides the page count from content; long trips continue
 at normal readable settings.
 
+Daily rows preserve the complete itinerary title from the source page, including
+route arrows and parenthetical details. The hotel cell uses only the first hotel
+listed by the supplier. Breakfast, lunch, and dinner cells contain only `O` for
+an included meal or `X` for no meal/self-arranged dining; meal descriptions stay
+in the source-bound draft data and are not printed in those cells.
+
 Automated checks do not prove visual correctness. Inspect every QA page at
 readable resolution for cropping, table borders, merged cells, first-page QR,
 continuation identity/header, daily rows, and yellow fields. Never confirm a

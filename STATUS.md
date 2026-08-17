@@ -1,5 +1,21 @@
 # STATUS
 
+## 2026-08-17 Word 內容修正 handoff
+
+- 一句話現況：NewAmazing URL-only 說明會功能已依真實
+  OSA05261103E 驗證；最新 `DRAFT_READY` Word 已改為完整行程、首間飯店
+  與餐食 O/X，兩頁視覺 QA 通過。
+- 這次做了什麼：將 live parser 由 `.day_content h3` 景點短標改為
+  `h4.day_title_right` 完整行程，保留箭頭與括號說明；住宿只取第一個
+  「或」之前的飯店；餐食固定解析早／午／晚三格，Word 僅顯示供餐 O、
+  無餐或自理 X。真實 run `20260817T145825+0800` 已產出 DOCX、PDF QA、
+  WAV、SRT、TXT；完整離線 suite 為 100% / exit 0，package build 為
+  63 entries，SHA-256 `e775700ca605319f76cd79d9eff711832974153cbbeb16b1472c1dc11ccd0f13`。
+- 下一步：OP 開啟最新 Word 審閱實際內容；若要進入 `CONFIRMED`，
+  再補齊黃色 OP 欄位、缺漏事實、讀音 review 與 MP3。
+- 阻塞點：本機沒有已設定的 ffmpeg，MP3 仍為 `missing`；這不阻擋
+  DOCX/WAV/SRT/TXT DRAFT，但仍阻擋 `CONFIRMED`。目前未做人耳聽取驗收。
+
 ## 2026-08-17 URL-only DRAFT handoff
 
 - 一句話現況：NewAmazing URL-only 說明會功能已可建立可審閱的本機

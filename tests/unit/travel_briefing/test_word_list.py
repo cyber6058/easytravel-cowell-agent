@@ -222,7 +222,7 @@ def test_patch_plan_never_renders_an_unresolved_blocking_conflict():
         )
 
 
-def test_compaction_removes_only_parenthetical_detail_and_never_truncates():
+def test_route_preserves_parenthetical_detail_and_never_truncates():
     attractions = (
         "大阪城（外觀拍照與自由散步）",
         "清水寺（含參拜時間）",
@@ -231,15 +231,38 @@ def test_compaction_removes_only_parenthetical_detail_and_never_truncates():
     assert compact_route_text(attractions, max_characters=80) == (
         "大阪城（外觀拍照與自由散步）／清水寺（含參拜時間）"
     )
-    assert compact_route_text(attractions, max_characters=8) == "大阪城、清水寺"
+    with pytest.raises(ValueError, match="preserve in full"):
+        compact_route_text(attractions, max_characters=8)
     with pytest.raises(ValueError, match="too long"):
         compact_route_text(("無法安全縮短的超級長景點名稱",), max_characters=4)
 
 
 def test_default_route_limit_accepts_a_wrappable_real_world_length():
-    assert compact_route_text(("x" * 59,)) == "x" * 59
+    assert compact_route_text(("x" * 200,)) == "x" * 200
     with pytest.raises(ValueError, match="too long"):
-        compact_route_text(("x" * 65,))
+        compact_route_text(("x" * 257,))
+
+
+def test_patch_plan_renders_meals_as_presence_markers_only():
+    source = draft()
+    source = replace(
+        source,
+        days=(
+            replace(
+                source.days[0],
+                meals=("飯店內早餐", "機上餐", "為方便逛街，敬請自理"),
+            ),
+            *source.days[1:],
+        ),
+    ).with_recomputed_id()
+
+    plan = build_list_patch_plan(source, expected_layout_fingerprint="a" * 64)
+
+    assert tuple(plan.cell(3, 2, column).text for column in (5, 6, 7)) == (
+        "O",
+        "O",
+        "X",
+    )
 
 
 def test_patch_plan_requires_a_sha256_layout_fingerprint():

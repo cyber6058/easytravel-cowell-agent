@@ -14,7 +14,7 @@ from ..input_validation import validate_newamazing_url
 from ..models import Flight, ItineraryDay, Notice, Product, SourceEvidence
 
 
-PARSER_VERSION = "newamazing-html/4"
+PARSER_VERSION = "newamazing-html/5"
 
 _NOTICE_CATEGORIES = {
     "小費": "tip",
@@ -331,15 +331,16 @@ def _parse_live_days(
     days: list[ItineraryDay] = []
     for card in section.select(".every_day"):
         number = _parse_live_day_number(card)
-        attractions = tuple(
-            _strip_brackets(_text(node))
-            for node in card.select(".day_content h3")
-            if _strip_brackets(_text(node))
-        )
-        if not attractions:
-            _contract_changed(f"第{number}天景點")
+        route_node = card.select_one("h4.day_title_right")
+        route = _text(route_node) if isinstance(route_node, Tag) else ""
+        if not route:
+            _contract_changed(f"第{number}天行程")
         hotel_node = card.select_one(".day_hotel p")
-        hotel = _text(hotel_node) if isinstance(hotel_node, Tag) else ""
+        hotel = (
+            _first_live_hotel(_text(hotel_node))
+            if isinstance(hotel_node, Tag)
+            else ""
+        )
         if not hotel:
             _contract_changed(f"第{number}天住宿")
         days.append(
@@ -347,7 +348,7 @@ def _parse_live_days(
                 number=number,
                 date=(start + timedelta(days=number - 1)).isoformat(),
                 city="",
-                attractions=attractions,
+                attractions=(route,),
                 meals=_parse_live_meals(card, number),
                 hotel=hotel,
                 source_ids=source_ids,
@@ -385,10 +386,12 @@ def _parse_live_meals(card: Tag, number: int) -> tuple[str, ...]:
         values[label] = _text(detail)
     if tuple(values) != expected_labels:
         _contract_changed(f"第{number}天餐食")
-    meals: list[str] = []
-    for label in expected_labels:
-        meals.extend(_split_items(values[label]))
-    return tuple(meals)
+    return tuple(values[label] for label in expected_labels)
+
+
+def _first_live_hotel(value: str) -> str:
+    """Return the supplier's first listed hotel, preserving its source spelling."""
+    return re.split(r"\s+或\s+", value, maxsplit=1)[0].strip()
 
 
 def _parse_live_notices(

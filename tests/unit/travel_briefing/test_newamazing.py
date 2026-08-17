@@ -60,8 +60,12 @@ def test_newamazing_parser_supports_the_live_card_contract_without_guessing_city
         "2026-09-05",
     ]
     assert all(day.city == "" for day in parsed.days)
-    assert parsed.days[1].attractions == ("清水寺", "嵐山")
+    assert parsed.days[1].attractions == (
+        "飯店→琵琶湖遊覽船~密西根號巡遊(航程約60分鐘)→"
+        "琵琶湖Valley露台纜車(來回)~ 眺望日本最大之湖『琵琶湖』→飯店",
+    )
     assert parsed.days[1].meals == ("飯店早餐", "合成午餐", "合成晚餐")
+    assert parsed.days[1].hotel == "合成京都飯店"
     assert parsed.days[3].hotel == "合成神戶飯店"
     assert {notice.category for notice in parsed.notices} == {
         "tip",
@@ -232,7 +236,7 @@ def test_newamazing_parser_returns_source_bound_structured_fields():
 
     assert parsed.source.kind == "newamazing_html"
     assert parsed.source.location == SOURCE_URL
-    assert parsed.source.parser_version == "newamazing-html/4"
+    assert parsed.source.parser_version == "newamazing-html/5"
     assert len(parsed.source.sha256) == 64
     assert parsed.product.code == "OSA-SYN-260901"
     assert parsed.product.name == "合成大阪五日"

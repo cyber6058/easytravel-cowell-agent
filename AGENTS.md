@@ -38,6 +38,9 @@ unrelated Cowell discovery without a new approved design.
   review, and an unavailable MP3 converter remain visible review items but do
   not block reviewable Word, WAV, TXT, or SRT artifacts. Omit missing or
   unconfirmed values from narration and never guess them.
+- In LIST Word daily rows, preserve the complete source itinerary title, show
+  only the supplier's first listed hotel, and render breakfast/lunch/dinner as
+  `O` when included or `X` when absent or self-arranged.
 - Source conflicts, untraceable facts, parser or template drift, and Word,
   visual, speech, duration, or subtitle QA failures still block the DRAFT.
   Every review item and a completed MP3 remain blocking for CONFIRMED.

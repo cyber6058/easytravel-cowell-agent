@@ -31,9 +31,11 @@ from .template_contract import (
 
 WAITING_FOR_OP = "待 OP 確認"
 LIST_WORD_GENERATOR_VERSION = "list-word/2"
-DEFAULT_ROUTE_CHARACTER_LIMIT = 64
+DEFAULT_ROUTE_CHARACTER_LIMIT = 256
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
-_PARENTHETICAL_DETAIL = re.compile(r"\s*[（(][^）)]*[）)]\s*")
+_MEAL_NOT_INCLUDED = re.compile(
+    r"(?:^\s*[x×無]\s*$|敬請自理|自理|方便逛街)", re.IGNORECASE
+)
 
 
 def format_list_day_date(value: str) -> str:
@@ -529,16 +531,16 @@ def compact_route_text(
     full = "／".join(normalized)
     if len(full) <= max_characters:
         return full
-    compacted_items = tuple(
-        (_PARENTHETICAL_DETAIL.sub("", item).strip() or item)
-        for item in normalized
-    )
-    compacted = "、".join(compacted_items)
-    if len(compacted) <= max_characters:
-        return compacted
     raise ValueError(
-        "LIST route text is too long after safe deterministic compaction"
+        "LIST route text is too long to preserve in full"
     )
+
+
+def _meal_marker(value: str) -> str:
+    normalized = value.strip()
+    if not normalized or _MEAL_NOT_INCLUDED.search(normalized):
+        return "X"
+    return "O"
 
 
 def _validate_draft_shape(draft: BriefingDraft) -> None:
@@ -668,6 +670,7 @@ def _build_day_cells(
             max_characters=route_character_limit,
         )
         meals = (*day.meals[:3], *("" for _ in range(max(0, 3 - len(day.meals)))))
+        meal_markers = tuple(_meal_marker(meal) for meal in meals)
         values = (
             (
                 format_list_day_date(day.date) if day.date else WAITING_FOR_OP,
@@ -676,7 +679,7 @@ def _build_day_cells(
             (route, WAITING_FOR_OP if route == WAITING_FOR_OP else ""),
             (day.hotel or WAITING_FOR_OP, "" if day.hotel else WAITING_FOR_OP),
             ("", ""),
-            *((meal, "") for meal in meals),
+            *((marker, "") for marker in meal_markers),
         )
         for column, (text, highlight) in enumerate(values, start=1):
             patches.append(
