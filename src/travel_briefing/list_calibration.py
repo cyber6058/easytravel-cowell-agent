@@ -2013,6 +2013,9 @@ def calibrate_list_templates(
     created_at: str,
     timeout_seconds: int = 180,
     on_stage: Callable[[str], None] | None = None,
+    normalization_table: dict[str, Any] | None = None,
+    normalization_choices: dict[str, Any] | None = None,
+    width_base_source_sha256: str | None = None,
 ) -> ListCalibrationBuildResult:
     samples = _resolve_sample_paths(sample_paths)
     master = master_path.expanduser().resolve()
@@ -2036,7 +2039,25 @@ def calibrate_list_templates(
         timeout_seconds=timeout_seconds,
     )
     _report_calibration_stage(on_stage, "compare-samples")
-    comparison = compare_calibration_samples(inspected.samples)
+    normalization_values = (
+        normalization_table,
+        normalization_choices,
+        width_base_source_sha256,
+    )
+    if all(value is None for value in normalization_values):
+        comparison = compare_calibration_samples(inspected.samples)
+    elif any(value is None for value in normalization_values):
+        raise ValueError("normalization inputs must be supplied together")
+    else:
+        assert normalization_table is not None
+        assert normalization_choices is not None
+        assert width_base_source_sha256 is not None
+        comparison = compare_calibration_samples_with_normalization(
+            inspected.samples,
+            table=normalization_table,
+            choices=normalization_choices,
+            width_base_source_sha256=width_base_source_sha256,
+        )
     base_index = next(
         index
         for index, item in enumerate(inspected.samples)
@@ -2321,6 +2342,115 @@ def compare_calibration_samples(
         base_sample_sha256=base.source_sha256,
         normalized_structure_fingerprint=(
             normalized_structure_fingerprint(samples[0].inspection)
+        ),
+        normalized_layout=_freeze_object(reference),
+        layout_profiles=tuple(profiles),
+        minimum_font_points=common_minimum,
+    )
+
+
+def compare_calibration_samples_with_normalization(
+    samples: tuple[ListCalibrationSample, ...],
+    *,
+    table: dict[str, Any],
+    choices: dict[str, Any],
+    width_base_source_sha256: str,
+) -> CalibrationComparison:
+    """Resolve approved conflicts by selecting one complete source layout."""
+    if len(samples) != 3 or len(
+        {item.source_sha256 for item in samples}
+    ) != 3:
+        raise ValueError("calibration requires three unique samples")
+    sources = tuple(item.source_sha256 for item in samples)
+    _validate_component_normalization_decision_table(table)
+    validated = validate_component_normalization_choices(table, choices)
+    if tuple(table["source_sha256"]) != sources:
+        raise ValueError("normalization sources do not match calibration samples")
+    width_source = _validate_nonzero_sha256(
+        width_base_source_sha256,
+        "width base source SHA-256",
+    )
+    selected_sources = {
+        item["selected_source_sha256"]
+        for item in validated["choices"]
+    }
+    selected_sources.add(width_source)
+    if len(selected_sources) != 1 or width_source not in sources:
+        raise ValueError(
+            "normalization requires one complete approved source layout"
+        )
+    allowed_conflicts = {
+        "style_digest",
+        "font_digest",
+        "paragraph_digest",
+        "border_digest",
+        "daily_header_digest",
+        "daily_body_prototype_digest",
+        "shape_geometry_points",
+        "table_column_widths_points",
+    }
+    conflicts = _calibration_conflict_field_paths(samples)
+    uncovered = tuple(
+        field for field in conflicts if field not in allowed_conflicts
+    )
+    if uncovered:
+        raise CalibrationContractError(
+            uncovered,
+            conflict_matrix=build_calibration_conflict_matrix(
+                samples, uncovered
+            ),
+        )
+    base = next(
+        item for item in samples if item.source_sha256 == width_source
+    )
+    common_names = {
+        profile.name for profile in samples[0].inspection.adaptive_profiles
+    }
+    for item in samples[1:]:
+        common_names.intersection_update(
+            profile.name for profile in item.inspection.adaptive_profiles
+        )
+    common_minimum = max(
+        min(
+            profile.body_font_points
+            for profile in item.inspection.adaptive_profiles
+        )
+        for item in samples
+    )
+    profiles = []
+    for name in common_names:
+        candidates = [
+            profile
+            for item in samples
+            for profile in item.inspection.adaptive_profiles
+            if profile.name == name
+        ]
+        selected = max(
+            candidates,
+            key=lambda profile: (
+                profile.body_font_points,
+                profile.line_spacing_points,
+                profile.paragraph_space_after_points,
+            ),
+        )
+        if selected.body_font_points >= common_minimum:
+            profiles.append(selected)
+    profiles.sort(
+        key=lambda item: (
+            item.name != "normal",
+            -item.body_font_points,
+            -item.line_spacing_points,
+            item.name,
+        )
+    )
+    if not profiles or profiles[0].name != "normal":
+        raise ValueError("calibration samples have no common normal profile")
+    reference = _normalized_layout_dict(base.inspection)
+    return CalibrationComparison(
+        samples=samples,
+        base_sample_sha256=base.source_sha256,
+        normalized_structure_fingerprint=(
+            normalized_structure_fingerprint(base.inspection)
         ),
         normalized_layout=_freeze_object(reference),
         layout_profiles=tuple(profiles),

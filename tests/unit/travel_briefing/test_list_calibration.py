@@ -23,6 +23,7 @@ from travel_briefing.list_calibration import (
     component_normalization_decision_table_sha256,
     calibrate_list_templates,
     compare_calibration_samples,
+    compare_calibration_samples_with_normalization,
     diagnose_calibration_conflicts,
     diagnose_gate_c_5992,
     diagnose_gate_c_v3,
@@ -1001,6 +1002,67 @@ def test_op_choice_validator_binds_table_source_and_component_hashes():
 
     assert validated == artifact
     assert validated is not artifact
+
+
+def test_normalized_comparison_uses_one_fully_approved_source_layout():
+    table = decision_table_with_one_font_choice()
+    choices = valid_choice_artifact(table)
+    samples = (
+        sample("a" * 64, inspection(5)),
+        sample(
+            "b" * 64,
+            replace(inspection(6), font_digest=digest("font-b")),
+        ),
+        sample(
+            "c" * 64,
+            replace(inspection(7), font_digest=digest("font-c")),
+        ),
+    )
+
+    compared = compare_calibration_samples_with_normalization(
+        samples,
+        table=table,
+        choices=choices,
+        width_base_source_sha256="a" * 64,
+    )
+
+    assert compared.base_sample_sha256 == "a" * 64
+    assert compared.normalized_structure_fingerprint == (
+        normalized_structure_fingerprint(samples[0].inspection)
+    )
+
+
+def test_normalized_comparison_rejects_mixed_or_uncovered_selection():
+    table = decision_table_with_one_font_choice()
+    choices = valid_choice_artifact(table)
+    samples = (
+        sample("a" * 64, inspection(5)),
+        sample("b" * 64, inspection(6)),
+        sample("c" * 64, inspection(7)),
+    )
+    with pytest.raises(ValueError, match="one complete approved source"):
+        compare_calibration_samples_with_normalization(
+            samples,
+            table=table,
+            choices=choices,
+            width_base_source_sha256="b" * 64,
+        )
+
+    uncovered = (
+        samples[0],
+        samples[1],
+        sample(
+            "c" * 64,
+            replace(inspection(7), margins_points=(1.0, 2.0, 3.0, 4.0)),
+        ),
+    )
+    with pytest.raises(CalibrationContractError, match="margins_points"):
+        compare_calibration_samples_with_normalization(
+            uncovered,
+            table=table,
+            choices=choices,
+            width_base_source_sha256="a" * 64,
+        )
 
 
 @pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate"])

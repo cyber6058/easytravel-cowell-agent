@@ -131,6 +131,12 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
             "private",
             "--pdftoppm",
             "pdftoppm.exe",
+            "--decision-table",
+            "decision-table.json",
+            "--normalization-choices",
+            "choices.json",
+            "--width-base-sample",
+            "sample-001",
         ]
     )
 
@@ -176,6 +182,7 @@ def test_cli_exposes_prepare_check_script_and_yating_only_render():
     assert checked.command == "check-script"
     assert rendered.tts == "yating"
     assert calibrated.command == "calibrate-list"
+    assert calibrated.width_base_sample == "sample-001"
     assert diagnosed.command == "diagnose-list-conflicts"
     assert component_diagnosed.command == "diagnose-list-components"
     assert planned.command == "plan-list-normalization"

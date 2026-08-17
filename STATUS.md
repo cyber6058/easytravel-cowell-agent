@@ -5,10 +5,21 @@
 說明會產生器 0.2.0 的 Gate I 已完成；真實 OP-choice worksheet 與 blank choice artifact
 已由既有兩份 private-safe reports 純離線產生並驗證，decision table 仍為
 `BLOCKED_MIXED_VALUE`；OP 已明確指定 13 組全部選 sample-001，36 個 hash-bound choices
-已填妥並通過 strict validation；新的 Gate C 已獲核准，但 preflight 發現 choices 尚未接入
-calibration 且漏列 table-column-width 決策，因此尚未啟動 Word，仍無 master／manifest／config。
+已填妥並通過 strict validation；欄寬亦明確選 sample-001，Gate C 單一來源 normalization
+整合已通過完整離線回歸，正待執行已核准的唯一真實 Gate C，仍無 master／manifest／config。
 
 ## 這次做了什麼
+
+- 2026-08-17 OP 明確確認欄寬也選 sample-001。新增 fail-closed Gate C 單一來源 normalization
+  整合：`calibrate-list` 的 decision table、completed choices 與 width-base sample 必須一起
+  提供，三份即時 source hash 順序必須吻合，36 個 component choices 與 width base 必須
+  全部指向同一 source；任何新的非既知八欄位 conflict 仍在 Word mutation 前阻塞。
+- 選定來源的完整 schema-2 normalized layout 成為 master target；既有 source-mutation、
+  dynamic-token、exclusive-create、master fingerprint 與 manifest validation 均未放寬。
+  Targeted regression 原文為 `71 passed in 1.83s`；完整離線回歸改用專案內 sandbox-safe
+  basetemp 後為 `496 passed, 3 skipped in 7.80s`，compileall 與 `git diff --check` 通過。
+  預設 pytest temp 的第一次完整回歸因 Windows sandbox `WinError 5` 無法建立 tmp_path，
+  不是程式測試失敗；本次建立的專案內 basetemp 已清除。
 
 - 2026-08-15 使用者明確核准「一次新的 Gate C 真實校準」。唯讀 code／STATUS preflight
   發現現有 36-choice validator 尚未接入 `calibrate-list` 或 Word normalization job；直接
@@ -931,11 +942,9 @@ calibration 且漏列 table-column-width 決策，因此尚未啟動 Word，仍�
 
 ## 下一步
 
-真實 worksheet、blank artifact 與 OP-selected artifact 均已完成；36 component choices
-全選 sample-001 並通過 hash-bound validator，Gate C 亦已獲核准。下一步需 OP 明確指定
-`table_column_widths_points` 也選 sample-001、sample-002 或 sample-003；隨後先以 synthetic
-測試補齊 choices → Word normalization → unchanged schema-2 validation 的最小整合，再執行
-本次已核准的唯一真實 Gate C。沒有新核准
+真實 worksheet、OP-selected artifact、sample-001 欄寬決策與 fail-closed Gate C 整合均已
+完成並通過離線回歸。下一步執行本次已核准的唯一真實 Gate C，以 sample-001 完整 layout
+建立並驗證 master；若成功，再分別取得 Gate V 與 Gate E 核准。沒有新核准
 不得再次讀取真實 LIST、啟動 Word、執行 diagnosis 或 calibration。只有 Gate C
 成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。

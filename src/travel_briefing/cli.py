@@ -38,6 +38,7 @@ from .list_calibration import (
     diagnose_list_components,
     load_component_diagnosis_artifact,
     load_component_normalization_decision_table,
+    validate_component_normalization_choices,
 )
 from .adapters.windows_word import WindowsWordAdapter
 from .models import BriefingDraft, DraftStatus
@@ -89,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
     calibrate.add_argument("--private-dir", type=Path, required=True)
     calibrate.add_argument("--pdftoppm", type=Path, required=True)
     calibrate.add_argument("--generated-at")
+    calibrate.add_argument("--decision-table", type=Path)
+    calibrate.add_argument("--normalization-choices", type=Path)
+    calibrate.add_argument(
+        "--width-base-sample",
+        choices=("sample-001", "sample-002", "sample-003"),
+    )
     calibrate.add_argument("--format", choices=("text", "json"), default="text")
     calibrate.set_defaults(handler=run_calibrate_list)
 
@@ -285,6 +292,42 @@ def run_calibrate_list(args: argparse.Namespace) -> dict[str, Any]:
             "calibrate-list pdftoppm must be an existing executable"
         )
     source_hashes = [_sha256_file(path) for path in samples]
+    normalization_args = (
+        args.decision_table,
+        args.normalization_choices,
+        args.width_base_sample,
+    )
+    normalization_table = None
+    normalization_choices = None
+    width_base_source_sha256 = None
+    if any(value is not None for value in normalization_args):
+        if any(value is None for value in normalization_args):
+            raise BriefingInputError(
+                "calibrate-list normalization inputs must be supplied together"
+            )
+        try:
+            normalization_table = (
+                load_component_normalization_decision_table(
+                    args.decision_table
+                )
+            )
+            normalization_choices = validate_component_normalization_choices(
+                normalization_table,
+                _read_json_object(
+                    args.normalization_choices,
+                    label="normalization choices",
+                ),
+            )
+        except (OSError, UnicodeError, ValueError) as error:
+            raise BriefingInputError(
+                "calibrate-list normalization inputs are invalid"
+            ) from error
+        if normalization_table["source_sha256"] != source_hashes:
+            raise BriefingInputError(
+                "calibrate-list normalization sources do not match samples"
+            )
+        width_index = int(args.width_base_sample[-3:]) - 1
+        width_base_source_sha256 = source_hashes[width_index]
     stage = "inspect-samples"
 
     def record_stage(value: str) -> None:
@@ -306,6 +349,9 @@ def run_calibrate_list(args: argparse.Namespace) -> dict[str, Any]:
             created_at=_generated_at(args.generated_at),
             timeout_seconds=180,
             on_stage=record_stage,
+            normalization_table=normalization_table,
+            normalization_choices=normalization_choices,
+            width_base_source_sha256=width_base_source_sha256,
         )
     except CalibrationContractError as error:
         review_path = private / "calibration-review.json"

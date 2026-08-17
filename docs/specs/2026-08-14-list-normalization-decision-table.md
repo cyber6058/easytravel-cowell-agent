@@ -90,6 +90,23 @@ sample. A sentinel-bearing option remains visible as evidence but has
 until the OP fills every selected source SHA-256 and matching component-value
 SHA-256 from an eligible worksheet option.
 
+## Gate C integration
+
+`calibrate-list` may accept a strict decision table, a completed strict choice
+artifact, and an explicit width-base sample together. Omission of any one input
+rejects the normalization request before Word access. The table source hashes
+must match the three current calibration source hashes in order.
+
+The current approved implementation is deliberately narrower than arbitrary
+per-component mixing: every selected component source and the width-base source
+must resolve to one complete source layout. Calibration copies that source and
+uses its complete schema-2 normalized layout as the master target. This covers
+only the eight already diagnosed formatting conflicts; any new schema-2 field
+conflict remains a contract error before the calibration mutation. The master
+must still reproduce the selected source's normalized structure fingerprint,
+and all existing dynamic-token, source-mutation, exclusive-create, and manifest
+checks remain unchanged.
+
 ## Gate boundary
 
 The decision table is offline evidence only. Calibration remains blocked until:
