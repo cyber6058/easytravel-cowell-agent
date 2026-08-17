@@ -13,6 +13,19 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 QR 修正後的 4 天流程已成功建立 Word/PDF，但正式 QA 發現實際 2 頁且
+  第 2 頁缺 continuation identity/header、day-page map 亦與 PDF 不符；fail-safe 仍未發布
+  正式 QA 產物。另以本次 Gate V 範圍內的隔離 diagnostic artifact 略過兩個斷言取得 raw
+  PDF/PNG，逐頁視覺確認兩頁頂端均顯示 Word「錯誤：遺漏測試條件。」，第 2 頁只是被
+  推出的團體旅遊注意事項。根因為 `Add-ContinuationGroupHeader` 建立的巢狀 IF/PAGE field
+  無效且佔用 header 高度。已先用紅測鎖住不得使用 IF fields，再改為 Word 原生
+  `DifferentFirstPageHeaderFooter`：首頁 header 必須空白，第 2 頁起 primary header 直接顯示
+  團號／團名，任何既有 header 內容或 shape 均 fail closed。targeted test 與 parser 通過；
+  第一次完整 suite 因過長 private basetemp 觸發 Windows 深層 package path
+  `DirectoryNotFoundException`（非功能失敗），換用全新短路徑且未改測試後完整結果為
+  `508 passed, 8 skipped in 8.69s`，compileall 與 `git diff --check` 通過。尚未在 Word
+  重跑此修正。
+
 - 2026-08-17 header terminator 修正後的 4 天 Word 案例通過 paragraph-count contract，
   隨後固定失敗於 `LIST_QR_MISSING`；後驗仍為零產物、WINWORD 0、master hash 不變。
   master XML 證明第 1 段已是固定「日本精緻假期」且保留範本定位空白，浮動 QR 正錨定於

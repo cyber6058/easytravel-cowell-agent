@@ -18,6 +18,8 @@ public static class EasyTravelWordNativeMethods {
 $ExpectedHeaderCells = "1:1,2:1,2:2,2:3,3:1,4:1,4:2"
 $WdAlertsNone = 0
 $WdFormatDocumentDefault = 16
+$WdHeaderFooterPrimary = 1
+$WdHeaderFooterFirstPage = 2
 $WdStatisticPages = 2
 $WdYellow = 7
 $script:GateC5992Checkpoint = $null
@@ -1376,20 +1378,41 @@ function Add-ContinuationGroupHeader {
         [Parameter(Mandatory = $true)]$Document,
         [Parameter(Mandatory = $true)][string]$GroupText
     )
-    $header = $Document.Sections.Item(1).Headers.Item(1)
-    $range = $header.Range.Duplicate
-    $range.Collapse(0)
-    if ($range.Start -gt 0) {
-        $range.InsertAfter([string][char]13)
-        $range.Collapse(0)
+    if ([string]::IsNullOrWhiteSpace($GroupText)) {
+        throw "LIST_CONTINUATION_HEADER_EMPTY"
     }
-    $range.InsertAfter("IF ")
-    $range.Collapse(0)
-    [void]$Document.Fields.Add($range, 33, "PAGE", $true)
-    $range.Collapse(0)
-    $range.InsertAfter(" > 1 " + [char]34 + $GroupText + [char]34 + " " + [char]34 + [char]34)
-    $conditionRange = $header.Range.Paragraphs.Last.Range
-    [void]$Document.Fields.Add($conditionRange, 7)
+    $section = $Document.Sections.Item(1)
+    $section.PageSetup.DifferentFirstPageHeaderFooter = $true
+    $primaryHeader = $section.Headers.Item($WdHeaderFooterPrimary)
+    $firstPageHeader = $section.Headers.Item($WdHeaderFooterFirstPage)
+    foreach ($header in @($primaryHeader, $firstPageHeader)) {
+        $visibleText = ([string]$header.Range.Text).Trim(
+            [char[]]@([char]13, [char]7, [char]32, [char]9)
+        )
+        if (
+            -not [string]::IsNullOrEmpty($visibleText) -or
+            [int]$header.Range.InlineShapes.Count -ne 0 -or
+            [int]$header.Shapes.Count -ne 0
+        ) {
+            throw "LIST_HEADER_CONTENT_CONFLICT"
+        }
+    }
+    $range = $null
+    try {
+        $range = $primaryHeader.Range.Duplicate
+        $range.End = [int]$range.End - 1
+        $range.Text = $GroupText
+    }
+    finally {
+        if ($null -ne $range) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $range
+                )
+            }
+            catch {}
+        }
+    }
 }
 
 function Get-DayPageMap {
