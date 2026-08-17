@@ -6,13 +6,24 @@
 已由既有兩份 private-safe reports 純離線產生並驗證，decision table 仍為
 `BLOCKED_MIXED_VALUE`；OP 已明確指定 13 組全部選 sample-001，36 個 hash-bound choices
 已填妥並通過 strict validation；欄寬亦明確選 sample-001，Gate C 單一來源 normalization
-整合已通過完整離線回歸；唯一真實 Gate C 回傳 `INTERNAL_ERROR` 且未留下輸出，而後續
-read-only、working-copy diagnosis 與最新正式 Gate C 已證明 comparison、sample-001
-normalization、SaveAs2、temporary-master validation 與 fingerprint 全通；最新失敗已精確定位
-並離線修正為 manifest evidence 使用錯誤的 pre-normalization fingerprints。仍無正式
-master／manifest／config；修正已測試，但需新的正式 Gate C 核准才能驗證與交付。
+整合已通過完整離線回歸；manifest evidence 接線錯誤修正後的新正式 Gate C 已成功，
+sample-001 normalization、SaveAs2、master validation、manifest 與 exclusive publish 全部
+通過。正式 `LIST-master.docx` 與 `calibration-manifest.json` 已建立並完成 identity 後驗；
+Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端可用驗收。
 
 ## 這次做了什麼
+
+- 2026-08-17 使用者明確核准一次新的正式 Gate C；preflight 確認三份來源 hash、36 choices
+  全選 sample-001、欄寬 base、decision table／choices hashes、全新輸出目錄、WINWORD 0、
+  修正 commit `515bdd7` 與乾淨工作樹全部符合。正式 `calibrate-list` 隨後執行且只執行
+  一次，沒有 retry，15.1 秒後以 exit 0／status `ok` 成功。
+- 新 private 目錄恰好只含 `LIST-master.docx`（38,421 bytes，SHA-256
+  `6b4fbf74fb10af0bf00e1c00841deea8d80546db60698b8152457873fcc041a5`）與
+  `calibration-manifest.json`（3,096 bytes，SHA-256
+  `9fa1b84d5a566c000105b0bdd7f3caefee22cc04a26890b4f953925baabd8701`）。manifest master
+  hash／共同 normalized fingerprint 完全吻合，base 為 sample-001，三筆 sample evidence
+  完整，unsafe token 0，沒有 review；DOCX ZIP signature 正確，三份來源 hash 不變，
+  WINWORD 0。Gate C 已正式完成，但尚未執行 Gate V 視覺 QA 或 Gate E 端到端 DRAFT。
 
 - 2026-08-17 經明確核准執行且只執行一次正式 Gate C，沒有 retry。結果為
   `CALIBRATION_MANIFEST_INVALID`、stage `validate-master`；這同時證明真實 Word SaveAs2、
@@ -1026,11 +1037,9 @@ master／manifest／config；修正已測試，但需新的正式 Gate C 核准�
 
 真實 worksheet、OP-selected artifact、sample-001 欄寬決策與 fail-closed Gate C 整合均已
 完成並通過離線回歸。read-only comparison 與 diagnostic-only working-copy normalization
-也已各執行一次並通過；最新正式 Gate C 更證明 SaveAs2 與 temporary-master validation
-全通，manifest evidence 的離線根因已修正並通過回歸。下一步只需另行核准一次新的正式
-Gate C，成功即建立 master／manifest；沒有新核准不得再次讀取真實 LIST、啟動 Word 或
-執行 calibration。只有 Gate C
-成功建立並驗證 master 後，才分別取得 Gate V（4／5／6／7／8／12 天 Word 視覺 QA）與 Gate E
+也已各執行一次並通過；manifest evidence 修正後的新正式 Gate C 已成功建立並驗證
+master／manifest。下一步是另行取得 Gate V 核准，以 4／5／6／7／8／12 天 synthetic
+fixtures 執行 Word 視覺 QA；通過後再取得 Gate E
 （真實 URL／PDF 到語音 DRAFT）的當次核准。
 GitHub visibility 依使用者指示不變；`e0d1b60` public push 是收到風險警告後的單次
 明確例外，不構成 Gate I 紀錄 commit 或後續 public push 授權。Cowell 部分維持到
@@ -1047,12 +1056,9 @@ GitHub 遠端於 2026-08-13 即時驗證仍為 public。依私有產品與「不
 衝突後明確要求直接 push，因此僅本次依反迎合條款記錄為違規例外。
 
 Gate I 已完成，沒有剩餘安裝阻塞。OP 已用 hash-bound choices 解決既有八個 schema-2
-field conflicts；最新正式 Gate C 已證實 normalized comparison、sample-001 mutation、
-SaveAs2 與 temporary-master validation 都可通過。manifest evidence 接線錯誤已離線修正，
-目前唯一阻塞是需要一次新的正式 Gate C 核准來驗證修正並建立 master／manifest；修正
-尚未經真實 Word 重跑，不得提前宣稱 Gate C 完成。
-既有 private artifacts 與最新 reports 都不能覆蓋或刪除；新的 Word 回合、再次讀取
-三份 LIST、診斷或 calibration 都需要新的明確核准。
+field conflicts；manifest evidence 修正已經新正式 Gate C 實證通過，master／manifest
+均已建立並完成 hash／fingerprint 後驗，Gate C 不再阻塞。目前產品阻塞在尚未執行 Gate V
+多天數 Word 視覺 QA 與 Gate E 真實端到端 DRAFT；兩者仍需各自的明確核准。
 
 說明會產生器 0.2.0 Task 1–8 的離線程式沒有 calibration、parser、merge、天氣、
 Word plan、workflow 或 packaging 技術阻塞；
