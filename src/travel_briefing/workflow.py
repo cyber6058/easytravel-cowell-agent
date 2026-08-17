@@ -46,7 +46,7 @@ from .script_validation import (
     validate_audio_duration,
 )
 from .source_fetch import fetch_newamazing_html
-from .word_list import build_list_word
+from .word_list import build_list_word, format_list_day_date
 from .word_qa import render_list_word_for_qa
 
 
@@ -189,7 +189,7 @@ class LocalRenderBackend:
             ),
             day_page_map=built.day_page_map,
             day_tokens={
-                day.number: day.date
+                day.number: format_list_day_date(day.date)
                 for day in draft.days
                 if day.date
             },

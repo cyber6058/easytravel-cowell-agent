@@ -149,6 +149,7 @@ def test_patch_plan_maps_any_positive_trip_to_dynamic_daily_rows(day_count):
     assert plan.cell(1, 2, 2).highlight_text == WAITING_FOR_OP
     assert plan.cell(1, 3, 1).text == "集合地點：第二航廈集合處"
     assert plan.cell(2, 2, 2).text == "JX820"
+    assert plan.cell(3, 2, 1).text == "9/1"
     assert plan.cell(3, day_count + 1, 2).text == (
         f"合成景點 {day_count}A／合成景點 {day_count}B"
     )

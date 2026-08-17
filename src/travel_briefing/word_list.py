@@ -7,6 +7,7 @@ import secrets
 import shutil
 import tempfile
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -33,6 +34,16 @@ LIST_WORD_GENERATOR_VERSION = "list-word/2"
 DEFAULT_ROUTE_CHARACTER_LIMIT = 56
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _PARENTHETICAL_DETAIL = re.compile(r"\s*[（(][^）)]*[）)]\s*")
+
+
+def format_list_day_date(value: str) -> str:
+    try:
+        parsed = date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return value
+    if parsed.isoformat() != value:
+        return value
+    return f"{parsed.month}/{parsed.day}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -657,7 +668,10 @@ def _build_day_cells(
         )
         meals = (*day.meals[:3], *("" for _ in range(max(0, 3 - len(day.meals)))))
         values = (
-            (day.date or WAITING_FOR_OP, "" if day.date else WAITING_FOR_OP),
+            (
+                format_list_day_date(day.date) if day.date else WAITING_FOR_OP,
+                "" if day.date else WAITING_FOR_OP,
+            ),
             (route, WAITING_FOR_OP if route == WAITING_FOR_OP else ""),
             (day.hotel or WAITING_FOR_OP, "" if day.hotel else WAITING_FOR_OP),
             ("", ""),

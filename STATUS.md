@@ -13,6 +13,17 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 原生 continuation header 修正後，4 天 QA 仍為 2 頁；最新版 build-only
+  diagnostic 成功保留 DOCX，最終列印因診斷程式誤用不存在的 `DayPagePlacement.to_dict()`
+  失敗，但沒有 unknown Word result。直接讀該 DOCX OpenXML 顯示每日列 line spacing 仍為
+  normal 14pt，證明 compact 也無法單頁後依設計恢復 normal。視覺證據中的每日 ISO 日期
+  `2026-09-01` 被 38.85pt 日期欄折成三行，這才是剩餘溢頁來源。已先用紅測鎖住 LIST
+  presentation date，再將 canonical ISO 日期僅在 Word 顯示層轉為 `M/D`（draft 仍保留完整
+  日期），PDF day-token QA 同用此 formatter；無法解析或非 canonical 值原樣保留，不猜測。
+  日期 targeted cases 通過；另一個 workspace `.tmp` setup error 是父目錄不存在而非斷言
+  失敗，改用全新短 private basetemp 後完整結果為 `508 passed, 8 skipped in 8.59s`，
+  compileall 與 `git diff --check` 通過。尚未在 Word 重跑日期修正。
+
 - 2026-08-17 QR 修正後的 4 天流程已成功建立 Word/PDF，但正式 QA 發現實際 2 頁且
   第 2 頁缺 continuation identity/header、day-page map 亦與 PDF 不符；fail-safe 仍未發布
   正式 QA 產物。另以本次 Gate V 範圍內的隔離 diagnostic artifact 略過兩個斷言取得 raw
