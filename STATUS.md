@@ -13,6 +13,14 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 SaveAs2 後在原 COM document 重算仍回報舊的 2 頁，而重新開啟輸出 DOCX
+  的 PDF render 為 1 頁，證明 Word current document 保留 pre-save pagination cache。
+  已先把回歸測試加嚴為必須 reopen output artifact，再於 adapter 中 SaveAs2 後關閉並釋放
+  working document、read-only 重開剛儲存的 DOCX，重新執行 saved-artifact inspection、
+  Repaginate、page count 與 day map；report 不再採用舊 COM cache。targeted test、
+  PowerShell parser、compileall、`git diff --check` 與全新短 private basetemp 的完整回歸
+  均通過，結果為 `509 passed, 8 skipped in 8.72s`。尚未在 Word 重跑此修正。
+
 - 2026-08-17 日期顯示修正後的 4 天案例證明儲存後 PDF 已為 1 頁，但 patch report 仍為
   2 頁，固定失敗於 `Word, PDF, and expected LIST page count do not match`；其
   day-page map 亦是 SaveAs2 前值。根因是 Word 在 SaveAs2 才完成首頁不同 header 的最終

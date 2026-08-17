@@ -311,12 +311,19 @@ def test_patch_report_measures_pagination_after_save_as():
     )[0]
     save = function.index("$document.SaveAs2($outputDocx")
     day_map = function.index("$dayPageMap = Get-DayPageMap")
-    final_repaginate = function.rindex("$document.Repaginate()", save, day_map)
+    reopen = function.index(
+        "$document = $Word.Documents.Open($outputDocx, $false, $true)",
+        save,
+        day_map,
+    )
+    final_repaginate = function.rindex(
+        "$document.Repaginate()", reopen, day_map
+    )
     final_page_count = function.rindex(
-        "$pageCount = [int]$document.ComputeStatistics", save, day_map
+        "$pageCount = [int]$document.ComputeStatistics", reopen, day_map
     )
 
-    assert save < final_repaginate < final_page_count < day_map
+    assert save < reopen < final_repaginate < final_page_count < day_map
 
 
 def test_word_timeout_does_not_stop_a_stale_or_ambiguous_pid_record(tmp_path):

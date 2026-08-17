@@ -2170,8 +2170,22 @@ function Invoke-Patch {
         if (-not [IO.File]::Exists($outputDocx)) {
             throw "LIST_DOCX_NOT_CREATED"
         }
-        # SaveAs2 can finalize first-page header pagination. Measure the saved
-        # document, not the pre-save in-memory layout, for all report evidence.
+        # Word keeps the pre-save pagination cache on the current COM document.
+        # Reopen the saved artifact so report evidence matches later PDF export.
+        $document.Close($false)
+        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+            $document
+        )
+        $document = $null
+        $document = $Word.Documents.Open($outputDocx, $false, $true)
+        $dailyTable = $document.Tables.Item(3)
+        $outputInspection = Get-ListInspection `
+            -Document $document `
+            -AnchorChecks $Job.plan.anchor_checks
+        Assert-BasicListContract `
+            -Inspection $outputInspection `
+            -RequiredAnchorLabels $requiredLabels `
+            -RequiredDayCount $dayCount
         $document.Repaginate()
         $pageCount = [int]$document.ComputeStatistics($WdStatisticPages)
         if ($pageCount -le 0) { throw "LIST_PAGE_COUNT_INVALID" }
