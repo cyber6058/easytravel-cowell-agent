@@ -1266,6 +1266,18 @@ function Set-HeaderParagraph {
         throw "LIST_HEADER_PARAGRAPH_MISSING"
     }
     $paragraph = $HeaderCell.Range.Paragraphs.Item($number)
+    if ($number -eq 1) {
+        $currentTitle = ([string]$paragraph.Range.Text).Trim(
+            [char[]]@([char]13, [char]7, [char]32, [char]9)
+        )
+        $expectedTitle = ([string]$Patch.text).Trim()
+        if ($currentTitle -cne $expectedTitle) {
+            throw "LIST_HEADER_TITLE_CHANGED"
+        }
+        # The floating QR is anchored to this fixed calibrated paragraph.
+        # Leaving it untouched preserves both its anchor and template spacing.
+        return
+    }
     $visibleRange = $null
     try {
         $visibleRange = $paragraph.Range.Duplicate

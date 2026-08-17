@@ -13,6 +13,14 @@ Gate C 現已完成，下一關是 Gate V Word 視覺 QA，尚未完成端到端
 
 ## 這次做了什麼
 
+- 2026-08-17 header terminator 修正後的 4 天 Word 案例通過 paragraph-count contract，
+  隨後固定失敗於 `LIST_QR_MISSING`；後驗仍為零產物、WINWORD 0、master hash 不變。
+  master XML 證明第 1 段已是固定「日本精緻假期」且保留範本定位空白，浮動 QR 正錨定於
+  該段；重寫該 range 會刪除 shape anchor。已先用紅測鎖住 QR-anchored title preservation，
+  再改成第 1 段 trim 後必須與計畫標題完全相符但不 mutation，只 patch 第 2–4 段；
+  targeted test、PowerShell parser、compileall、`git diff --check` 與完整離線回歸均通過，
+  結果為 `507 passed, 8 skipped in 8.72s`。尚未在 Word 重跑此修正。
+
 - 2026-08-17 擴列修正後的 4 天 Word 案例通過 day-row contract，隨後固定失敗於
   `LIST_HEADER_PARAGRAPHS_CHANGED`；後驗仍為零產物、WINWORD 0、master hash 不變。
   根因是 `Set-HeaderParagraph` 覆寫整段 range，最後一段包含 Word cell terminator，另補
