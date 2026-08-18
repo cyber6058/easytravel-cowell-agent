@@ -1,5 +1,17 @@
 # STATUS
 
+## 2026-08-18 LIST full-cell direct range offline implementation plan review
+
+- 一句話現況：OP 已核准 T4/R1/C2 full-cell direct range 書面規格；離線實作計畫已建立並等待 OP 核准，尚未修改 production 或 tests。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`，working tree 原為乾淨的 `main...origin/main [ahead 61]`。重新核對 commit `642a1e2` 的書面規格、現行 `Get-ListVisibleRangeEnd`／`Set-TokenHighlight`／`Set-ListCell`、三個 adapter tests、既有 content-shape control 與前一輪 plan 格式；`CONTEXT.md` 不存在。
+- 計畫文件：新增 `docs/plans/2026-08-18-list-full-cell-direct-range-implementation-plan.md`，拆成 one-retreat red regression、最小 helper removal／direct range change、target green／無 COM compound-marker model、focused parser／non-change proof、完整 suite／implementation commit 與 handoff 六個 tasks。
+- Test seam：只修改 `tests/unit/travel_briefing/test_windows_word.py` 的已核准 adapter source contracts；`tests/unit/travel_briefing/test_word_list.py` 只執行既有 5 embedded＋2 direct content-shape control，不修改。red 必須由 helper 尚在且 direct duplicate 尚未採單次 `End - 1` 造成；`Set-ListCell` 的 live-proven post-range assertion 是 unchanged control。
+- Production 範圍：只修改 `scripts/briefing/patch_list_template.ps1`，移除唯一 caller 的 `Get-ListVisibleRangeEnd`；direct duplicate 只退一個自己的 `End`、先做 `LIST_HIGHLIGHT_RANGE_INVALID` safe check，再沿用 exact comparison／黃色／match。embedded／repeated Find boundary、settings、cursor、safe-code 與 cleanup 不改。
+- 驗證與停止點：計畫要求 target red→green、無 COM compound-marker model、兩個 focused files、PowerShell parser、完整 offline suite、`compileall`、static／non-change checks 與 `git diff --check`；全綠後建立本機 implementation／handoff commits並停止。最近完整 suite 基線 `556 passed, 8 skipped` 只供參考，以未來實際輸出為準。
+- 誠實邊界：本輪只寫規格狀態、計畫與 STATUS；沒有修改或執行 production／tests，沒有啟動 Word、讀寫私人 master／calibration、產生 DRAFT／DOCX／PDF／PNG，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。Word 成功仍未驗證。
+- 下一步：OP 回覆「同意此實作計畫，開始離線實作」後才開始 Task 1 test edit。完整離線實作完成後，新的單次 4 天 Word repro 仍需另一個明確授權；不跑其他天數，成功或失敗都不重試。
+- 阻塞點：離線實作計畫核准關卡。
+
 ## 2026-08-18 LIST full-cell direct range offline diagnosis and design review
 
 - 一句話現況：T4/R1/C2 full-cell direct path 已離線縮小為 `Get-ListVisibleRangeEnd` 把 cell 尾端 `U+000D U+0007` 的兩個文字碼點誤當成兩個 Word Range 位置，令 direct duplicate 比已通過實機前置斷言的 `End - 1` 多退一格；已完成書面修正規格，等待 OP 審閱，尚未修改 production 或 tests。
