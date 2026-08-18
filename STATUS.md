@@ -1,5 +1,26 @@
 # STATUS
 
+## 2026-08-18 LIST Word output normalization design handoff
+
+- 一句話現況：OP 已選擇方案 1「輸出時正規化」；移除 QR 且不留空位、除第一行
+  `日本精緻假期` 外所有可見文字固定 12 pt、移除程式填值後多餘空白段落的書面規格
+  已完成自審，實作尚未開始。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；唯讀檢查確認
+  `Set-ListCell` 目前附加 CR 與 cell marker，既有輸出中幾乎所有已填 ordinary cell
+  因而多出尾端空白段落。建立
+  `docs/specs/2026-08-18-list-word-output-normalization-design.md`，明定 canonical
+  master／calibration 不變，只在 owned output copy 移除校準 header QR、釋放文字
+  wrapping 空間、統一字級並正規化 cell paragraph；generator 與 patch schema 升版，
+  source QR 與 output zero-QR 驗證分離。
+- 驗證：規格 203 行且無超過 100 字元的行，無 TBD／TODO／FIXME／placeholder，
+  `git diff --check` 通過。未修改程式、master、calibration 或任何既有 DRAFT；目前
+  使用者開啟中的 Word 文件也未被操作。
+- 下一步：等待 OP 審閱並明確同意書面規格；之後先建立可執行實作計畫，再以 TDD
+  修改 Word plan／PowerShell adapter／Word-PDF QA／workflow evidence 與 packaging。
+- 阻塞點：`brainstorming` 設計關卡要求書面規格經使用者審閱後才能實作。私有 master
+  Word 整合驗證仍需另行當次授權；沒有 GET、JMA、Yating、LINE、upload、publish、
+  deploy、push 或 Cowell 動作，公開 remote 未獲 push 例外。
+
 ## 2026-08-18 OSA05261201A second one-shot DRAFT handoff
 
 - 一句話現況：另一個日期完整的 NewAmazing 產品也在唯一一次 render 重現相同
