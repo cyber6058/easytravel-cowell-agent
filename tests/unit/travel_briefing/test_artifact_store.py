@@ -151,14 +151,14 @@ def test_store_allows_safe_nested_artifacts_and_creates_parents(tmp_path):
         kind="word_qa_index",
         expected_name="qa/index.json",
         status="completed",
-        generator_version="list-word/2",
+        generator_version="list-word/3",
     )
     page = artifact_record(
         run,
         kind="word_qa_page_001",
         expected_name="qa/page-001.png",
         status="completed",
-        generator_version="list-word/2",
+        generator_version="list-word/3",
     )
 
     assert text_path == run / "qa" / "index.json"
