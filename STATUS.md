@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-08-18 LIST full-cell post-fix 4-day repro regresses first embedded highlight
+
+- 一句話現況：獲准的唯一一次 4 天 post-fix Word repro 已失敗於 `LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T1_R2_C2`；這是 execution order 的第一個 embedded token cell，流程尚未到 T4/R1/C2，因此 full-cell direct path 未獲實機驗證，也沒有 DOCX／PDF／PNG 可供視覺 QA。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`。不啟動 Word 的前檢確認 private master／manifest hash、normalized structure、pdftoppm 與 Word COM registry 均正常；第一次 collect-only 的自訂文字計數器因 `-q` 輸出形狀不同而以 `SELECTOR_COUNT_CHANGED` 停止，未執行 test 或 Word。隨後只做 collect-only `-vv`，原文為 `1 test collected`，精確 selector 是 `test_calibrated_master_renders_gate_v_day_counts[4]`。正式 integration pytest 只呼叫一次且使用 `-x`；5／6／7／8／12 天完全未進入。
+- 驗證：唯一正式 run 原文為 `1 failed in 10.44s`、`WORD_REPRO_EXIT=1`；adapter evidence 是 `WORD_GENERATION_FAILED`／`LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T1_R2_C2`／HRESULT `-2146233087`／return code 30／stage `run-action`。QA root `C:\Users\cance\AppData\Local\Temp\easytravel-word-fullcell-postfix-d2b083b7230c4c9da081be41961f8917` 只有空的 `day-004` directory，`QA_ENTRY_COUNT=1`、`QA_FILE_COUNT=0`。
+- 判讀：上一個實機版本曾越過全部 5 個 embedded cells 才停在 T4/R1/C2；本次唯一與此路徑直接相關的變更，是 embedded Find boundary 也從原本 cell `End - 1` 改用排除 CR／BEL 的 visible end。目前最強證據是 terminator-aware boundary 不適合既有 embedded Word Find；這仍是對單次結果與 source diff 的推論，不是另一次 Word probe，且 direct full-cell branch 本次根本未到達。
+- 事後狀態：WINWORD 回到 baseline 1；private `LIST-master.docx` 維持 36,262 bytes／SHA-256 `08b4393b8e7782f9f1425a4a265a4f2737cb1dec7f1813f1b1c2ede88daae468`，manifest 維持 3,096 bytes／SHA-256 `edf2300b7fecb34662482291bc1de37f2502e6feb4f54aec00895b0354d80593`，normalized fingerprint 維持 `c5786b598f981789a5dc856129d11435bc2e9ab9de665a7f1b5b5008f2e1cd0a`。
+- 下一步：若要繼續，先另行核准 T1/R2/C2 embedded Find boundary 的純離線診斷與書面修正規格，評估 full-cell direct comparison 使用 visible range、embedded Find 保留原 boundary 的最小分流；未核准前不修改 production／tests。任何新的 Word repro 仍需另一個單次明確授權。
+- 阻塞點：本次唯一 Word repro 授權已消耗且失敗，不得重跑。沒有修改 production／tests 或私人 master／calibration，沒有 GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST full-cell highlight offline implementation handoff
 
 - 一句話現況：full-cell highlight 已離線改為 terminator-aware visible range 的 direct yellow path；embedded／repeated tokens 保留既有 Word Find／cursor loop。完整離線 suite 全綠，但私人 master 的 Word 實機結果仍未驗證。
