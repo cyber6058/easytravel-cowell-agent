@@ -1384,6 +1384,27 @@ function Set-HeaderParagraph {
     Set-TokenHighlight -Range $paragraph.Range -Token ([string]$Patch.highlight_text)
 }
 
+function Get-ListCellExtraParagraphCode {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet(
+            "LIST_CELL_EXTRA_PARAGRAPH_SET",
+            "LIST_CELL_EXTRA_PARAGRAPH_POST_REOPEN"
+        )]
+        [string]$FailurePrefix,
+        [Parameter(Mandatory = $true)][int]$TableNumber,
+        [Parameter(Mandatory = $true)][int]$RowNumber,
+        [Parameter(Mandatory = $true)][int]$ColumnNumber
+    )
+    if ($TableNumber -le 0 -or $RowNumber -le 0 -or $ColumnNumber -le 0) {
+        throw "LIST_CELL_COORDINATE_INVALID"
+    }
+    return (
+        "{0}_T{1}_R{2}_C{3}" -f `
+            $FailurePrefix, $TableNumber, $RowNumber, $ColumnNumber
+    )
+}
+
 function Set-ListCell {
     param(
         [Parameter(Mandatory = $true)]$Document,
@@ -1418,7 +1439,12 @@ function Set-ListCell {
         -Row ([int]$Patch.row) `
         -Column ([int]$Patch.column)
     if ([int]$cell.Range.Paragraphs.Count -ne 1) {
-        throw "LIST_CELL_EXTRA_PARAGRAPH"
+        throw (Get-ListCellExtraParagraphCode `
+            -FailurePrefix "LIST_CELL_EXTRA_PARAGRAPH_SET" `
+            -TableNumber $tableNumber `
+            -RowNumber ([int]$Patch.row) `
+            -ColumnNumber ([int]$Patch.column)
+        )
     }
     $postRange = $null
     try {
@@ -1734,6 +1760,12 @@ function Assert-ListOutputPresentationContract {
         $paragraphCount = [int]$cell.Range.Paragraphs.Count
         if ($paragraphCount -gt 1) {
             $extraParagraphCount += $paragraphCount - 1
+            throw (Get-ListCellExtraParagraphCode `
+                -FailurePrefix "LIST_CELL_EXTRA_PARAGRAPH_POST_REOPEN" `
+                -TableNumber ([int]$patch.table) `
+                -RowNumber ([int]$patch.row) `
+                -ColumnNumber ([int]$patch.column)
+            )
         }
         $cellRange = $null
         try {
@@ -1753,9 +1785,6 @@ function Assert-ListOutputPresentationContract {
                 catch {}
             }
         }
-    }
-    if ($extraParagraphCount -ne 0) {
-        throw "LIST_CELL_EXTRA_PARAGRAPH"
     }
     return [ordered]@{
         non_title_font_points = [double]$Plan.output_font_points

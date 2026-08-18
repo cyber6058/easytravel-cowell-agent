@@ -355,8 +355,41 @@ def test_list_cell_replaces_only_visible_text_and_asserts_one_paragraph():
     assert "$visibleRange.End = [int]$visibleRange.End - 1" in function
     assert "$visibleRange.Text = [string]$Patch.text" in function
     assert "$cell.Range.Paragraphs.Count -ne 1" in function
-    assert 'throw "LIST_CELL_EXTRA_PARAGRAPH"' in function
+    assert '-FailurePrefix "LIST_CELL_EXTRA_PARAGRAPH_SET"' in function
     assert 'throw "LIST_CELL_TEXT_MISMATCH"' in function
+
+
+def test_cell_paragraph_failures_identify_checkpoint_and_coordinates():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    code_builder = script.split(
+        "function Get-ListCellExtraParagraphCode {", 1
+    )[1].split("function Set-ListCell {", 1)[0]
+    setter = script.split("function Set-ListCell {", 1)[1].split(
+        "function Get-ExactListTitleRange {", 1
+    )[0]
+    output_assertion = script.split(
+        "function Assert-ListOutputPresentationContract {", 1
+    )[1].split("function Set-DailyRowCount {", 1)[0]
+
+    for prefix in (
+        "LIST_CELL_EXTRA_PARAGRAPH_SET",
+        "LIST_CELL_EXTRA_PARAGRAPH_POST_REOPEN",
+    ):
+        assert f'"{prefix}"' in code_builder
+    assert 'throw "LIST_CELL_COORDINATE_INVALID"' in code_builder
+    assert '"{0}_T{1}_R{2}_C{3}" -f' in code_builder
+    assert '-FailurePrefix "LIST_CELL_EXTRA_PARAGRAPH_SET"' in setter
+    assert "-TableNumber $tableNumber" in setter
+    assert "-RowNumber ([int]$Patch.row)" in setter
+    assert "-ColumnNumber ([int]$Patch.column)" in setter
+    assert (
+        '-FailurePrefix "LIST_CELL_EXTRA_PARAGRAPH_POST_REOPEN"'
+        in output_assertion
+    )
+    assert "-TableNumber ([int]$patch.table)" in output_assertion
+    assert "-RowNumber ([int]$patch.row)" in output_assertion
+    assert "-ColumnNumber ([int]$patch.column)" in output_assertion
+    assert 'throw "LIST_CELL_EXTRA_PARAGRAPH"' not in script
 
 
 def test_qr_removal_is_bounded_to_square_candidates_in_header_cell():
