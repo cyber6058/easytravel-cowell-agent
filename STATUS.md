@@ -1,5 +1,17 @@
 # STATUS
 
+## 2026-08-18 LIST full-cell direct range offline diagnosis and design review
+
+- 一句話現況：T4/R1/C2 full-cell direct path 已離線縮小為 `Get-ListVisibleRangeEnd` 把 cell 尾端 `U+000D U+0007` 的兩個文字碼點誤當成兩個 Word Range 位置，令 direct duplicate 比已通過實機前置斷言的 `End - 1` 多退一格；已完成書面修正規格，等待 OP 審閱，尚未修改 production 或 tests。
+- 實機既有證據：唯一一次 boundary-split 4 天 repro 已通過五個 embedded highlight cases，然後失敗於第一個 full-cell token `LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T4_R1_C2`，原文為 `WORD_GENERATION_FAILED`／HRESULT `-2146233087`／return code 30／stage `run-action`／`1 failed in 23.37s`。同一 execution 在進入 highlight 前，`Set-ListCell` 對同一格的 duplicate 執行 `End - 1` 後已精確匹配 `Patch.text`，且該格 `Patch.text == Patch.highlight_text == WAITING_FOR_OP`。
+- 離線診斷：現行 helper 依 `Range.Text` 尾端碼點數把 cell direct boundary 算成有效的 `End - 2`，會少掉一個 visible token 位置；無 COM compound-marker model 輸出 `CELL_TEXT_TERMINATOR_CODEPOINTS=2`、`CELL_RANGE_TERMINATOR_SPAN=1`、`CELL_CURRENT_VISIBLE_SPAN=6`、`CELL_EXPECTED_VISIBLE_SPAN=7`、`CELL_OVER_RETREAT=1`。模型前後 WINWORD 均為 1；cell marker 的 range span 來自前述實機 invariant，不是本輪新 Word probe。
+- 測試缺口：現行四個相關離線 tests 仍為 `.... [100%]`，表示它們把錯誤的文字碼點至 Range 座標轉換當成契約，無法攔截這次實機矛盾；未以弱化、skip 或刪除測試方式處理。
+- 選定方案：移除只有一個 production caller 的 `Get-ListVisibleRangeEnd`；direct duplicate 只退一個自己的 `End` 位置，先保留 `LIST_HIGHLIGHT_RANGE_INVALID` 安全檢查，再做既有 case-sensitive exact equality、黃色 highlight 與 `$matches = 1`。embedded／repeated Find 的 `$findBoundary = [int]$Range.End - 1`、settings、cursor、caller-bound safe codes 與 cleanup 全部不變，不新增 T4 座標特例。
+- 書面規格：`docs/specs/2026-08-18-list-full-cell-direct-range-design.md` 記錄 evidence chain、四個方案比較、選定 source shape、錯誤與相容性契約、未來 red-then-green regression、完整離線驗證及單次 Word 關卡。
+- 誠實邊界：本輪沒有啟動 Word、沒有重跑已消耗的 repro、沒有讀寫私人 master／calibration，也沒有修改或執行 production／tests、產生 DRAFT／DOCX／PDF／PNG、GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。修法能否跨過 T4/R1/C2 仍未經 Word 驗證。
+- 下一步：OP 回覆「同意此書面規格，開始建立離線實作計畫」後，只建立離線實作計畫；那仍不授權修改程式或 tests。未來完成並核准實作後，新的單次 4 天 Word repro 仍需另一個明確授權，成功或失敗都不重試。
+- 阻塞點：書面規格審閱關卡；Word 成功仍未驗證。
+
 ## 2026-08-18 LIST boundary-split post-fix 4-day repro returns to full-cell blocker
 
 - 一句話現況：唯一一次獲准的 4 天 post-fix Word repro 已越過先前回歸的 T1 embedded highlights，但仍失敗於第一個 full-cell token `LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T4_R1_C2`；因此 boundary split 的 embedded 路徑獲得實機支持，full-cell direct path 仍未成功，也沒有可做視覺 QA 的 artifacts。
