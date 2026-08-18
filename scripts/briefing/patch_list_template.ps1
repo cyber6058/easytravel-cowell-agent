@@ -1385,13 +1385,14 @@ function Set-TokenHighlight {
     if ([string]::IsNullOrEmpty($Token)) {
         return
     }
-    $boundary = Get-ListVisibleRangeEnd -Range $Range
+    $visibleBoundary = Get-ListVisibleRangeEnd -Range $Range
+    $findBoundary = [int]$Range.End - 1
     $cursor = [int]$Range.Start
     $matches = 0
     $visibleRange = $null
     try {
         $visibleRange = $Range.Duplicate
-        $visibleRange.SetRange([int]$Range.Start, $boundary)
+        $visibleRange.SetRange([int]$Range.Start, $visibleBoundary)
         if ([string]$visibleRange.Text -ceq $Token) {
             $visibleRange.HighlightColorIndex = $WdYellow
             $matches = 1
@@ -1409,9 +1410,9 @@ function Set-TokenHighlight {
         }
     }
     if ($matches -eq 0) {
-        while ($cursor -lt $boundary) {
+        while ($cursor -lt $findBoundary) {
             $search = $Range.Duplicate
-            $search.SetRange($cursor, $boundary)
+            $search.SetRange($cursor, $findBoundary)
             $search.Find.ClearFormatting()
             $search.Find.Text = $Token
             $search.Find.Forward = $true

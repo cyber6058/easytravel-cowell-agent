@@ -379,7 +379,8 @@ def test_highlight_failure_code_is_validated_before_empty_token_return():
     assert 'throw "LIST_HIGHLIGHT_TOKEN_MISSING"' not in script
 
     unchanged_statements = (
-        "$boundary = Get-ListVisibleRangeEnd -Range $Range",
+        "$visibleBoundary = Get-ListVisibleRangeEnd -Range $Range",
+        "$findBoundary = [int]$Range.End - 1",
         "$cursor = [int]$Range.Start",
         "$search.Find.ClearFormatting()",
         "$search.Find.Text = $Token",
@@ -420,9 +421,11 @@ def test_full_cell_highlight_is_direct_and_embedded_tokens_keep_find():
     )[0]
 
     unchanged_find_statements = (
+        "$findBoundary = [int]$Range.End - 1",
         "$cursor = [int]$Range.Start",
+        "while ($cursor -lt $findBoundary)",
         "$search = $Range.Duplicate",
-        "$search.SetRange($cursor, $boundary)",
+        "$search.SetRange($cursor, $findBoundary)",
         "$search.Find.ClearFormatting()",
         "$search.Find.Text = $Token",
         "$search.Find.Forward = $true",
@@ -433,9 +436,9 @@ def test_full_cell_highlight_is_direct_and_embedded_tokens_keep_find():
         "$cursor = [int]$search.End",
     )
     direct_statements = (
-        "$boundary = Get-ListVisibleRangeEnd -Range $Range",
+        "$visibleBoundary = Get-ListVisibleRangeEnd -Range $Range",
         "$visibleRange = $Range.Duplicate",
-        "$visibleRange.SetRange([int]$Range.Start, $boundary)",
+        "$visibleRange.SetRange([int]$Range.Start, $visibleBoundary)",
         "[string]$visibleRange.Text -ceq $Token",
         "$visibleRange.HighlightColorIndex = $WdYellow",
         "$matches = 1",
@@ -447,15 +450,20 @@ def test_full_cell_highlight_is_direct_and_embedded_tokens_keep_find():
         function.index(item) for item in unchanged_find_statements
     ]
     assert find_positions == sorted(find_positions)
-    assert direct_positions[-1] < find_positions[1]
+    assert direct_positions[-1] < function.index(
+        "while ($cursor -lt $findBoundary)"
+    )
     assert "if ($matches -eq 0)" in function.split(
         "$matches = 1", 1
-    )[1].split("while ($cursor -lt $boundary)", 1)[0]
+    )[1].split("while ($cursor -lt $findBoundary)", 1)[0]
     release = function.split("finally {", 1)[1].split(
         "if ($matches -eq 0)", 1
     )[0]
     assert "FinalReleaseComObject" in release
     assert "$visibleRange" in release
+    assert "$boundary =" not in function
+    assert "T1_R2_C2" not in function
+    assert "T4_R1_C2" not in function
     assert "throw $FailureCode" in function
 
 
