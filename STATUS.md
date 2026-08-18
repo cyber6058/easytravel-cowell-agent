@@ -1,5 +1,13 @@
 # STATUS
 
+## 2026-08-18 LIST highlight-token safe-code design review
+
+- 一句話現況：generic `LIST_HIGHLIGHT_TOKEN_MISSING` 的兩個 caller 已離線盤點為 header paragraph 與 ordinary cell；OP 已確認 header 只帶 paragraph、cell 帶 table／row／column，選定 caller-bound safe-code helper 設計，目前書面規格待 OP 審閱，尚未改程式。
+- 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`；核對 commit `ee425a9`、shared `Set-TokenHighlight`、`Set-HeaderParagraph`／`Set-ListCell` callers 與 adapter `[A-Z][A-Z0-9_]{1,79}` 限制。新增 `docs/specs/2026-08-18-list-highlight-token-safe-code-design.md`，定義 `..._HEADER_P<number>`、`..._CELL_T<table>_R<row>_C<column>` 與固定 `LIST_HIGHLIGHT_CONTEXT_INVALID`。
+- 設計邊界：只增加診斷 context；不改 Word Find、highlight color、token/text、plan/report schema、generator version、私人 master 或 calibration。`Set-TokenHighlight` 在 empty-token early return 前也驗證 failure code，避免錯誤 metadata 被隱藏。
+- 下一步：OP 審閱並明確核准書面規格後，再建立離線實作計畫；未核准前不修改 PowerShell／tests。
+- 阻塞點：書面規格審閱關卡尚未通過；本次沒有 Word、私人 master／calibration、GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST leader post-fix 4-day repro reaches highlight blocker
 
 - 一句話現況：獲准的唯一一次 4 天 post-fix Word repro 已跨過 `LIST_CELL_EXTRA_PARAGRAPH_SET_T1_R2_C3`，但後續在 `run-action` 失敗於 generic `LIST_HIGHLIGHT_TOKEN_MISSING`；依約沒有重試、沒有跑其他天數，也沒有 DOCX／PDF／PNG 可供視覺驗收。
