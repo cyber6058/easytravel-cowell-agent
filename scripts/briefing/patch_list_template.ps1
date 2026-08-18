@@ -1338,7 +1338,7 @@ function Set-HeaderParagraph {
         )
         $expectedTitle = ([string]$Patch.text).Trim()
         if ($currentTitle -cne $expectedTitle) {
-            throw "LIST_HEADER_TITLE_CHANGED"
+            throw "LIST_SOURCE_HEADER_TITLE_CHANGED"
         }
         # The fixed title is validated here and receives its font exception
         # after all other visible output text is normalized.
@@ -1456,7 +1456,7 @@ function Get-ListTitleFontPoints {
             [char[]]@([char]13, [char]7, [char]32, [char]9)
         )
         if ($normalizedTitle -cne $ExpectedTitle) {
-            throw "LIST_HEADER_TITLE_CHANGED"
+            throw "LIST_SOURCE_HEADER_TITLE_CHANGED"
         }
         $fontPoints = [double]$range.Font.Size
         if ($fontPoints -le 0 -or $fontPoints -gt 72) {
@@ -1594,11 +1594,11 @@ function Assert-ListOutputPresentationContract {
         [int]$_.paragraph -eq $titleParagraph
     })
     if ($titlePatch.Count -ne 1) {
-        throw "LIST_HEADER_TITLE_CHANGED"
+        throw "LIST_TITLE_PLAN_INVALID"
     }
     $expectedTitle = [string]$titlePatch[0].text
     if ($expectedTitle -cne "日本精緻假期") {
-        throw "LIST_HEADER_TITLE_CHANGED"
+        throw "LIST_TITLE_PLAN_INVALID"
     }
     $titleRange = $null
     try {
@@ -1620,7 +1620,7 @@ function Assert-ListOutputPresentationContract {
             [char[]]@([char]13, [char]7, [char]32, [char]9)
         )
         if ($normalizedTitle -cne $expectedTitle) {
-            throw "LIST_HEADER_TITLE_CHANGED"
+            throw "LIST_POST_REOPEN_TITLE_CHANGED"
         }
         $titleFontPointsAfter = [double]$titleRange.Font.Size
         if (

@@ -286,10 +286,30 @@ def test_header_patch_preserves_the_title_paragraph_for_font_exception():
     )[0]
 
     assert "if ($number -eq 1)" in function
-    assert 'throw "LIST_HEADER_TITLE_CHANGED"' in function
+    assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' in function
     assert "return" in function.split("if ($number -eq 1)", 1)[1].split(
         "$visibleRange = $null", 1
     )[0]
+
+
+def test_title_failures_identify_source_plan_and_post_reopen_stage():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    source_setter = script.split("function Set-HeaderParagraph {", 1)[1].split(
+        "function Set-ListCell {", 1
+    )[0]
+    source_getter = script.split("function Get-ListTitleFontPoints {", 1)[1].split(
+        "function Set-ListOutputFontContract {", 1
+    )[0]
+    output_assertion = script.split(
+        "function Assert-ListOutputPresentationContract {", 1
+    )[1].split("function Set-DailyRowCount {", 1)[0]
+
+    assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' in source_setter
+    assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' in source_getter
+    assert output_assertion.count('throw "LIST_TITLE_PLAN_INVALID"') == 2
+    assert 'throw "LIST_POST_REOPEN_TITLE_CHANGED"' in output_assertion
+    for function in (source_setter, source_getter, output_assertion):
+        assert 'throw "LIST_HEADER_TITLE_CHANGED"' not in function
 
 
 def test_list_cell_replaces_only_visible_text_and_asserts_one_paragraph():
@@ -338,7 +358,8 @@ def test_output_font_contract_is_twelve_points_except_exact_title():
     assert "$footer.Range.Font.Size = $FontPoints" in setter
     assert "$titleRange.Font.Size = $TitleFontPoints" in setter
     assert '"日本精緻假期"' in assertion
-    assert 'throw "LIST_HEADER_TITLE_CHANGED"' in assertion
+    assert 'throw "LIST_TITLE_PLAN_INVALID"' in assertion
+    assert 'throw "LIST_POST_REOPEN_TITLE_CHANGED"' in assertion
     assert 'throw "LIST_TITLE_FONT_CHANGED"' in assertion
     assert 'throw "LIST_NON_TITLE_FONT_CHANGED"' in assertion
 
