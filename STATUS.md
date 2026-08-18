@@ -1,5 +1,14 @@
 # STATUS
 
+## 2026-08-18 LIST 4-day repro localizes write-time cell T1/R2/C3
+
+- 一句話現況：獲准的唯一一次 4 天 Word repro 已把原本的 generic cell paragraph blocker 精確定位為 write-time 的 `LIST_CELL_EXTRA_PARAGRAPH_SET_T1_R2_C3`；依約沒有重試、沒有跑其他天數，也沒有 DOCX／PDF／PNG 可供視覺驗收。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；前檢 doctor 確認 Word COM、pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure 均 `ok`，WINWORD baseline 為使用者原本的 1。只執行 opt-in integration 的 `[4]` node，使用全新 OS temp QA root 與 `-x`，5／6／7／8／12 天完全未進入。
+- 驗證：pytest 原始結果為 `1 failed`；adapter evidence 是 `WORD_GENERATION_FAILED`／`LIST_CELL_EXTRA_PARAGRAPH_SET_T1_R2_C3`／HRESULT `-2146233087`／return code 30／stage `run-action`。QA root `C:\Users\cance\AppData\Local\Temp\easytravel-word-coordinate-724f9631bc524514a500b1d8f56d7933` 只有空的 `day-004` directory，file count 0。事後 WINWORD count 回到 1；doctor 再確認 `master_sha256_matches: true` 與 normalized structure fingerprint 正常。
+- 結論：失敗發生在 `Set-ListCell` 寫值階段的 table 1／row 2／column 3，不是 post-reopen assertion；新版座標化安全碼已達成定位目的。因 adapter 在產物建立前 fail closed，本次沒有可交付檔案，QR、12pt 與填值後空行的 Word 視覺結果仍屬未驗證。
+- 下一步：若要繼續，先另行核准離線檢查 T1/R2/C3 的 master cell end-marker／段落結構與 `Set-ListCell` 寫值後 contract，建立針對性紅測後做最小修正並跑完整 suite；任何新的 Word repro 仍需新的單次授權。
+- 阻塞點：本次唯一 Word repro 授權已消耗且失敗，不得重跑。沒有修改程式或私人 master，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST cell paragraph checkpoint and coordinate codes handoff
 
 - 一句話現況：`LIST_CELL_EXTRA_PARAGRAPH` 已離線細分為 write-time 的 `LIST_CELL_EXTRA_PARAGRAPH_SET_T<table>_R<row>_C<column>` 與 post-reopen 的 `LIST_CELL_EXTRA_PARAGRAPH_POST_REOPEN_T<table>_R<row>_C<column>`；尚未執行新的 Word repro，因此實際失敗座標仍未知。
