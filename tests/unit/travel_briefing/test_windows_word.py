@@ -292,7 +292,7 @@ def test_header_patch_preserves_the_title_paragraph_for_font_exception():
     )[0]
 
 
-def test_title_failures_identify_source_plan_and_post_reopen_stage():
+def test_title_failures_identify_all_source_plan_and_post_reopen_stages():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
     source_setter = script.split("function Set-HeaderParagraph {", 1)[1].split(
         "function Set-ListCell {", 1
@@ -300,15 +300,26 @@ def test_title_failures_identify_source_plan_and_post_reopen_stage():
     source_getter = script.split("function Get-ListTitleFontPoints {", 1)[1].split(
         "function Set-ListOutputFontContract {", 1
     )[0]
+    pre_save_setter = script.split(
+        "function Set-ListOutputFontContract {", 1
+    )[1].split("function Assert-VisibleRangeFontContract {", 1)[0]
     output_assertion = script.split(
         "function Assert-ListOutputPresentationContract {", 1
     )[1].split("function Set-DailyRowCount {", 1)[0]
 
     assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' in source_setter
-    assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' in source_getter
+    assert 'throw "LIST_SOURCE_TITLE_RANGE_NOT_FOUND"' in source_getter
+    assert 'throw "LIST_PRE_SAVE_TITLE_RANGE_NOT_FOUND"' in pre_save_setter
+    assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' not in source_getter
+    assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' not in pre_save_setter
     assert output_assertion.count('throw "LIST_TITLE_PLAN_INVALID"') == 2
     assert 'throw "LIST_POST_REOPEN_TITLE_CHANGED"' in output_assertion
-    for function in (source_setter, source_getter, output_assertion):
+    for function in (
+        source_setter,
+        source_getter,
+        pre_save_setter,
+        output_assertion,
+    ):
         assert 'throw "LIST_HEADER_TITLE_CHANGED"' not in function
 
 

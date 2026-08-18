@@ -1492,7 +1492,7 @@ function Get-ListTitleFontPoints {
             -ParagraphRange $paragraphRange `
             -ExpectedTitle $ExpectedTitle
         if ($null -eq $titleRange) {
-            throw "LIST_SOURCE_HEADER_TITLE_CHANGED"
+            throw "LIST_SOURCE_TITLE_RANGE_NOT_FOUND"
         }
         $fontPoints = [double]$titleRange.Font.Size
         if ($fontPoints -le 0 -or $fontPoints -gt 72) {
@@ -1554,7 +1554,7 @@ function Set-ListOutputFontContract {
             -ParagraphRange $paragraphRange `
             -ExpectedTitle $ExpectedTitle
         if ($null -eq $titleRange) {
-            throw "LIST_SOURCE_HEADER_TITLE_CHANGED"
+            throw "LIST_PRE_SAVE_TITLE_RANGE_NOT_FOUND"
         }
         $titleRange.Font.Size = $TitleFontPoints
     }
