@@ -1300,11 +1300,61 @@ function Set-NormalizedHeaderDynamicTail {
     }
 }
 
+function Get-ListHighlightMissingCode {
+    param(
+        [Parameter(Mandatory = $true)][string]$Context,
+        [int]$ParagraphNumber = 0,
+        [int]$TableNumber = 0,
+        [int]$RowNumber = 0,
+        [int]$ColumnNumber = 0
+    )
+    if ($Context -ceq "HEADER") {
+        if (
+            $ParagraphNumber -le 0 -or
+            $TableNumber -ne 0 -or
+            $RowNumber -ne 0 -or
+            $ColumnNumber -ne 0
+        ) {
+            throw "LIST_HIGHLIGHT_CONTEXT_INVALID"
+        }
+        return (
+            "LIST_HIGHLIGHT_TOKEN_MISSING_HEADER_P{0}" -f `
+                $ParagraphNumber
+        )
+    }
+    if ($Context -ceq "CELL") {
+        if (
+            $ParagraphNumber -ne 0 -or
+            $TableNumber -le 0 -or
+            $RowNumber -le 0 -or
+            $ColumnNumber -le 0
+        ) {
+            throw "LIST_HIGHLIGHT_CONTEXT_INVALID"
+        }
+        return (
+            "LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T{0}_R{1}_C{2}" -f `
+                $TableNumber, $RowNumber, $ColumnNumber
+        )
+    }
+    throw "LIST_HIGHLIGHT_CONTEXT_INVALID"
+}
+
 function Set-TokenHighlight {
     param(
         [Parameter(Mandatory = $true)]$Range,
-        [string]$Token
+        [string]$Token,
+        [Parameter(Mandatory = $true)][string]$FailureCode
     )
+    if (
+        $FailureCode -cnotmatch (
+            "^LIST_HIGHLIGHT_TOKEN_MISSING_(" +
+            "HEADER_P[1-9][0-9]*|" +
+            "CELL_T[1-9][0-9]*_R[1-9][0-9]*_C[1-9][0-9]*)$"
+        ) -or
+        $FailureCode -cnotmatch '^[A-Z][A-Z0-9_]{1,79}$'
+    ) {
+        throw "LIST_HIGHLIGHT_CONTEXT_INVALID"
+    }
     if ([string]::IsNullOrEmpty($Token)) {
         return
     }
@@ -1326,7 +1376,7 @@ function Set-TokenHighlight {
         $cursor = [int]$search.End
     }
     if ($matches -eq 0) {
-        throw "LIST_HIGHLIGHT_TOKEN_MISSING"
+        throw $FailureCode
     }
 }
 
@@ -1381,7 +1431,13 @@ function Set-HeaderParagraph {
         }
     }
     $paragraph = $HeaderCell.Range.Paragraphs.Item($number)
-    Set-TokenHighlight -Range $paragraph.Range -Token ([string]$Patch.highlight_text)
+    $highlightFailureCode = Get-ListHighlightMissingCode `
+        -Context "HEADER" `
+        -ParagraphNumber $number
+    Set-TokenHighlight `
+        -Range $paragraph.Range `
+        -Token ([string]$Patch.highlight_text) `
+        -FailureCode $highlightFailureCode
 }
 
 function Get-ListCellExtraParagraphCode {
@@ -1464,7 +1520,15 @@ function Set-ListCell {
             catch {}
         }
     }
-    Set-TokenHighlight -Range $cell.Range -Token ([string]$Patch.highlight_text)
+    $highlightFailureCode = Get-ListHighlightMissingCode `
+        -Context "CELL" `
+        -TableNumber $tableNumber `
+        -RowNumber ([int]$Patch.row) `
+        -ColumnNumber ([int]$Patch.column)
+    Set-TokenHighlight `
+        -Range $cell.Range `
+        -Token ([string]$Patch.highlight_text) `
+        -FailureCode $highlightFailureCode
 }
 
 function Get-ExactListTitleRange {

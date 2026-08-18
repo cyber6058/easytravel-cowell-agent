@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -290,6 +291,105 @@ def test_header_patch_preserves_the_title_paragraph_for_font_exception():
     assert "return" in function.split("if ($number -eq 1)", 1)[1].split(
         "$visibleRange = $null", 1
     )[0]
+
+
+def test_highlight_failures_identify_header_paragraph_or_cell_coordinates():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    code_builder = script.split(
+        "function Get-ListHighlightMissingCode {", 1
+    )[1].split("function Set-TokenHighlight {", 1)[0]
+    header_setter = script.split(
+        "function Set-HeaderParagraph {", 1
+    )[1].split("function Get-ListCellExtraParagraphCode {", 1)[0]
+    cell_setter = script.split("function Set-ListCell {", 1)[1].split(
+        "function Get-ExactListTitleRange {", 1
+    )[0]
+
+    assert "[ValidateSet(" not in code_builder
+    assert '$Context -ceq "HEADER"' in code_builder
+    assert '$Context -ceq "CELL"' in code_builder
+    assert "[int]$ParagraphNumber = 0" in code_builder
+    assert "[int]$TableNumber = 0" in code_builder
+    assert "[int]$RowNumber = 0" in code_builder
+    assert "[int]$ColumnNumber = 0" in code_builder
+    assert "LIST_HIGHLIGHT_TOKEN_MISSING_HEADER_P{0}" in code_builder
+    assert (
+        "LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T{0}_R{1}_C{2}"
+        in code_builder
+    )
+    for invalid_fragment in (
+        "$ParagraphNumber -le 0",
+        "$TableNumber -ne 0",
+        "$RowNumber -ne 0",
+        "$ColumnNumber -ne 0",
+        "$ParagraphNumber -ne 0",
+        "$TableNumber -le 0",
+        "$RowNumber -le 0",
+        "$ColumnNumber -le 0",
+    ):
+        assert invalid_fragment in code_builder
+    assert code_builder.count(
+        'throw "LIST_HIGHLIGHT_CONTEXT_INVALID"'
+    ) == 3
+
+    assert '-Context "HEADER"' in header_setter
+    assert "-ParagraphNumber $number" in header_setter
+    assert "-TableNumber" not in header_setter
+    assert "-RowNumber" not in header_setter
+    assert "-ColumnNumber" not in header_setter
+    assert "-FailureCode $highlightFailureCode" in header_setter
+
+    assert '-Context "CELL"' in cell_setter
+    assert "-ParagraphNumber" not in cell_setter
+    assert "-TableNumber $tableNumber" in cell_setter
+    assert "-RowNumber ([int]$Patch.row)" in cell_setter
+    assert "-ColumnNumber ([int]$Patch.column)" in cell_setter
+    assert "-FailureCode $highlightFailureCode" in cell_setter
+
+    representative_codes = (
+        "LIST_HIGHLIGHT_TOKEN_MISSING_HEADER_P2",
+        "LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T1_R2_C3",
+        (
+            "LIST_HIGHLIGHT_TOKEN_MISSING_CELL_"
+            "T2147483647_R2147483647_C2147483647"
+        ),
+    )
+    for code in representative_codes:
+        assert re.fullmatch(r"[A-Z][A-Z0-9_]{1,79}", code)
+        assert len(code) <= 80
+
+
+def test_highlight_failure_code_is_validated_before_empty_token_return():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split("function Set-TokenHighlight {", 1)[1].split(
+        "function Set-HeaderParagraph {", 1
+    )[0]
+
+    assert "[Parameter(Mandatory = $true)][string]$FailureCode" in function
+    validation_index = function.index("$FailureCode -cnotmatch")
+    empty_token_index = function.index("[string]::IsNullOrEmpty($Token)")
+    assert validation_index < empty_token_index
+    validation = function[validation_index:empty_token_index]
+    assert "LIST_HIGHLIGHT_TOKEN_MISSING_" in validation
+    assert "HEADER_P[1-9][0-9]*" in validation
+    assert "CELL_T[1-9][0-9]*_R[1-9][0-9]*_C[1-9][0-9]*" in validation
+    assert "^[A-Z][A-Z0-9_]{1,79}$" in validation
+    assert 'throw "LIST_HIGHLIGHT_CONTEXT_INVALID"' in validation
+    assert "throw $FailureCode" in function
+    assert 'throw "LIST_HIGHLIGHT_TOKEN_MISSING"' not in script
+
+    unchanged_statements = (
+        "$boundary = [int]$Range.End - 1",
+        "$cursor = [int]$Range.Start",
+        "$search.Find.ClearFormatting()",
+        "$search.Find.Text = $Token",
+        "$search.Find.Forward = $true",
+        "$search.Find.Wrap = 0",
+        "$search.Find.Execute()",
+        "$search.HighlightColorIndex = $WdYellow",
+    )
+    positions = [function.index(statement) for statement in unchanged_statements]
+    assert positions == sorted(positions)
 
 
 def test_title_range_failures_identify_stage_and_exact_branch():
