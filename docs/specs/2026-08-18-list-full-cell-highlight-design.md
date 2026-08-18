@@ -2,9 +2,11 @@
 
 ## Status
 
-Offline diagnosis and selected design written on 2026-08-18. The diagnosis is
-bounded by the OP's no-Word authorization and the written specification awaits
-OP review. No production implementation is authorized by this document.
+Offline diagnosis and selected design written on 2026-08-18. The OP approved
+this written specification on 2026-08-18. The diagnosis remains bounded by the
+no-Word authorization; implementation requires separate approval of the
+offline implementation plan. No production implementation is authorized by
+this document alone.
 
 ## Observed failure
 

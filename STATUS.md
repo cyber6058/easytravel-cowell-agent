@@ -1,14 +1,22 @@
 # STATUS
 
+## 2026-08-18 LIST full-cell highlight offline implementation plan review
+
+- 一句話現況：OP 已核准 T4/R1/C2 full-cell highlight 書面規格；離線實作計畫已建立，明定 terminator-aware visible range、full-cell direct yellow path 與 embedded/repeated Find 保留契約，目前等待 OP 核准計畫，尚未修改 PowerShell／tests。
+- 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`；將設計狀態更新為 OP 已核准，並新增 `docs/plans/2026-08-18-list-full-cell-highlight-implementation-plan.md`。計畫拆成 content-shape／adapter red tests、最小 helper／direct path、無 COM probe、focused parser／non-change proof、完整 suite 與 handoff 六個 tasks。
+- 驗證設計：先鎖定 4 天 plan 的 5 個 embedded＋2 個 full-cell cases；修正前預期 plan control 通過、兩個 adapter regressions 失敗。最小實作只讓 exact full-cell token bypass Word Find，embedded 與 repeated token 繼續使用既有 Find／cursor loop；再以 synthetic range probe 證明只排除尾端 CR／BEL。
+- 下一步：OP 審閱並回覆「同意此實作計畫，開始離線實作」後，才可修改 `patch_list_template.ps1` 與兩個核准 test files；完整離線驗證通過後停止。
+- 阻塞點：離線實作計畫核准關卡尚未通過；本次沒有修改 production source／tests，沒有 Word、私人 master／calibration、DRAFT、GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST T4/R1/C2 full-cell highlight offline diagnosis and design review
 
-- 一句話現況：T4/R1/C2 已離線縮小為第一個「整格 visible text 完全等於 highlight token」的 ordinary cell；最有證據支持的原因是 cell Range 固定 `End - 1` 只排除 `U+0007`、仍把 terminal `U+000D` 留在 Word Find range。已完成 terminator-aware visible range＋full-cell direct highlight 書面設計，待 OP 審閱；尚未改 production／tests。
+- 一句話現況：T4/R1/C2 已離線縮小為第一個「整格 visible text 完全等於 highlight token」的 ordinary cell；最有證據支持的原因是 cell Range 固定 `End - 1` 只排除 `U+0007`、仍把 terminal `U+000D` 留在 Word Find range。terminator-aware visible range＋full-cell direct highlight 書面設計已由 OP 核准；尚未改 production／tests。
 - 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`。追蹤 4 天 synthetic plan、`Set-ListCell` post-write assertion、`Set-TokenHighlight` 與 patch 執行順序；7 個 highlighted cells 中前 5 個都是 embedded，T4/R1/C2、C3 才是唯二 full-cell，且 target text/token code points 完全相同。新增 `docs/specs/2026-08-18-list-full-cell-highlight-design.md`，比較三個修法並選定不綁座標的 full-cell direct path。
 - 診斷證據：boundary model 顯示 paragraph 的 `End - 1` 會正確去掉唯一 CR，但 cell 的 `End - 1` 仍留下 CR；selected-path probe 為 `DIRECT_COUNT=2`／`FIND_COUNT=5`，既有 T1/R2/C3 兩次 token 仍保留 Find loop。私人 master 只做唯讀 OOXML 結構檢查：T4/R1/C2、C3 都是兩個空 paragraph，排除 width／revision attributes 後 normalized XML 完全相同；實際 Word failure 前的 write-time assertion 已證明 output cell 是一個 paragraph 且 visible text 等於 patch text。
 - 誠實界線：這是目前證據最支持的根因推論，不是 Word live proof。使用者禁止本回合執行 Word，因此沒有重跑 repro、沒有 COM instrumentation，也不能宣稱修法已越過 T4/R1/C2。
 - 設計摘要：新增只讀 `Get-ListVisibleRangeEnd`，只剝除尾端 `U+000D`／`U+0007`；`Set-TokenHighlight` 對 exact full-cell token 直接將 visible duplicate 套黃色，embedded token 才走既有 Find／cursor loop。錯誤固定為安全碼，不改 caller safe code、schema、內容、QR、12 pt、paragraph、pagination、master 或 calibration contract。
-- 下一步：OP 審閱並明確核准此書面規格後，再建立離線實作計畫；未核准前不修改 PowerShell／tests。
-- 阻塞點：書面規格審閱關卡尚未通過；本次沒有啟動 Word、沒有修改私人 master／calibration 或既有 DRAFT，也沒有 GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。
+- 下一步：依已核准規格建立離線實作計畫，待 OP 另行核准計畫後才修改 PowerShell／tests。
+- 阻塞點：書面規格已核准，但離線實作計畫仍是獨立關卡；本次沒有啟動 Word、沒有修改私人 master／calibration 或既有 DRAFT，也沒有 GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。
 
 ## 2026-08-18 LIST highlight post-fix 4-day repro localizes guide-name cell
 
