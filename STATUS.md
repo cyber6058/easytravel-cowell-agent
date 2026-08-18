@@ -1,5 +1,13 @@
 # STATUS
 
+## 2026-08-18 LIST leader-cell offline implementation plan review
+
+- 一句話現況：OP 已核准 T1/R2/C3 的書面修正規格；離線實作計畫已建立，明確以 payload-level TDD 將領隊欄 `U+000D` 改為 `U+000B` 並在 plan boundary 拒絕 CR／LF／BEL，目前等待 OP 核准計畫，尚未修改 source／tests。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；以 commit `0b0b7a1`、已核准規格、實際 `draft(4)` test fixture、`build_list_patch_plan` seam 與既有 Word adapter tests 建立 `docs/plans/2026-08-18-list-leader-cell-manual-line-break-fix-implementation-plan.md`。計畫分成 red tests、最小 source fix、focused/parser、full suite 與 handoff 五個 tasks。
+- 驗證設計：先要求 4 個 payload cases 紅燈，再把 actual 4-day loop 從 `U+000D` 轉為 `U+000B`；focused tests 維持 adapter paragraph assertion，最後跑完整 suite、parser、compileall、static search 與 `git diff --check`。預估 test count 僅作參考，回報以實際輸出為準。
+- 下一步：OP 審閱並明確核准本實作計畫後，才可離線修改 `src/travel_briefing/word_list.py` 與 `tests/unit/travel_briefing/test_word_list.py`；完整測試通過後停止。
+- 阻塞點：實作計畫尚未獲核准；本次沒有修改 production source／tests，沒有 Word、私人 master／calibration、GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST leader-cell manual-line-break design review
 
 - 一句話現況：4 天 repro 的 T1/R2/C3 blocker 已離線重現為領隊欄 patch payload 內的 `U+000D`；OP 已確認姓名與手機維持兩行，選定以 `U+000B` manual line break 保持單一 paragraph，目前書面規格待 OP 審閱，尚未改程式。

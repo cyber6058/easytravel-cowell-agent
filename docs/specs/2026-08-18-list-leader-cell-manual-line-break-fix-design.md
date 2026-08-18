@@ -2,8 +2,8 @@
 
 ## Status
 
-Selected design approved in conversation on 2026-08-18; written review is
-pending. This is a narrow bug-fix addendum to
+Selected design and written specification approved by the OP on 2026-08-18.
+This is a narrow bug-fix addendum to
 `2026-08-18-list-word-output-normalization-design.md`.
 
 ## Observed failure
