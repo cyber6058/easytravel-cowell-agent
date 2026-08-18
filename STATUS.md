@@ -1,5 +1,14 @@
 # STATUS
 
+## 2026-08-18 LIST leader-cell manual-line-break offline fix handoff
+
+- 一句話現況：T1/R2/C3 的領隊姓名／台灣手機 patch payload 已離線由 `U+000D` 修正為 `U+000B` manual line break，保留兩行但維持單一 paragraph 語意；ordinary cell plan boundary 現在 fail closed 拒絕 CR／LF／BEL。完整離線 suite 全綠，但私人 master 的 Word 實機結果仍未驗證。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`。先在公開 `build_list_patch_plan` seam 新增 leader exact payload 與三種 forbidden marker cases；production 只修改 `src/travel_briefing/word_list.py`：leader separator `\r` 改為 `\v`，並在所有 cell builders 完成後、建立 `ListPatchPlan` 前執行不含值的固定訊息 validator。PowerShell adapter、plan schema/version、私人 master／calibration 均未修改。實作 commit 是 `021f124`。
+- TDD 證據：目標 tests 修正前為 `4 failed`，leader failure 精確顯示 `\r` 對 `\v`，CR／LF／BEL 三案皆為 `DID NOT RAISE ValueError`；最小修正後同一組為 `4 passed`。原始實際 4 天 synthetic loop 現輸出 `T1_R2_C3_CODEPOINTS=U+000B`。
+- 完整驗證：focused collection 為 `test_windows_word.py: 44`、`test_word_list.py: 35`，執行 exit 0；PowerShell parser 輸出 `PARSER_ERROR_COUNT=0`，adapter `git diff --exit-code` 通過。完整 suite 為 `551 passed, 8 skipped in 24.66s`；`compileall` 與 `git diff --check` exit 0。靜態搜尋沒有 leader `\r`，只保留預期的 `LIST_CELL_EXTRA_PARAGRAPH_SET` fail-closed assertion；WINWORD count 維持原本的 1。
+- 下一步：若要驗收實機修正，需要新的明確授權，只執行一次 4 天 post-fix Word repro；不跑其他天數，失敗不重試。成功後才可檢查同次 DOCX／PDF／PNG 的兩行領隊欄、尾端空白行、QR 與 12 pt 視覺契約。
+- 阻塞點：本回合依核准計畫在完整離線驗證後停止；沒有 Word、私人 master／calibration、GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。Word blocker 是否已解除仍屬未驗證。
+
 ## 2026-08-18 LIST leader-cell offline implementation plan review
 
 - 一句話現況：OP 已核准 T1/R2/C3 的書面修正規格；離線實作計畫已建立，明確以 payload-level TDD 將領隊欄 `U+000D` 改為 `U+000B` 並在 plan boundary 拒絕 CR／LF／BEL，目前等待 OP 核准計畫，尚未修改 source／tests。
