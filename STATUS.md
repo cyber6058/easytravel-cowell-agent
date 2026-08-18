@@ -1,5 +1,13 @@
 # STATUS
 
+## 2026-08-18 LIST highlight-token safe-code offline implementation plan review
+
+- 一句話現況：OP 已核准 caller-bound highlight safe-code 書面規格；離線實作計畫已建立，明定 header paragraph、ordinary cell table／row／column 與固定 context-invalid regression，現等待 OP 核准計畫，尚未修改 PowerShell／tests。
+- 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`；將設計狀態更新為 OP 已核准，並新增 `docs/plans/2026-08-18-list-highlight-token-safe-code-implementation-plan.md`。計畫拆成 red tests、最小 helper／caller wiring、focused parser／non-change proof、完整 suite 與 handoff 五個 tasks。
+- 計畫邊界：只允許後續修改 `scripts/briefing/patch_list_template.ps1`、`tests/unit/travel_briefing/test_windows_word.py` 與 `STATUS.md`，執行 synthetic／source-contract 離線驗證並建立本機 commits；完整驗證後停止。
+- 下一步：OP 審閱並回覆「同意此實作計畫，開始離線實作」後，才先建立兩個會紅的安全錯誤碼 regressions，再做最小 PowerShell 修正；未核准前不改 source／tests。
+- 阻塞點：離線實作計畫核准關卡尚未通過；本次沒有 Word、私人 master／calibration、DRAFT、GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST highlight-token safe-code design review
 
 - 一句話現況：generic `LIST_HIGHLIGHT_TOKEN_MISSING` 的兩個 caller 已離線盤點為 header paragraph 與 ordinary cell；OP 已確認 header 只帶 paragraph、cell 帶 table／row／column，選定 caller-bound safe-code helper 設計，目前書面規格待 OP 審閱，尚未改程式。

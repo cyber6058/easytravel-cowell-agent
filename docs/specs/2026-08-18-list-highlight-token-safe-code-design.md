@@ -2,9 +2,9 @@
 
 ## Status
 
-Selected design approved in conversation on 2026-08-18; written review is
-pending. This specification changes diagnostic classification only. It does
-not change highlight content, search behavior, color, or document layout.
+Selected design and written specification approved by the OP on 2026-08-18.
+This specification changes diagnostic classification only. It does not change
+highlight content, search behavior, color, or document layout.
 
 ## Observed failure
 
