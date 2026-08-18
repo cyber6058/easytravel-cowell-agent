@@ -2,7 +2,8 @@
 
 日期：2026-08-18
 
-狀態：書面規格已由 OP 核准；本計畫等待 OP 核准，尚未修改 production 或 tests。
+狀態：書面規格與本計畫均已由 OP 核准；離線實作於 2026-08-18 完成並通過完整
+驗證。Word 實機 repro 仍是獨立關卡。
 
 依據：
 `docs/specs/2026-08-18-list-embedded-find-boundary-design.md`
@@ -322,6 +323,39 @@ git log -3 --oneline
 working tree 必須乾淨。本計畫不執行 push；依現行專案紀律，push 是另一個明確授權
 關卡。
 
+## 實作結果（2026-08-18）
+
+- 實作基線為 `433c545712538ec6c5c731fa8fdc6cdb6ee84e5d`；開工
+  `git pull --ff-only` 為 `Already up to date.`，working tree 乾淨。
+- red command 原文摘要為 `..FF [100%]`。content-shape 與 visible-helper controls 通過；
+  validation-order test 與 direct／Find test 均因 expected boundary substring 尚不存在而
+  `ValueError: substring not found`，符合計畫後才修改 production。
+- 最小 source change 後同一 command 為 `.... [100%]`。
+- 無 COM model 輸出：
+
+  ```text
+  PARAGRAPH_LEGACY_MINUS_VISIBLE=0
+  CELL_LEGACY_MINUS_VISIBLE=1
+  PROPOSED_FIND_COUNT=5
+  PROPOSED_DIRECT_COUNT=2
+  REPEATED_TOKEN_MAX_OCCURRENCES=2
+  WINWORD_COUNT_BEFORE_MODEL=1
+  WINWORD_COUNT_AFTER_MODEL=1
+  ```
+
+- 兩個 focused files 的 84 個 tests 全綠；PowerShell parser 輸出
+  `PARSER_ERROR_COUNT=0`。
+- non-change proof 輸出 `PLAN_BUILDER_UNCHANGED=True`、
+  `TEST_WORD_LIST_UNCHANGED=True`、`VISIBLE_HELPER_UNCHANGED=True`、
+  `HEADER_CALLER_UNCHANGED=True`、`CELL_CALLER_UNCHANGED=True` 與
+  `CHANGED_FILE_COUNT=2`。
+- 完整 suite 為 `556 passed, 8 skipped in 32.86s`；另有 `COMPILEALL_OK`、
+  `GIT_DIFF_CHECK_OK`，validation 後 WINWORD count 仍為 1。
+- production／tests commit 為 `6e78c04`（`fix(briefing): split LIST highlight
+  boundaries`）；只修改核准的 PowerShell adapter 與 source-contract test。
+- 沒有啟動 Word、讀寫私人 master／calibration／DRAFT、產生 DOCX／PDF／PNG、使用
+  installed runtime、網路或外部系統，也沒有 push。Word blocker 是否實際解除仍未驗證。
+
 ## 3. Failure handling
 
 - red tests 未按預期失敗：停止，不改 production。
@@ -354,7 +388,8 @@ working tree 必須乾淨。本計畫不執行 push；依現行專案紀律，pu
 
 ## 5. 計畫核准關卡
 
-OP 核准本計畫後，才可修改 tests 與 production。核准用語：
+OP 已於 2026-08-18 使用下列用語核准本計畫。該核准只涵蓋上述離線 tests、production
+修正、驗證與本機 commits，不涵蓋 Word 或其他外部關卡。
 
 ```text
 同意此實作計畫，開始離線實作

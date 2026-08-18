@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-08-18 LIST embedded Find boundary split offline implementation handoff
+
+- 一句話現況：`Set-TokenHighlight` 已離線分成 `$visibleBoundary` exact/direct path 與 `$findBoundary = [int]$Range.End - 1` embedded／repeated Find path；完整離線驗證全綠，但 Word 實機仍未驗證。
+- TDD 證據：基線 `433c545712538ec6c5c731fa8fdc6ee84e5d`，開工 `git pull --ff-only` 為 `Already up to date.`。先只改兩個 source-contract tests，target run 原文為 `..FF [100%]`；兩個 controls 通過，另兩個 tests 都因新 boundary substring 尚不存在而 `ValueError: substring not found`。最小 production change 後相同 command 為 `.... [100%]`。
+- 實作內容：`scripts/briefing/patch_list_template.ps1` 保留 `Get-ListVisibleRangeEnd`，exact full-cell visible duplicate 只用 `$visibleBoundary`；embedded loop 與 search range 只用 `$findBoundary`。`tests/unit/travel_briefing/test_windows_word.py` 明確鎖定兩條 boundary、保留 Find／cursor／safe-code／cleanup assertions，並禁止 shared `$boundary` 與 coordinate special case。implementation commit 為 `6e78c04`。
+- 離線驗證：無 COM model 為 `PARAGRAPH_LEGACY_MINUS_VISIBLE=0`、`CELL_LEGACY_MINUS_VISIBLE=1`、`PROPOSED_FIND_COUNT=5`、`PROPOSED_DIRECT_COUNT=2`、`REPEATED_TOKEN_MAX_OCCURRENCES=2`，前後 WINWORD 都是 1；兩個 focused files 的 84 tests 全綠；parser 為 `PARSER_ERROR_COUNT=0`；完整 suite 為 `556 passed, 8 skipped in 32.86s`；`COMPILEALL_OK`、`GIT_DIFF_CHECK_OK`。
+- 範圍證明：`PLAN_BUILDER_UNCHANGED=True`、`TEST_WORD_LIST_UNCHANGED=True`、`VISIBLE_HELPER_UNCHANGED=True`、`HEADER_CALLER_UNCHANGED=True`、`CELL_CALLER_UNCHANGED=True`、`CHANGED_FILE_COUNT=2`。沒有修改 schema、內容、QR policy、12 pt、paragraph、pagination、layout、私人 master、calibration、DRAFT 或 installed runtime。
+- 下一步：若要確認 blocker 是否實際解除，需要新的明確授權，只執行一次 4 天 post-fix Word repro；不跑其他天數，成功或失敗都不重試。只有成功產生同次 DOCX／PDF／PNG 後才能做內容與視覺 QA。
+- 阻塞點：本輪沒有 Word 授權，因此不得把離線綠燈宣稱為 Word 已修好；沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。
+
 ## 2026-08-18 LIST embedded Find boundary offline implementation plan review
 
 - 一句話現況：OP 已核准 embedded Find boundary split 書面規格；離線實作計畫已建立並等待 OP 核准，尚未修改 production 或 tests。
