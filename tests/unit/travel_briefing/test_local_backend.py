@@ -37,6 +37,9 @@ def config(tmp_path, *, with_ffmpeg=True):
         master_structure_fingerprint=(
             calibrated.master_structure_fingerprint
         ),
+        source_header_qr_candidate_count=(
+            calibrated.source_header_qr_candidate_count
+        ),
         layout_profiles=tuple(
             item.to_dict() for item in calibrated.layout_profiles
         ),

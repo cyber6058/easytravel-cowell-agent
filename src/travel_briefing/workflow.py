@@ -161,6 +161,9 @@ class LocalRenderBackend:
                 self.config.master_structure_fingerprint
             ),
             layout_profiles=self.config.layout_profiles,
+            expected_source_header_qr_candidate_count=(
+                self.config.source_header_qr_candidate_count
+            ),
             adapter=self.patch_adapter,
         )
         required_text = tuple(

@@ -29,6 +29,7 @@ class BriefingConfig:
     master_sha256: str
     calibration_manifest_sha256: str
     master_structure_fingerprint: str
+    source_header_qr_candidate_count: int
     layout_profiles: tuple[dict[str, Any], ...]
     calibration_manifest: ListCalibrationManifest
     ffmpeg_path: Path | None
@@ -118,6 +119,9 @@ def parse_config(raw: Mapping[str, Any]) -> BriefingConfig:
         calibration_manifest_sha256=manifest_hash,
         master_structure_fingerprint=(
             manifest.master_structure_fingerprint
+        ),
+        source_header_qr_candidate_count=(
+            manifest.source_header_qr_candidate_count
         ),
         layout_profiles=tuple(
             item.to_dict() for item in manifest.layout_profiles

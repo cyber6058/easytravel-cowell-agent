@@ -30,7 +30,10 @@ from .template_contract import (
 
 
 WAITING_FOR_OP = "待 OP 確認"
-LIST_WORD_GENERATOR_VERSION = "list-word/2"
+LIST_WORD_GENERATOR_VERSION = "list-word/3"
+LIST_OUTPUT_QR_POLICY = "removed"
+LIST_OUTPUT_FONT_POINTS = 12.0
+LIST_PRESERVED_TITLE_PARAGRAPH = 1
 DEFAULT_ROUTE_CHARACTER_LIMIT = 256
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _MEAL_NOT_INCLUDED = re.compile(
@@ -106,6 +109,10 @@ class ListPatchPlan:
     master_sha256: str
     calibration_manifest_sha256: str
     normalized_structure_fingerprint: str
+    expected_source_header_qr_candidate_count: int
+    output_qr_policy: str
+    output_font_points: float
+    preserved_title_paragraph: int
     layout_profiles: tuple[dict[str, Any], ...]
     expected_master_table_shapes: tuple[TableShape, ...]
     expected_table_shapes: tuple[TableShape, ...]
@@ -143,6 +150,12 @@ class ListPatchPlan:
             "normalized_structure_fingerprint": (
                 self.normalized_structure_fingerprint
             ),
+            "expected_source_header_qr_candidate_count": (
+                self.expected_source_header_qr_candidate_count
+            ),
+            "output_qr_policy": self.output_qr_policy,
+            "output_font_points": self.output_font_points,
+            "preserved_title_paragraph": self.preserved_title_paragraph,
             "layout_profiles": list(self.layout_profiles),
             "expected_master_table_shapes": [
                 shape.to_dict() for shape in self.expected_master_table_shapes
@@ -173,6 +186,13 @@ class ListWordBuildResult:
     day_page_map: tuple[DayPagePlacement, ...]
     continuation_group_header: bool
     repeated_daily_header: bool
+    source_header_qr_candidate_count: int
+    output_header_qr_candidate_count: int
+    non_title_font_points: float
+    title_font_points_before: float
+    title_font_points_after: float
+    patched_cell_count: int
+    extra_trailing_paragraph_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,6 +333,7 @@ def build_list_patch_plan(
     calibration_manifest_sha256: str | None = None,
     normalized_structure_fingerprint: str | None = None,
     layout_profiles: tuple[dict[str, Any], ...] | None = None,
+    expected_source_header_qr_candidate_count: int = 1,
     route_character_limit: int = DEFAULT_ROUTE_CHARACTER_LIMIT,
 ) -> ListPatchPlan:
     legacy_fingerprint = expected_layout_fingerprint
@@ -336,6 +357,16 @@ def build_list_patch_plan(
         },
     )
     _validate_layout_profiles(profiles)
+    if (
+        isinstance(expected_source_header_qr_candidate_count, bool)
+        or not isinstance(expected_source_header_qr_candidate_count, int)
+        or expected_source_header_qr_candidate_count <= 0
+    ):
+        raise ValueError("source header QR candidate count must be positive")
+    normalized_profiles = tuple(
+        {**profile, "body_font_points": LIST_OUTPUT_FONT_POINTS}
+        for profile in profiles
+    )
     shapes = expected_list_table_shapes(draft.product.day_count)
     _validate_draft_shape(draft)
     _validate_document_state(draft)
@@ -367,7 +398,7 @@ def build_list_patch_plan(
     )
     cells.extend(_build_guide_cells(op_fields))
     return ListPatchPlan(
-        schema_version=2,
+        schema_version=3,
         generator_version=LIST_WORD_GENERATOR_VERSION,
         draft_id=draft.draft_id,
         document_status=draft.status.value,
@@ -375,7 +406,13 @@ def build_list_patch_plan(
         master_sha256=master_hash,
         calibration_manifest_sha256=calibration_hash,
         normalized_structure_fingerprint=normalized_fingerprint,
-        layout_profiles=profiles,
+        expected_source_header_qr_candidate_count=(
+            expected_source_header_qr_candidate_count
+        ),
+        output_qr_policy=LIST_OUTPUT_QR_POLICY,
+        output_font_points=LIST_OUTPUT_FONT_POINTS,
+        preserved_title_paragraph=LIST_PRESERVED_TITLE_PARAGRAPH,
+        layout_profiles=normalized_profiles,
         expected_master_table_shapes=expected_list_table_shapes(1),
         expected_table_shapes=shapes,
         anchor_checks=_list_anchor_checks(),
@@ -394,6 +431,7 @@ def build_list_word(
     calibration_manifest_sha256: str | None = None,
     normalized_structure_fingerprint: str | None = None,
     layout_profiles: tuple[dict[str, Any], ...] | None = None,
+    expected_source_header_qr_candidate_count: int = 1,
     adapter: WordAdapter,
     timeout_seconds: int = 120,
     route_character_limit: int = DEFAULT_ROUTE_CHARACTER_LIMIT,
@@ -428,6 +466,9 @@ def build_list_word(
         calibration_manifest_sha256=calibration_manifest_sha256,
         normalized_structure_fingerprint=normalized_structure_fingerprint,
         layout_profiles=layout_profiles,
+        expected_source_header_qr_candidate_count=(
+            expected_source_header_qr_candidate_count
+        ),
         route_character_limit=route_character_limit,
     )
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -467,6 +508,10 @@ def build_list_word(
             approved_profiles=tuple(
                 item["name"] for item in plan.layout_profiles
             ),
+            expected_source_header_qr_candidate_count=(
+                plan.expected_source_header_qr_candidate_count
+            ),
+            expected_patched_cell_count=len(plan.cells),
         )
         if not temporary_docx.is_file() or temporary_docx.stat().st_size == 0:
             raise WordGenerationError(
@@ -482,6 +527,9 @@ def build_list_word(
             expected_layout_fingerprint=layout_fingerprint(
                 source_inspection
             ),
+            expected_header_qr_candidate_count=(
+                plan.expected_source_header_qr_candidate_count
+            ),
         )
         output_inspection = report["output_inspection"]
         output_fingerprint = layout_fingerprint(output_inspection)
@@ -489,12 +537,8 @@ def build_list_word(
             output_inspection,
             day_count=draft.product.day_count,
             expected_layout_fingerprint=output_fingerprint,
+            expected_header_qr_candidate_count=0,
         )
-        if (
-            output_inspection.header_qr_candidate_count
-            != source_inspection.header_qr_candidate_count
-        ):
-            raise ValueError("LIST output did not preserve the template QR candidate")
         if (
             master_sha256 is not None
             and _sha256_file(template) != configured_master_sha256
@@ -515,6 +559,19 @@ def build_list_word(
             "continuation_group_header"
         ],
         repeated_daily_header=report["repeated_daily_header"],
+        source_header_qr_candidate_count=report[
+            "source_header_qr_candidate_count"
+        ],
+        output_header_qr_candidate_count=report[
+            "output_header_qr_candidate_count"
+        ],
+        non_title_font_points=report["non_title_font_points"],
+        title_font_points_before=report["title_font_points_before"],
+        title_font_points_after=report["title_font_points_after"],
+        patched_cell_count=report["patched_cell_count"],
+        extra_trailing_paragraph_count=report[
+            "extra_trailing_paragraph_count"
+        ],
     )
 
 
@@ -788,6 +845,8 @@ def _read_patch_report(
     *,
     target_day_count: int,
     approved_profiles: tuple[str, ...],
+    expected_source_header_qr_candidate_count: int,
+    expected_patched_cell_count: int,
 ) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -805,12 +864,19 @@ def _read_patch_report(
         "continuation_group_header",
         "repeated_daily_header",
         "qr_policy",
+        "source_header_qr_candidate_count",
+        "output_header_qr_candidate_count",
+        "non_title_font_points",
+        "title_font_points_before",
+        "title_font_points_after",
+        "patched_cell_count",
+        "extra_trailing_paragraph_count",
         "output_bytes",
     }
     if (
         not isinstance(payload, dict)
         or set(payload) != expected_keys
-        or payload.get("schema_version") != 2
+        or payload.get("schema_version") != 3
         or payload.get("action") != "patch"
         or not isinstance(payload.get("word_version"), str)
         or not payload["word_version"]
@@ -821,7 +887,31 @@ def _read_patch_report(
         not in approved_profiles
         or payload.get("continuation_group_header") is not True
         or payload.get("repeated_daily_header") is not True
-        or payload.get("qr_policy") != "first_page_only"
+        or payload.get("qr_policy") != LIST_OUTPUT_QR_POLICY
+        or isinstance(
+            payload.get("source_header_qr_candidate_count"), bool
+        )
+        or payload.get("source_header_qr_candidate_count")
+        != expected_source_header_qr_candidate_count
+        or isinstance(
+            payload.get("output_header_qr_candidate_count"), bool
+        )
+        or payload.get("output_header_qr_candidate_count") != 0
+        or payload.get("non_title_font_points")
+        != LIST_OUTPUT_FONT_POINTS
+        or isinstance(payload.get("title_font_points_before"), bool)
+        or not isinstance(
+            payload.get("title_font_points_before"), (int, float)
+        )
+        or payload["title_font_points_before"] <= 0
+        or payload.get("title_font_points_after")
+        != payload.get("title_font_points_before")
+        or isinstance(payload.get("patched_cell_count"), bool)
+        or payload.get("patched_cell_count") != expected_patched_cell_count
+        or isinstance(
+            payload.get("extra_trailing_paragraph_count"), bool
+        )
+        or payload.get("extra_trailing_paragraph_count") != 0
         or not isinstance(payload.get("day_page_map"), list)
         or isinstance(payload.get("output_bytes"), bool)
         or not isinstance(payload.get("output_bytes"), int)
@@ -829,7 +919,7 @@ def _read_patch_report(
     ):
         if (
             isinstance(payload, dict)
-            and payload.get("schema_version") == 2
+            and payload.get("schema_version") == 3
         ):
             if payload.get("computed_page_count") in {0, None}:
                 raise ValueError("LIST page count must be positive")
@@ -842,8 +932,14 @@ def _read_patch_report(
                 raise ValueError("LIST continuation header is missing")
             if payload.get("repeated_daily_header") is not True:
                 raise ValueError("LIST repeated daily header is missing")
+            if (
+                payload.get("source_header_qr_candidate_count")
+                != expected_source_header_qr_candidate_count
+                or payload.get("output_header_qr_candidate_count") != 0
+            ):
+                raise ValueError("LIST output QR candidate count is invalid")
         raise WordGenerationError(
-            "Word patch report does not match schema version 2"
+            "Word patch report does not match schema version 3"
         )
     try:
         source = ListTemplateInspection.from_dict(payload["source_inspection"])

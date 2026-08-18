@@ -72,6 +72,31 @@ def test_template_validation_accepts_only_the_configured_layout_fingerprint():
         )
 
 
+def test_template_validation_separates_source_and_output_qr_counts():
+    source = replace(inspection(), header_qr_candidate_count=2)
+    output = replace(inspection(), header_qr_candidate_count=0)
+
+    assert validate_list_template(
+        source,
+        day_count=5,
+        expected_layout_fingerprint=layout_fingerprint(source),
+        expected_header_qr_candidate_count=2,
+    ) == layout_fingerprint(source)
+    assert validate_list_template(
+        output,
+        day_count=5,
+        expected_layout_fingerprint=layout_fingerprint(output),
+        expected_header_qr_candidate_count=0,
+    ) == layout_fingerprint(output)
+    with pytest.raises(ValueError, match="QR candidate count"):
+        validate_list_template(
+            source,
+            day_count=5,
+            expected_layout_fingerprint=layout_fingerprint(source),
+            expected_header_qr_candidate_count=1,
+        )
+
+
 @pytest.mark.parametrize(
     ("changed", "message"),
     [

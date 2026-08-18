@@ -428,6 +428,14 @@ def test_manifest_round_trip_is_canonical_hash_stable_and_private_safe():
         ListCalibrationManifest.from_dict(zero_hash)
 
 
+def test_manifest_exposes_source_qr_count_without_changing_serialization():
+    calibrated = manifest()
+    canonical = calibrated.to_canonical_json()
+
+    assert calibrated.source_header_qr_candidate_count == 1
+    assert calibrated.to_canonical_json() == canonical
+
+
 @pytest.mark.parametrize(
     "changes",
     [

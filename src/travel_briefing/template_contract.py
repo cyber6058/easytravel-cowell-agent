@@ -196,6 +196,7 @@ def validate_list_template(
     *,
     day_count: int,
     expected_layout_fingerprint: str,
+    expected_header_qr_candidate_count: int | None = None,
 ) -> str:
     expected_shapes = expected_list_table_shapes(day_count)
     if inspection.table_shapes != expected_shapes:
@@ -206,8 +207,21 @@ def validate_list_template(
         raise ValueError("LIST template merged-cell structure has changed")
     if inspection.list_header_paragraph_count != 4:
         raise ValueError("LIST template must expose exactly four header paragraphs")
-    if inspection.header_qr_candidate_count < 1:
-        raise ValueError("LIST template header has no QR candidate")
+    if expected_header_qr_candidate_count is None:
+        if inspection.header_qr_candidate_count < 1:
+            raise ValueError("LIST template header has no QR candidate")
+    else:
+        if (
+            isinstance(expected_header_qr_candidate_count, bool)
+            or not isinstance(expected_header_qr_candidate_count, int)
+            or expected_header_qr_candidate_count < 0
+        ):
+            raise ValueError("expected QR candidate count must be nonnegative")
+        if (
+            inspection.header_qr_candidate_count
+            != expected_header_qr_candidate_count
+        ):
+            raise ValueError("LIST template QR candidate count changed")
     if inspection.section_count != 1:
         raise ValueError("LIST template must contain one section")
     if (

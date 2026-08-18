@@ -135,8 +135,14 @@ def test_patch_plan_maps_any_positive_trip_to_dynamic_daily_rows(day_count):
         ),
     )
 
-    assert plan.schema_version == 2
-    assert plan.generator_version == "list-word/2"
+    assert plan.schema_version == 3
+    assert plan.generator_version == "list-word/3"
+    assert plan.expected_source_header_qr_candidate_count == 1
+    assert plan.output_qr_policy == "removed"
+    assert plan.output_font_points == 12.0
+    assert plan.preserved_title_paragraph == 1
+    assert plan.layout_profiles[0]["body_font_points"] == 12.0
+    assert plan.layout_profiles[0]["line_spacing_points"] == 12.0
     assert plan.master_sha256 == "a" * 64
     assert plan.calibration_manifest_sha256 == "b" * 64
     assert plan.normalized_structure_fingerprint == "c" * 64
@@ -360,7 +366,7 @@ class SyntheticWordAdapter:
         Path(job["report_path"]).write_text(
             json.dumps(
                 {
-                    "schema_version": 2,
+                    "schema_version": 3,
                     "action": "patch",
                     "word_version": "synthetic",
                     "source_inspection": self.source_inspection.to_dict(),
@@ -372,7 +378,18 @@ class SyntheticWordAdapter:
                         self.continuation_group_header
                     ),
                     "repeated_daily_header": self.repeated_daily_header,
-                    "qr_policy": "first_page_only",
+                    "qr_policy": "removed",
+                    "source_header_qr_candidate_count": (
+                        self.source_inspection.header_qr_candidate_count
+                    ),
+                    "output_header_qr_candidate_count": (
+                        self.output_inspection.header_qr_candidate_count
+                    ),
+                    "non_title_font_points": 12.0,
+                    "title_font_points_before": 22.0,
+                    "title_font_points_after": 22.0,
+                    "patched_cell_count": len(job["plan"]["cells"]),
+                    "extra_trailing_paragraph_count": 0,
                     "output_bytes": output.stat().st_size,
                 },
                 ensure_ascii=False,
@@ -481,7 +498,11 @@ def test_build_list_word_uses_a_temp_job_and_publishes_exclusively(tmp_path):
     template.write_bytes(b"synthetic private template")
     output = tmp_path / "new-output.docx"
     source_inspection = template_inspection(1)
-    adapter = SyntheticWordAdapter(source_inspection, template_inspection(7))
+    output_inspection = replace(
+        template_inspection(7),
+        header_qr_candidate_count=0,
+    )
+    adapter = SyntheticWordAdapter(source_inspection, output_inspection)
 
     result = build_list_word(
         draft(7),
@@ -500,13 +521,15 @@ def test_build_list_word_uses_a_temp_job_and_publishes_exclusively(tmp_path):
     assert result.day_page_map[-1].day_number == 7
     assert result.continuation_group_header is True
     assert result.repeated_daily_header is True
+    assert result.source_header_qr_candidate_count == 1
+    assert result.output_header_qr_candidate_count == 0
+    assert result.non_title_font_points == 12.0
+    assert result.title_font_points_before == 22.0
+    assert result.title_font_points_after == 22.0
+    assert result.extra_trailing_paragraph_count == 0
     assert result.source_layout_fingerprint == layout_fingerprint(source_inspection)
     assert result.output_layout_fingerprint == layout_fingerprint(
-        template_inspection(7)
-    )
-    assert (
-        result.source_layout_fingerprint
-        == result.output_layout_fingerprint
+        output_inspection
     )
     received_job, timeout = adapter.jobs[0]
     assert timeout == 90
@@ -540,10 +563,7 @@ def test_build_list_word_rejects_report_or_qr_drift_without_publishing(tmp_path)
     template.write_bytes(b"synthetic private template")
     output = tmp_path / "new-output.docx"
     source_inspection = template_inspection(1)
-    changed_output = replace(
-        template_inspection(5),
-        header_qr_candidate_count=0,
-    )
+    changed_output = template_inspection(5)
     adapter = SyntheticWordAdapter(source_inspection, changed_output)
 
     with pytest.raises(ValueError, match="QR candidate"):
@@ -592,7 +612,10 @@ def test_word_pagination_outcome_depends_on_report_not_day_count(
     )
     adapter = SyntheticWordAdapter(
         source,
-        template_inspection(day_count),
+        replace(
+            template_inspection(day_count),
+            header_qr_candidate_count=0,
+        ),
         page_count=page_count,
         selected_profile=selected_profile,
     )
@@ -663,7 +686,10 @@ def test_word_pagination_report_fails_closed(
     source = template_inspection(1)
     adapter = SyntheticWordAdapter(
         source,
-        template_inspection(7),
+        replace(
+            template_inspection(7),
+            header_qr_candidate_count=0,
+        ),
         **adapter_changes,
     )
 

@@ -857,6 +857,7 @@ class ListCalibrationManifest:
             raise ValueError("base sample is not present in evidence")
         if not self.normalized_layout:
             raise ValueError("normalized layout is required")
+        self.source_header_qr_candidate_count
         if (
             not self.layout_profiles
             or self.layout_profiles[0].name != "normal"
@@ -886,6 +887,16 @@ class ListCalibrationManifest:
             value = getattr(self, field_name)
             if not isinstance(value, str) or not value:
                 raise ValueError(f"{field_name} must be non-empty text")
+
+    @property
+    def source_header_qr_candidate_count(self) -> int:
+        normalized_layout = _thaw_object(self.normalized_layout)
+        value = normalized_layout.get("qr_shape_count")
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(
+                "calibration normalized layout QR count must be positive"
+            )
+        return value
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -63,6 +63,7 @@ def test_config_contains_only_local_output_template_and_tool_paths(tmp_path):
     assert config.master_structure_fingerprint == (
         config.calibration_manifest.master_structure_fingerprint
     )
+    assert config.source_header_qr_candidate_count == 1
     assert config.ffmpeg_path == (tmp_path / "ffmpeg.exe").resolve()
     assert config.pdftoppm_path == (tmp_path / "pdftoppm.exe").resolve()
 
