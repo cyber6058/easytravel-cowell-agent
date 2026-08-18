@@ -1,5 +1,30 @@
 # STATUS
 
+## 2026-08-18 LIST exact-title range offline fix handoff
+
+- 一句話現況：已依既有核准規格完成 LIST exact-title range 的最小離線修正並通過
+  完整 suite；程式不再用 `Range.Text` terminator 數量推算 Word `Range.End`，但本次
+  沒有新的 Word COM 授權，因此 4 天實機是否跨過 source title blocker 仍未驗證。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`。新增
+  `Get-ExactListTitleRange`：先用完整 paragraph range 驗證 Trim 後文字為 exact
+  `日本精緻假期`，再沿用專案既有 Word `Find.Execute()` 找到只含 title token 的
+  COM range。讀取 master 原字級、套回 title 字級及 save-reopen assertion 三處都改用
+  同一 helper，不再把 `Range.Text.Length` 與 Word character position 混算。程式 commit
+  為 `cfd6c78`。
+- 驗證：新的 regression test 先得到預期 `1 failed`，修正後同一測試 `1 passed`；
+  focused Word tests 為 `73 passed`，PowerShell parser 為 `0 errors`，完整 suite 為
+  `545 passed, 8 skipped in 20.85s`，compileall 與 `git diff --check` 通過。沒有加入
+  debug log 或 raw title 輸出，也沒有弱化既有 source／plan／post-reopen safe codes。
+- 根因進度：離線證據支持前一輪最高順位假設：舊 getter 的錯誤點是先依文字內容計算
+  terminator 數量，再直接改 Word range position；新的實作已移除這條耦合。不過沒有
+  Word coordinate probe 或新實機 repro，故目前只能宣稱修正了可疑算法，不能宣稱
+  Word blocker 已解除。
+- 下一步：若要取得實機結論，需要新的當次明確授權，只執行一次 4 天 Word repro、
+  使用 `-x`、不跑其他天數且未知結果不重試；若通過，再逐頁檢查該案例的 QA PNG。
+- 阻塞點：Word COM 關卡尚未重新驗證，沒有 DOCX／PDF／PNG 可交付。本次沒有啟動
+  Word、沒有修改私人 master／calibration，也沒有 GET、JMA、Yating、ffmpeg、LINE、
+  upload、publish、deploy、push 或 Cowell。
+
 ## 2026-08-18 LIST title stage codes and 4-day source blocker
 
 - 一句話現況：LIST title 已離線細分為 source／plan／post-reopen 三種安全錯誤碼並
