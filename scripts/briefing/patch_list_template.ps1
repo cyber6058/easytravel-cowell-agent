@@ -510,6 +510,62 @@ function Get-HeaderQrCandidateCount {
     return $count
 }
 
+function Remove-CalibratedHeaderQrCandidates {
+    param(
+        [Parameter(Mandatory = $true)]$Document,
+        [Parameter(Mandatory = $true)]$HeaderCell,
+        [Parameter(Mandatory = $true)][int]$ExpectedCount
+    )
+    $observed = [int](
+        Get-HeaderQrCandidateCount `
+            -Document $Document `
+            -HeaderCell $HeaderCell
+    )
+    if ($ExpectedCount -le 0 -or $observed -ne $ExpectedCount) {
+        throw "LIST_SOURCE_QR_COUNT_CHANGED"
+    }
+    $start = [int]$HeaderCell.Range.Start
+    $end = [int]$HeaderCell.Range.End
+    for (
+        $index = [int]$Document.InlineShapes.Count;
+        $index -ge 1;
+        $index -= 1
+    ) {
+        $shape = $Document.InlineShapes.Item($index)
+        $position = [int]$shape.Range.Start
+        if (
+            $position -ge $start -and
+            $position -le $end -and
+            (Test-SquareGraphic -Width $shape.Width -Height $shape.Height)
+        ) {
+            [void]$shape.Delete()
+        }
+    }
+    for (
+        $index = [int]$Document.Shapes.Count;
+        $index -ge 1;
+        $index -= 1
+    ) {
+        $shape = $Document.Shapes.Item($index)
+        $position = [int]$shape.Anchor.Start
+        if (
+            $position -ge $start -and
+            $position -le $end -and
+            (Test-SquareGraphic -Width $shape.Width -Height $shape.Height)
+        ) {
+            [void]$shape.Delete()
+        }
+    }
+    $remaining = [int](
+        Get-HeaderQrCandidateCount `
+            -Document $Document `
+            -HeaderCell $HeaderCell
+    )
+    if ($remaining -ne 0) {
+        throw "LIST_OUTPUT_QR_SURVIVED"
+    }
+}
+
 function Get-ListInspection {
     param(
         [Parameter(Mandatory = $true)]$Document,
@@ -1094,6 +1150,7 @@ function Assert-BasicListContract {
         [Parameter(Mandatory = $true)]$Inspection,
         [Parameter(Mandatory = $true)]$RequiredAnchorLabels,
         [int]$RequiredDayCount = 0,
+        [int]$ExpectedHeaderQrCandidateCount = -1,
         [switch]$AllowVariableHeaderTail
     )
     if ($Inspection.table_shapes.Count -ne 4) {
@@ -1138,8 +1195,14 @@ function Assert-BasicListContract {
     ) {
         throw "LIST_HEADER_PARAGRAPHS_CHANGED"
     }
-    if ([int]$Inspection.header_qr_candidate_count -lt 1) {
-        throw "LIST_QR_MISSING"
+    $observedQrCandidateCount = [int]$Inspection.header_qr_candidate_count
+    if ($ExpectedHeaderQrCandidateCount -lt 0) {
+        if ($observedQrCandidateCount -lt 1) {
+            throw "LIST_QR_MISSING"
+        }
+    }
+    elseif ($observedQrCandidateCount -ne $ExpectedHeaderQrCandidateCount) {
+        throw "LIST_QR_COUNT_CHANGED"
     }
     if (
         [int]$Inspection.section_count -ne 1 -or
@@ -1277,8 +1340,8 @@ function Set-HeaderParagraph {
         if ($currentTitle -cne $expectedTitle) {
             throw "LIST_HEADER_TITLE_CHANGED"
         }
-        # The floating QR is anchored to this fixed calibrated paragraph.
-        # Leaving it untouched preserves both its anchor and template spacing.
+        # The fixed title is validated here and receives its font exception
+        # after all other visible output text is normalized.
         return
     }
     $visibleRange = $null
@@ -1326,12 +1389,319 @@ function Set-ListCell {
         -Table $Document.Tables.Item($tableNumber) `
         -Row ([int]$Patch.row) `
         -Column ([int]$Patch.column)
-    $cell.Range.Text = ([string]$Patch.text) + "`r`a"
+    $visibleRange = $null
+    try {
+        $visibleRange = $cell.Range.Duplicate
+        $visibleRange.End = [int]$visibleRange.End - 1
+        $visibleRange.Text = [string]$Patch.text
+    }
+    finally {
+        if ($null -ne $visibleRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $visibleRange
+                )
+            }
+            catch {}
+        }
+    }
     $cell = Get-Cell `
         -Table $Document.Tables.Item($tableNumber) `
         -Row ([int]$Patch.row) `
         -Column ([int]$Patch.column)
+    if ([int]$cell.Range.Paragraphs.Count -ne 1) {
+        throw "LIST_CELL_EXTRA_PARAGRAPH"
+    }
+    $postRange = $null
+    try {
+        $postRange = $cell.Range.Duplicate
+        $postRange.End = [int]$postRange.End - 1
+        if ([string]$postRange.Text -cne [string]$Patch.text) {
+            throw "LIST_CELL_TEXT_MISMATCH"
+        }
+    }
+    finally {
+        if ($null -ne $postRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $postRange
+                )
+            }
+            catch {}
+        }
+    }
     Set-TokenHighlight -Range $cell.Range -Token ([string]$Patch.highlight_text)
+}
+
+function Get-ListTitleFontPoints {
+    param(
+        [Parameter(Mandatory = $true)]$HeaderCell,
+        [Parameter(Mandatory = $true)][int]$ParagraphNumber,
+        [Parameter(Mandatory = $true)][string]$ExpectedTitle
+    )
+    $paragraph = $HeaderCell.Range.Paragraphs.Item($ParagraphNumber)
+    $range = $null
+    try {
+        $range = $paragraph.Range.Duplicate
+        $text = [string]$range.Text
+        $visibleEnd = [int]$range.End
+        for ($index = $text.Length - 1; $index -ge 0; $index -= 1) {
+            if ([int][char]$text[$index] -notin @([int][char]13, [int][char]7)) {
+                break
+            }
+            $visibleEnd -= 1
+        }
+        $range.End = $visibleEnd
+        if ([string]$range.Text -cne $ExpectedTitle) {
+            throw "LIST_HEADER_TITLE_CHANGED"
+        }
+        $fontPoints = [double]$range.Font.Size
+        if ($fontPoints -le 0 -or $fontPoints -gt 72) {
+            throw "LIST_TITLE_FONT_AMBIGUOUS"
+        }
+        return $fontPoints
+    }
+    finally {
+        if ($null -ne $range) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $range
+                )
+            }
+            catch {}
+        }
+    }
+}
+
+function Set-ListOutputFontContract {
+    param(
+        [Parameter(Mandatory = $true)]$Document,
+        [Parameter(Mandatory = $true)]$HeaderCell,
+        [Parameter(Mandatory = $true)][double]$FontPoints,
+        [Parameter(Mandatory = $true)][double]$TitleFontPoints,
+        [Parameter(Mandatory = $true)][int]$TitleParagraph
+    )
+    if ([Math]::Abs($FontPoints - 12.0) -gt 0.01) {
+        throw "LIST_OUTPUT_FONT_POLICY_INVALID"
+    }
+    $Document.Content.Font.Size = $FontPoints
+    for ($sectionIndex = 1; $sectionIndex -le $Document.Sections.Count; $sectionIndex += 1) {
+        $section = $Document.Sections.Item($sectionIndex)
+        for ($index = 1; $index -le $section.Headers.Count; $index += 1) {
+            $header = $section.Headers.Item($index)
+            $header.Range.Font.Size = $FontPoints
+        }
+        for ($index = 1; $index -le $section.Footers.Count; $index += 1) {
+            $footer = $section.Footers.Item($index)
+            $footer.Range.Font.Size = $FontPoints
+        }
+    }
+    $titleRange = $null
+    try {
+        $titleRange = (
+            $HeaderCell.Range.Paragraphs.Item($TitleParagraph).Range.Duplicate
+        )
+        $titleText = [string]$titleRange.Text
+        for ($index = $titleText.Length - 1; $index -ge 0; $index -= 1) {
+            if (
+                [int][char]$titleText[$index] -notin @(
+                    [int][char]13, [int][char]7
+                )
+            ) {
+                break
+            }
+            $titleRange.End = [int]$titleRange.End - 1
+        }
+        $titleRange.Font.Size = $TitleFontPoints
+    }
+    finally {
+        if ($null -ne $titleRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $titleRange
+                )
+            }
+            catch {}
+        }
+    }
+}
+
+function Assert-VisibleRangeFontContract {
+    param(
+        [Parameter(Mandatory = $true)]$Range,
+        [Parameter(Mandatory = $true)][double]$FontPoints,
+        [int]$ExcludedStart = -1,
+        [int]$ExcludedEnd = -1
+    )
+    $visibleCount = 0
+    for ($index = 1; $index -le $Range.Characters.Count; $index += 1) {
+        $character = $null
+        try {
+            $character = $Range.Characters.Item($index)
+            $position = [int]$character.Start
+            if (
+                $ExcludedStart -ge 0 -and
+                $position -ge $ExcludedStart -and
+                $position -lt $ExcludedEnd
+            ) {
+                continue
+            }
+            $text = [string]$character.Text
+            if (
+                $text.Length -eq 0 -or
+                [int][char]$text[0] -in @([int][char]13, [int][char]7)
+            ) {
+                continue
+            }
+            if (
+                [Math]::Abs(
+                    [double]$character.Font.Size - $FontPoints
+                ) -gt 0.01
+            ) {
+                throw "LIST_NON_TITLE_FONT_CHANGED"
+            }
+            $visibleCount += 1
+        }
+        finally {
+            if ($null -ne $character) {
+                try {
+                    [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                        $character
+                    )
+                }
+                catch {}
+            }
+        }
+    }
+    return $visibleCount
+}
+
+function Assert-ListOutputPresentationContract {
+    param(
+        [Parameter(Mandatory = $true)]$Document,
+        [Parameter(Mandatory = $true)]$Plan,
+        [Parameter(Mandatory = $true)][double]$TitleFontPointsBefore
+    )
+    $headerCell = Get-Cell `
+        -Table $Document.Tables.Item(1) `
+        -Row 1 `
+        -Column 1
+    $titleParagraph = [int]$Plan.preserved_title_paragraph
+    $titlePatch = @($Plan.header_paragraphs | Where-Object {
+        [int]$_.paragraph -eq $titleParagraph
+    })
+    if ($titlePatch.Count -ne 1) {
+        throw "LIST_HEADER_TITLE_CHANGED"
+    }
+    $expectedTitle = [string]$titlePatch[0].text
+    if ($expectedTitle -cne "日本精緻假期") {
+        throw "LIST_HEADER_TITLE_CHANGED"
+    }
+    $titleRange = $null
+    try {
+        $titleRange = (
+            $headerCell.Range.Paragraphs.Item($titleParagraph).Range.Duplicate
+        )
+        $titleText = [string]$titleRange.Text
+        for ($index = $titleText.Length - 1; $index -ge 0; $index -= 1) {
+            if (
+                [int][char]$titleText[$index] -notin @(
+                    [int][char]13, [int][char]7
+                )
+            ) {
+                break
+            }
+            $titleRange.End = [int]$titleRange.End - 1
+        }
+        if ([string]$titleRange.Text -cne $expectedTitle) {
+            throw "LIST_HEADER_TITLE_CHANGED"
+        }
+        $titleFontPointsAfter = [double]$titleRange.Font.Size
+        if (
+            $titleFontPointsAfter -le 0 -or
+            [Math]::Abs(
+                $titleFontPointsAfter - $TitleFontPointsBefore
+            ) -gt 0.01
+        ) {
+            throw "LIST_TITLE_FONT_CHANGED"
+        }
+        $visibleCharacterCount = [int](
+            Assert-VisibleRangeFontContract `
+                -Range $Document.Content `
+                -FontPoints ([double]$Plan.output_font_points) `
+                -ExcludedStart ([int]$titleRange.Start) `
+                -ExcludedEnd ([int]$titleRange.End)
+        )
+    }
+    finally {
+        if ($null -ne $titleRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $titleRange
+                )
+            }
+            catch {}
+        }
+    }
+    for ($sectionIndex = 1; $sectionIndex -le $Document.Sections.Count; $sectionIndex += 1) {
+        $section = $Document.Sections.Item($sectionIndex)
+        for ($index = 1; $index -le $section.Headers.Count; $index += 1) {
+            $visibleCharacterCount += [int](
+                Assert-VisibleRangeFontContract `
+                    -Range $section.Headers.Item($index).Range `
+                    -FontPoints ([double]$Plan.output_font_points)
+            )
+        }
+        for ($index = 1; $index -le $section.Footers.Count; $index += 1) {
+            $visibleCharacterCount += [int](
+                Assert-VisibleRangeFontContract `
+                    -Range $section.Footers.Item($index).Range `
+                    -FontPoints ([double]$Plan.output_font_points)
+            )
+        }
+    }
+    if ($visibleCharacterCount -le 0) {
+        throw "LIST_NON_TITLE_FONT_CHANGED"
+    }
+    $extraParagraphCount = 0
+    foreach ($patch in $Plan.cells) {
+        $cell = Get-Cell `
+            -Table $Document.Tables.Item([int]$patch.table) `
+            -Row ([int]$patch.row) `
+            -Column ([int]$patch.column)
+        $paragraphCount = [int]$cell.Range.Paragraphs.Count
+        if ($paragraphCount -gt 1) {
+            $extraParagraphCount += $paragraphCount - 1
+        }
+        $cellRange = $null
+        try {
+            $cellRange = $cell.Range.Duplicate
+            $cellRange.End = [int]$cellRange.End - 1
+            if ([string]$cellRange.Text -cne [string]$patch.text) {
+                throw "LIST_CELL_TEXT_MISMATCH"
+            }
+        }
+        finally {
+            if ($null -ne $cellRange) {
+                try {
+                    [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                        $cellRange
+                    )
+                }
+                catch {}
+            }
+        }
+    }
+    if ($extraParagraphCount -ne 0) {
+        throw "LIST_CELL_EXTRA_PARAGRAPH"
+    }
+    return [ordered]@{
+        non_title_font_points = [double]$Plan.output_font_points
+        title_font_points_before = $TitleFontPointsBefore
+        title_font_points_after = $titleFontPointsAfter
+        patched_cell_count = [int]$Plan.cells.Count
+        extra_trailing_paragraph_count = $extraParagraphCount
+    }
 }
 
 function Set-DailyRowCount {
@@ -1364,6 +1734,9 @@ function Set-ListLayoutProfile {
         [Parameter(Mandatory = $true)]$DailyTable,
         [Parameter(Mandatory = $true)]$Profile
     )
+    if ([Math]::Abs([double]$Profile.body_font_points - 12.0) -gt 0.01) {
+        throw "LIST_OUTPUT_FONT_POLICY_INVALID"
+    }
     for ($row = 2; $row -le $DailyTable.Rows.Count; $row += 1) {
         $range = $DailyTable.Rows.Item($row).Range
         $range.Font.Size = [double]$Profile.body_font_points
@@ -2122,10 +2495,19 @@ function Invoke-Patch {
         throw "LIST_OUTPUT_NOT_EXCLUSIVE"
     }
     if (
-        [int]$Job.plan.schema_version -ne 2 -or
-        [string]$Job.plan.generator_version -cne "list-word/2"
+        [int]$Job.plan.schema_version -ne 3 -or
+        [string]$Job.plan.generator_version -cne "list-word/3" -or
+        [string]$Job.plan.output_qr_policy -cne "removed" -or
+        [Math]::Abs([double]$Job.plan.output_font_points - 12.0) -gt 0.01 -or
+        [int]$Job.plan.preserved_title_paragraph -ne 1 -or
+        [int]$Job.plan.expected_source_header_qr_candidate_count -le 0
     ) {
         throw "LIST_PATCH_PLAN_UNSUPPORTED"
+    }
+    foreach ($profile in $Job.plan.layout_profiles) {
+        if ([Math]::Abs([double]$profile.body_font_points - 12.0) -gt 0.01) {
+            throw "LIST_PATCH_PLAN_UNSUPPORTED"
+        }
     }
     [IO.File]::Copy($template, $workingCopy, $false)
     $document = $null
@@ -2154,19 +2536,34 @@ function Invoke-Patch {
         Assert-BasicListContract `
             -Inspection $sourceInspection `
             -RequiredAnchorLabels $requiredLabels `
-            -RequiredDayCount 1
+            -RequiredDayCount 1 `
+            -ExpectedHeaderQrCandidateCount (
+                [int]$Job.plan.expected_source_header_qr_candidate_count
+            )
         $dayCount = [int]$Job.plan.target_day_count
         if ($dayCount -le 0) {
             throw "LIST_DAY_COUNT_UNSUPPORTED"
         }
         Set-DailyRowCount -Table $document.Tables.Item(3) -DayCount $dayCount
         $headerCell = Get-Cell -Table $document.Tables.Item(1) -Row 1 -Column 1
+        $titleFontPointsBefore = [double](
+            Get-ListTitleFontPoints `
+                -HeaderCell $headerCell `
+                -ParagraphNumber ([int]$Job.plan.preserved_title_paragraph) `
+                -ExpectedTitle "日本精緻假期"
+        )
         foreach ($patch in $Job.plan.header_paragraphs) {
             Set-HeaderParagraph -HeaderCell $headerCell -Patch $patch
         }
         foreach ($patch in $Job.plan.cells) {
             Set-ListCell -Document $document -Patch $patch
         }
+        Remove-CalibratedHeaderQrCandidates `
+            -Document $document `
+            -HeaderCell $headerCell `
+            -ExpectedCount (
+                [int]$Job.plan.expected_source_header_qr_candidate_count
+            )
         $dailyTable = $document.Tables.Item(3)
         $dailyTable.Rows.Item(1).HeadingFormat = $true
         for ($row = 2; $row -le $dailyTable.Rows.Count; $row += 1) {
@@ -2178,6 +2575,12 @@ function Invoke-Patch {
             [string]$Job.plan.header_paragraphs[2].text
         )
         Add-ContinuationGroupHeader -Document $document -GroupText $groupText
+        Set-ListOutputFontContract `
+            -Document $document `
+            -HeaderCell $headerCell `
+            -FontPoints ([double]$Job.plan.output_font_points) `
+            -TitleFontPoints $titleFontPointsBefore `
+            -TitleParagraph ([int]$Job.plan.preserved_title_paragraph)
         Set-ListPaginationGuards -Document $document
         $outputInspection = Get-ListInspection `
             -Document $document `
@@ -2185,7 +2588,8 @@ function Invoke-Patch {
         Assert-BasicListContract `
             -Inspection $outputInspection `
             -RequiredAnchorLabels $requiredLabels `
-            -RequiredDayCount $dayCount
+            -RequiredDayCount $dayCount `
+            -ExpectedHeaderQrCandidateCount 0
         $selectedProfile = "normal"
         $normalProfile = $Job.plan.layout_profiles[0]
         Set-ListLayoutProfile -DailyTable $dailyTable -Profile $normalProfile
@@ -2229,13 +2633,18 @@ function Invoke-Patch {
         Assert-BasicListContract `
             -Inspection $outputInspection `
             -RequiredAnchorLabels $requiredLabels `
-            -RequiredDayCount $dayCount
+            -RequiredDayCount $dayCount `
+            -ExpectedHeaderQrCandidateCount 0
+        $presentationEvidence = Assert-ListOutputPresentationContract `
+            -Document $document `
+            -Plan $Job.plan `
+            -TitleFontPointsBefore $titleFontPointsBefore
         $document.Repaginate()
         $pageCount = [int]$document.ComputeStatistics($WdStatisticPages)
         if ($pageCount -le 0) { throw "LIST_PAGE_COUNT_INVALID" }
         $dayPageMap = Get-DayPageMap -DailyTable $dailyTable -DayCount $dayCount
         $report = [ordered]@{
-            schema_version = 2
+            schema_version = 3
             action = "patch"
             word_version = [string]$Word.Version
             source_inspection = $sourceInspection
@@ -2245,7 +2654,28 @@ function Invoke-Patch {
             day_page_map = $dayPageMap
             continuation_group_header = $true
             repeated_daily_header = $true
-            qr_policy = "first_page_only"
+            qr_policy = "removed"
+            source_header_qr_candidate_count = [int](
+                $sourceInspection.header_qr_candidate_count
+            )
+            output_header_qr_candidate_count = [int](
+                $outputInspection.header_qr_candidate_count
+            )
+            non_title_font_points = [double](
+                $presentationEvidence.non_title_font_points
+            )
+            title_font_points_before = [double](
+                $presentationEvidence.title_font_points_before
+            )
+            title_font_points_after = [double](
+                $presentationEvidence.title_font_points_after
+            )
+            patched_cell_count = [int](
+                $presentationEvidence.patched_cell_count
+            )
+            extra_trailing_paragraph_count = [int](
+                $presentationEvidence.extra_trailing_paragraph_count
+            )
             output_bytes = [int64](Get-Item -LiteralPath $outputDocx).Length
         }
         Write-JsonExclusive -Value $report -Path ([string]$Job.report_path)

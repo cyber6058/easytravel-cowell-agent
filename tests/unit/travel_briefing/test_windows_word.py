@@ -279,7 +279,7 @@ def test_header_patch_preserves_paragraph_and_cell_terminators():
     assert "$visibleRange.Text = [string]$Patch.text" in function
 
 
-def test_header_patch_preserves_the_qr_anchored_title_paragraph():
+def test_header_patch_preserves_the_title_paragraph_for_font_exception():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
     function = script.split("function Set-HeaderParagraph {", 1)[1].split(
         "function Set-ListCell {", 1
@@ -290,6 +290,100 @@ def test_header_patch_preserves_the_qr_anchored_title_paragraph():
     assert "return" in function.split("if ($number -eq 1)", 1)[1].split(
         "$visibleRange = $null", 1
     )[0]
+
+
+def test_list_cell_replaces_only_visible_text_and_asserts_one_paragraph():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split("function Set-ListCell {", 1)[1].split(
+        "function Set-DailyRowCount {", 1
+    )[0]
+
+    assert '([string]$Patch.text) + "`r`a"' not in function
+    assert "$visibleRange = $cell.Range.Duplicate" in function
+    assert "$visibleRange.End = [int]$visibleRange.End - 1" in function
+    assert "$visibleRange.Text = [string]$Patch.text" in function
+    assert "$cell.Range.Paragraphs.Count -ne 1" in function
+    assert 'throw "LIST_CELL_EXTRA_PARAGRAPH"' in function
+    assert 'throw "LIST_CELL_TEXT_MISMATCH"' in function
+
+
+def test_qr_removal_is_bounded_to_square_candidates_in_header_cell():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split(
+        "function Remove-CalibratedHeaderQrCandidates {", 1
+    )[1].split("function Get-ListInspection {", 1)[0]
+
+    assert "$index = [int]$Document.InlineShapes.Count" in function
+    assert "$index = [int]$Document.Shapes.Count" in function
+    assert function.count("$index -ge 1") == 2
+    assert "Test-SquareGraphic" in function
+    assert "$shape.Range.Start" in function
+    assert "$shape.Anchor.Start" in function
+    assert "$shape.Delete()" in function
+    assert 'throw "LIST_SOURCE_QR_COUNT_CHANGED"' in function
+    assert 'throw "LIST_OUTPUT_QR_SURVIVED"' in function
+
+
+def test_output_font_contract_is_twelve_points_except_exact_title():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    setter = script.split("function Set-ListOutputFontContract {", 1)[1].split(
+        "function Assert-ListOutputPresentationContract {", 1
+    )[0]
+    assertion = script.split(
+        "function Assert-ListOutputPresentationContract {", 1
+    )[1].split("function Set-DailyRowCount {", 1)[0]
+
+    assert "$Document.Content.Font.Size = $FontPoints" in setter
+    assert "$header.Range.Font.Size = $FontPoints" in setter
+    assert "$footer.Range.Font.Size = $FontPoints" in setter
+    assert "$titleRange.Font.Size = $TitleFontPoints" in setter
+    assert '"日本精緻假期"' in assertion
+    assert 'throw "LIST_HEADER_TITLE_CHANGED"' in assertion
+    assert 'throw "LIST_TITLE_FONT_CHANGED"' in assertion
+    assert 'throw "LIST_NON_TITLE_FONT_CHANGED"' in assertion
+
+
+def test_patch_action_requires_schema_three_and_reports_normalization_evidence():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split("function Invoke-Patch {", 1)[1].split(
+        "function Invoke-Action {", 1
+    )[0]
+
+    assert "$Job.plan.schema_version -ne 3" in function
+    assert 'generator_version -cne "list-word/3"' in function
+    assert 'output_qr_policy -cne "removed"' in function
+    assert "schema_version = 3" in function
+    assert 'qr_policy = "removed"' in function
+    for key in (
+        "source_header_qr_candidate_count",
+        "output_header_qr_candidate_count",
+        "non_title_font_points",
+        "title_font_points_before",
+        "title_font_points_after",
+        "patched_cell_count",
+        "extra_trailing_paragraph_count",
+    ):
+        assert key in function
+
+
+def test_patch_normalizes_presentation_before_final_pagination_and_qa():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split("function Invoke-Patch {", 1)[1].split(
+        "function Invoke-Action {", 1
+    )[0]
+
+    fill = function.index("foreach ($patch in $Job.plan.cells)")
+    remove_qr = function.index("Remove-CalibratedHeaderQrCandidates", fill)
+    normalize_font = function.index("Set-ListOutputFontContract", remove_qr)
+    paginate = function.index("$document.Repaginate()", normalize_font)
+    save = function.index("$document.SaveAs2($outputDocx", paginate)
+    reopen = function.index("$Word.Documents.Open($outputDocx", save)
+    final_assertion = function.index(
+        "Assert-ListOutputPresentationContract", reopen
+    )
+
+    assert fill < remove_qr < normalize_font < paginate < save
+    assert save < reopen < final_assertion
 
 
 def test_continuation_header_uses_first_page_header_policy_not_if_fields():
