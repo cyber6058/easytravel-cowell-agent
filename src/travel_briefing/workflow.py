@@ -46,7 +46,11 @@ from .script_validation import (
     validate_audio_duration,
 )
 from .source_fetch import fetch_newamazing_html
-from .word_list import build_list_word, format_list_day_date
+from .word_list import (
+    LIST_WORD_GENERATOR_VERSION,
+    build_list_word,
+    format_list_day_date,
+)
 from .word_qa import render_list_word_for_qa
 
 
@@ -74,6 +78,11 @@ class WordRenderEvidence:
     generator_version: str
     page_count: int
     qr_image_count: int
+    header_qr_candidate_count: int
+    non_title_font_points: float
+    title_font_points_before: float
+    title_font_points_after: float
+    extra_trailing_paragraph_count: int
     qa_index_sha256: str
     page_sha256s: tuple[str, ...]
     master_sha256: str = ""
@@ -204,6 +213,15 @@ class LocalRenderBackend:
             generator_version=built.generator_version,
             page_count=qa.pdf_inspection.page_count,
             qr_image_count=qa.pdf_inspection.image_count,
+            header_qr_candidate_count=(
+                built.output_header_qr_candidate_count
+            ),
+            non_title_font_points=built.non_title_font_points,
+            title_font_points_before=built.title_font_points_before,
+            title_font_points_after=built.title_font_points_after,
+            extra_trailing_paragraph_count=(
+                built.extra_trailing_paragraph_count
+            ),
             qa_index_sha256=qa.qa_index_sha256,
             page_sha256s=tuple(
                 _sha256_file(path) for path in qa.png_paths
@@ -487,7 +505,24 @@ def _render_draft(
             )
             if (
                 word_evidence.page_count <= 0
-                or word_evidence.qr_image_count < 1
+                or not _valid_word_presentation_contract(
+                    qr_image_count=word_evidence.qr_image_count,
+                    header_qr_candidate_count=(
+                        word_evidence.header_qr_candidate_count
+                    ),
+                    non_title_font_points=(
+                        word_evidence.non_title_font_points
+                    ),
+                    title_font_points_before=(
+                        word_evidence.title_font_points_before
+                    ),
+                    title_font_points_after=(
+                        word_evidence.title_font_points_after
+                    ),
+                    extra_trailing_paragraph_count=(
+                        word_evidence.extra_trailing_paragraph_count
+                    ),
+                )
                 or len(word_evidence.page_sha256s)
                 != word_evidence.page_count
                 or not _valid_sha256_or_legacy_empty(
@@ -498,7 +533,7 @@ def _render_draft(
                 )
             ):
                 raise ValueError(
-                    "Word QA evidence did not prove every page with first-page QR"
+                    "Word QA evidence did not prove normalized QR-free output"
                 )
             page_paths = tuple(
                 paths["word_qa_directory"]
@@ -894,19 +929,29 @@ def _prepare_artifacts(run: Path, product_code: str) -> tuple[Artifact, ...]:
             "completed",
             WORKFLOW_VERSION,
         ),
-        ("word", f"{prefix}_說明會資料.docx", "missing", "list-word/2"),
+        (
+            "word",
+            f"{prefix}_說明會資料.docx",
+            "missing",
+            LIST_WORD_GENERATOR_VERSION,
+        ),
         (
             "word_evidence",
             "qa/word-evidence.json",
             "missing",
-            "list-word/2",
+            LIST_WORD_GENERATOR_VERSION,
         ),
-        ("word_qa", f"{prefix}_Word-QA.pdf", "missing", "list-word/2"),
+        (
+            "word_qa",
+            f"{prefix}_Word-QA.pdf",
+            "missing",
+            LIST_WORD_GENERATOR_VERSION,
+        ),
         (
             "word_qa_index",
             "qa/index.json",
             "missing",
-            "list-word/2",
+            LIST_WORD_GENERATOR_VERSION,
         ),
         ("audio_mp3", f"{prefix}_說明會語音.mp3", "missing", "ffmpeg/unknown"),
         ("audio_wav", f"{prefix}_說明會語音.wav", "missing", "yating/1"),
@@ -953,7 +998,7 @@ def _word_artifacts(
     *,
     accepted: bool,
 ) -> tuple[Artifact, ...]:
-    version = evidence.generator_version if evidence else "list-word/2"
+    version = evidence.generator_version if evidence else LIST_WORD_GENERATOR_VERSION
     artifacts = [
         artifact_record(
             run,
@@ -1276,7 +1321,7 @@ def _write_word_render_evidence(
     evidence: WordRenderEvidence,
 ) -> None:
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "generator_version": evidence.generator_version,
         "master_sha256": evidence.master_sha256,
         "calibration_manifest_sha256": (
@@ -1284,6 +1329,13 @@ def _write_word_render_evidence(
         ),
         "page_count": evidence.page_count,
         "qr_image_count": evidence.qr_image_count,
+        "header_qr_candidate_count": evidence.header_qr_candidate_count,
+        "non_title_font_points": evidence.non_title_font_points,
+        "title_font_points_before": evidence.title_font_points_before,
+        "title_font_points_after": evidence.title_font_points_after,
+        "extra_trailing_paragraph_count": (
+            evidence.extra_trailing_paragraph_count
+        ),
         "qa_index_sha256": evidence.qa_index_sha256,
         "page_sha256s": list(evidence.page_sha256s),
     }
@@ -1320,6 +1372,11 @@ def _validate_recorded_word_evidence(
         "calibration_manifest_sha256",
         "page_count",
         "qr_image_count",
+        "header_qr_candidate_count",
+        "non_title_font_points",
+        "title_font_points_before",
+        "title_font_points_after",
+        "extra_trailing_paragraph_count",
         "qa_index_sha256",
         "page_sha256s",
     }
@@ -1327,14 +1384,27 @@ def _validate_recorded_word_evidence(
     if (
         not isinstance(payload, dict)
         or set(payload) != expected_keys
-        or payload.get("schema_version") != 2
+        or payload.get("schema_version") != 3
         or payload.get("generator_version") != record.generator_version
         or not _valid_sha256(payload.get("master_sha256"))
         or not _valid_sha256(payload.get("calibration_manifest_sha256"))
         or payload.get("page_count") != len(page_kinds)
-        or isinstance(payload.get("qr_image_count"), bool)
-        or not isinstance(payload.get("qr_image_count"), int)
-        or payload["qr_image_count"] < 1
+        or not _valid_word_presentation_contract(
+            qr_image_count=payload.get("qr_image_count"),
+            header_qr_candidate_count=payload.get(
+                "header_qr_candidate_count"
+            ),
+            non_title_font_points=payload.get("non_title_font_points"),
+            title_font_points_before=payload.get(
+                "title_font_points_before"
+            ),
+            title_font_points_after=payload.get(
+                "title_font_points_after"
+            ),
+            extra_trailing_paragraph_count=payload.get(
+                "extra_trailing_paragraph_count"
+            ),
+        )
         or not isinstance(pages, list)
         or pages
         != [completed[kind].sha256 for kind in page_kinds]
@@ -1467,3 +1537,39 @@ def _valid_sha256_or_legacy_empty(value: str) -> bool:
 
 def _valid_sha256(value: object) -> bool:
     return isinstance(value, str) and _valid_sha256_or_legacy_empty(value) and bool(value)
+
+
+def _valid_word_presentation_contract(
+    *,
+    qr_image_count: object,
+    header_qr_candidate_count: object,
+    non_title_font_points: object,
+    title_font_points_before: object,
+    title_font_points_after: object,
+    extra_trailing_paragraph_count: object,
+) -> bool:
+    integer_zeroes = (
+        qr_image_count,
+        header_qr_candidate_count,
+        extra_trailing_paragraph_count,
+    )
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value != 0
+        for value in integer_zeroes
+    ):
+        return False
+    if (
+        isinstance(non_title_font_points, bool)
+        or not isinstance(non_title_font_points, (int, float))
+        or float(non_title_font_points) != 12.0
+    ):
+        return False
+    if (
+        isinstance(title_font_points_before, bool)
+        or not isinstance(title_font_points_before, (int, float))
+        or float(title_font_points_before) <= 0
+    ):
+        return False
+    return title_font_points_after == title_font_points_before

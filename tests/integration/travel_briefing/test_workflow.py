@@ -335,9 +335,14 @@ class SyntheticRenderBackend:
         import hashlib
 
         return WordRenderEvidence(
-            generator_version="synthetic-word/2",
+            generator_version="synthetic-word/3",
             page_count=self.word_page_count,
-            qr_image_count=1,
+            qr_image_count=0,
+            header_qr_candidate_count=0,
+            non_title_font_points=12.0,
+            title_font_points_before=22.0,
+            title_font_points_after=22.0,
+            extra_trailing_paragraph_count=0,
             qa_index_sha256=hashlib.sha256(
                 output_qa_index.read_bytes()
             ).hexdigest(),
@@ -410,7 +415,14 @@ def test_render_builds_a_new_draft_then_confirms_without_rerunning_generators(
     )
     assert word_evidence["master_sha256"] == "a" * 64
     assert word_evidence["calibration_manifest_sha256"] == "b" * 64
+    assert word_evidence["schema_version"] == 3
     assert word_evidence["page_count"] == 2
+    assert word_evidence["qr_image_count"] == 0
+    assert word_evidence["header_qr_candidate_count"] == 0
+    assert word_evidence["non_title_font_points"] == 12.0
+    assert word_evidence["title_font_points_before"] == 22.0
+    assert word_evidence["title_font_points_after"] == 22.0
+    assert word_evidence["extra_trailing_paragraph_count"] == 0
     assert word_evidence["qa_index_sha256"]
     script_check = json.loads(
         (draft_render.run_directory / "script-check.json").read_text(

@@ -141,9 +141,9 @@ def inspect_list_pdf(
                     "LIST QA PDF contains insufficient non-empty text"
                 )
             image_count = len(page.get_images(full=True))
-            if index == 0 and image_count < 1:
+            if image_count != 0:
                 raise ValueError(
-                    "LIST QA PDF contains no image for the preserved QR"
+                    "LIST QA PDF contains an unexpected image"
                 )
             pages.append(
                 ListPdfPageInspection(

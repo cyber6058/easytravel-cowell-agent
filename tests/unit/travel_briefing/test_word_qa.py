@@ -17,15 +17,25 @@ from travel_briefing.word_list import DayPagePlacement
 from travel_briefing.errors import WordGenerationError
 
 
-def write_pdf(path: Path, *, pages=1, text="OSA-SYN-260901 JX820 JX821") -> None:
+def write_pdf(
+    path: Path,
+    *,
+    pages=1,
+    text="OSA-SYN-260901 JX820 JX821",
+    include_image=False,
+) -> None:
     document = fitz.open()
     for page_number in range(pages):
         page = document.new_page(width=595.28, height=841.89)
         page.insert_text((72, 72), text if page_number == 0 else "second page")
-        image = Image.new("RGB", (16, 16), color="black")
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
-        page.insert_image(fitz.Rect(72, 90, 104, 122), stream=buffer.getvalue())
+        if include_image:
+            image = Image.new("RGB", (16, 16), color="black")
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            page.insert_image(
+                fitz.Rect(72, 90, 104, 122),
+                stream=buffer.getvalue(),
+            )
     document.save(path)
     document.close()
 
@@ -46,14 +56,6 @@ def write_multipage_list_pdf(path: Path, *, pages: int) -> None:
                 f"2026-09-0{page_number}"
             )
         page.insert_text((72, 72), text)
-        if page_number == 1:
-            image = Image.new("RGB", (16, 16), color="black")
-            buffer = io.BytesIO()
-            image.save(buffer, format="PNG")
-            page.insert_image(
-                fitz.Rect(72, 90, 104, 122),
-                stream=buffer.getvalue(),
-            )
     document.save(path)
     document.close()
 
@@ -91,8 +93,7 @@ def test_pdf_inspection_validates_every_page_and_day_mapping(
 
     assert inspection.page_count == page_count
     assert len(inspection.pages) == page_count
-    assert inspection.pages[0].image_count == 1
-    assert all(page.image_count == 0 for page in inspection.pages[1:])
+    assert all(page.image_count == 0 for page in inspection.pages)
     assert tuple(page.page_number for page in inspection.pages) == tuple(
         range(1, page_count + 1)
     )
@@ -152,10 +153,6 @@ def test_pdf_inspection_allows_identity_only_on_non_daily_continuation_page(
         "OSA-SYN-260901 JX820 JX821 DATE ROUTE HOTEL BREAKFAST LUNCH "
         "DINNER 2026-09-01",
     )
-    image = Image.new("RGB", (16, 16), color="black")
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    first.insert_image(fitz.Rect(72, 90, 104, 122), stream=buffer.getvalue())
     second = document.new_page(width=595.28, height=841.89)
     second.insert_text(
         (72, 72), "OSA-SYN-260901 GROUP TRAVEL NOTES CONTINUATION PAGE"
@@ -187,10 +184,6 @@ def test_pdf_day_tokens_do_not_prefix_match_two_digit_days(tmp_path):
     document = fitz.open()
     page = document.new_page(width=595.28, height=841.89)
     page.insert_text((72, 72), "OSA-SYN-260901 JX820 JX821 9/1 9/10")
-    image = Image.new("RGB", (16, 16), color="black")
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    page.insert_image(fitz.Rect(72, 90, 104, 122), stream=buffer.getvalue())
     document.save(pdf)
     document.close()
 
@@ -207,7 +200,7 @@ def test_pdf_day_tokens_do_not_prefix_match_two_digit_days(tmp_path):
     assert inspection.page_count == 1
 
 
-def test_pdf_inspection_requires_one_a4_page_text_and_an_image(tmp_path):
+def test_pdf_inspection_requires_a4_text_and_no_images(tmp_path):
     pdf = tmp_path / "list.pdf"
     write_pdf(pdf)
 
@@ -217,13 +210,13 @@ def test_pdf_inspection_requires_one_a4_page_text_and_an_image(tmp_path):
     )
 
     assert inspection.page_count == 1
-    assert inspection.image_count == 1
+    assert inspection.image_count == 0
     assert inspection.text_character_count >= 20
     assert inspection.page_width_points == pytest.approx(595.28, abs=0.1)
     assert inspection.page_height_points == pytest.approx(841.89, abs=0.1)
 
 
-def test_pdf_inspection_fails_closed_on_page_text_or_qr_drift(tmp_path):
+def test_pdf_inspection_fails_closed_on_page_text_or_image_drift(tmp_path):
     two_pages = tmp_path / "two-pages.pdf"
     write_pdf(two_pages, pages=2)
     with pytest.raises(ValueError, match="insufficient"):
@@ -234,14 +227,13 @@ def test_pdf_inspection_fails_closed_on_page_text_or_qr_drift(tmp_path):
     with pytest.raises(ValueError, match="required text"):
         inspect_list_pdf(missing_text, required_text=("OSA-SYN-260901",))
 
-    no_image = tmp_path / "no-image.pdf"
-    document = fitz.open()
-    page = document.new_page(width=595.28, height=841.89)
-    page.insert_text((72, 72), "OSA-SYN-260901 sufficiently long text")
-    document.save(no_image)
-    document.close()
+    unexpected_image = tmp_path / "unexpected-image.pdf"
+    write_pdf(unexpected_image, include_image=True)
     with pytest.raises(ValueError, match="image"):
-        inspect_list_pdf(no_image, required_text=("OSA-SYN-260901",))
+        inspect_list_pdf(
+            unexpected_image,
+            required_text=("OSA-SYN-260901",),
+        )
 
 
 class PdftoppmRunner:
@@ -483,7 +475,7 @@ def test_word_pdf_render_publishes_every_page_and_hash_bound_index(
     assert result.pdf_path == output_pdf.resolve()
     assert result.qa_index_path == output_index.resolve()
     assert result.pdf_inspection.page_count == page_count
-    assert result.pdf_inspection.image_count == 1
+    assert result.pdf_inspection.image_count == 0
     assert [path.name for path in result.png_paths] == [
         f"page-{number:03d}.png"
         for number in range(1, page_count + 1)

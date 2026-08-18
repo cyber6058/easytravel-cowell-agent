@@ -92,9 +92,14 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
         kwargs["output_docx"].write_bytes(b"docx")
         return SimpleNamespace(
             docx_path=kwargs["output_docx"],
-            generator_version="list-word/2",
+            generator_version="list-word/3",
             computed_page_count=2,
             day_page_map=(),
+            output_header_qr_candidate_count=0,
+            non_title_font_points=12.0,
+            title_font_points_before=22.0,
+            title_font_points_after=22.0,
+            extra_trailing_paragraph_count=0,
         )
 
     def qa(source, **kwargs):
@@ -113,7 +118,7 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
             page_paths.append(page)
         kwargs["output_qa_index"].write_bytes(b"index")
         return SimpleNamespace(
-            pdf_inspection=SimpleNamespace(page_count=2, image_count=2),
+            pdf_inspection=SimpleNamespace(page_count=2, image_count=0),
             qa_index_sha256="a" * 64,
             png_paths=tuple(page_paths),
         )
@@ -132,7 +137,12 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
 
     assert evidence.page_count == 2
     assert len(evidence.page_sha256s) == 2
-    assert evidence.qr_image_count == 2
+    assert evidence.qr_image_count == 0
+    assert evidence.header_qr_candidate_count == 0
+    assert evidence.non_title_font_points == 12.0
+    assert evidence.title_font_points_before == 22.0
+    assert evidence.title_font_points_after == 22.0
+    assert evidence.extra_trailing_paragraph_count == 0
     assert calls["build"][1]["template_path"] == value.master_path
     assert calls["build"][1]["master_sha256"] == value.master_sha256
     assert calls["build"][1]["calibration_manifest_sha256"] == (
@@ -142,6 +152,9 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
         value.master_structure_fingerprint
     )
     assert calls["build"][1]["layout_profiles"] == value.layout_profiles
+    assert calls["build"][1][
+        "expected_source_header_qr_candidate_count"
+    ] == value.source_header_qr_candidate_count
     assert evidence.master_sha256 == value.master_sha256
     assert evidence.calibration_manifest_sha256 == (
         value.calibration_manifest_sha256

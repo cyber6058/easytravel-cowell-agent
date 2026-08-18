@@ -100,7 +100,11 @@ def test_calibrated_master_renders_gate_v_day_counts(tmp_path, day_count):
         assert evidence.page_count == 1
     if day_count >= 8:
         assert evidence.page_count >= 2
-    assert evidence.qr_image_count >= 1
+    assert evidence.qr_image_count == 0
+    assert evidence.header_qr_candidate_count == 0
+    assert evidence.non_title_font_points == 12.0
+    assert evidence.title_font_points_before == evidence.title_font_points_after
+    assert evidence.extra_trailing_paragraph_count == 0
     assert len(evidence.page_sha256s) == evidence.page_count
     assert len(index["day_page_map"]) == day_count
     assert [item["day_number"] for item in index["day_page_map"]] == list(
