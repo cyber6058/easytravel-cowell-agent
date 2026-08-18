@@ -1,5 +1,31 @@
 # STATUS
 
+## 2026-08-18 LIST title leading-space Word integration blocker
+
+- 一句話現況：OP 核准的 4／5／6／7／8／12 天私人 master Word COM 整合矩陣已用
+  `-x` 執行一次；第一個 4 天 case 在 SaveAs 前明確失敗於
+  `LIST_HEADER_TITLE_CHANGED`，因此安全停止，5／6／7／8／12 天均未執行，也沒有
+  DOCX／PDF／PNG 可供視覺驗收。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；doctor 確認
+  Word COM、pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure
+  均 `ok`。使用 repo 內 opt-in integration test 與合成 4／5／6／7／8／12 天資料，
+  將 QA root 綁到新的 OS temp directory，且設定 first failure stop。整合前已有 1 個
+  WINWORD process，結束後與再檢查都仍為 1，owned hidden Word 已清理，未關閉使用者
+  原本的 Word。
+- 驗證：pytest 原始結果為 `1 failed`，adapter evidence 是
+  `WORD_GENERATION_FAILED`／`LIST_HEADER_TITLE_CHANGED`／return code 30／stage
+  `run-action`。失敗 QA root 只有空的 `day-004` directory，file count 0。唯讀 OOXML
+  盤點確認 canonical master 的第一個 header paragraph 是 18 個 `U+0020` 後接 exact
+  `日本精緻假期`；既有 `Set-HeaderParagraph` 會 Trim 後比對，但新加入的
+  `Get-ListTitleFontPoints` 對未 Trim 的整段做 exact compare，因而在任何輸出寫入前
+  fail closed。事後 doctor 再次確認 `master_sha256_matches: true`。
+- 下一步：依既有核准規格離線修正 title token／leading-space range 契約，加入真實
+  source-shape regression test 並跑完整 suite；修正通過後，仍須取得新的 Word COM
+  授權才能重跑六種天數整合矩陣。
+- 阻塞點：本次 Word integration 授權已消耗且 4 天 case 未通過；不得在同一授權下
+  修碼後重試。沒有修改 master／calibration，沒有 GET、JMA、Yating、ffmpeg、LINE、
+  upload、publish、deploy 或 Cowell；公開 remote 未獲新的 push 例外。
+
 ## 2026-08-18 LIST Word output normalization implementation handoff
 
 - 一句話現況：OP 核准的方案 1「輸出時正規化」已完成離線 TDD 實作；新產出的
