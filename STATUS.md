@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-08-18 LIST full-cell highlight offline implementation handoff
+
+- 一句話現況：full-cell highlight 已離線改為 terminator-aware visible range 的 direct yellow path；embedded／repeated tokens 保留既有 Word Find／cursor loop。完整離線 suite 全綠，但私人 master 的 Word 實機結果仍未驗證。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`。先確認單元 `draft(4)` 只有 6 個 highlight cells，而實際 Word integration repro 使用全部 OP fields 未確認的 synthetic draft，才是已診斷的 5 embedded＋2 full-cell cases；因此只校正 regression fixture，不改核准設計。production 在 `scripts/briefing/patch_list_template.ps1` 新增純 range-like `Get-ListVisibleRangeEnd`，只排除尾端 CR／BEL；`Set-TokenHighlight` 對 exact full-cell token 直接套 `$WdYellow`，其餘才進既有 Find loop。implementation commit 是 `a7cd518`。
+- TDD 證據：初始 target run 原文為 `.FF`，即 content-shape control 通過、兩個 adapter tests 失敗；失敗分別是 `Get-ListVisibleRangeEnd` 不存在的 `IndexError` 與 direct statements 不存在的 `ValueError`。最小實作後相同三個 tests 輸出 `... [100%]`／exit 0。
+- 離線驗證：無 COM helper probe 輸出 `VISIBLE_RANGE_CASES=5`、`VISIBLE_RANGE_INVALID_CASES=2`、`VISIBLE_RANGE_ERROR=LIST_HIGHLIGHT_RANGE_INVALID`，且 `WINWORD_COUNT_BEFORE=1`／`WINWORD_COUNT_AFTER=1`。兩個 focused files 為 `84 tests collected in 0.13s` 且執行 exit 0；PowerShell parser 為 `PARSER_ERROR_COUNT=0`；完整 suite 為 `556 passed, 8 skipped in 24.49s`；`COMPILEALL_OK`、`git diff --check 880a0cf..HEAD` 與 commit check 均通過。source comparison 為 `HEADER_CALLER_UNCHANGED=True`、`CELL_CALLER_UNCHANGED=True`。
+- 範圍證明：未修改輸出內容、schema、QR、12 pt、paragraph、pagination、caller safe-code、私人 master、calibration 或 installed runtime。沒有執行 JobPath、Word repro、DOCX／PDF／PNG、GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 public remote push；完成 handoff commit 後 `main` 預期為 `origin/main [ahead 54]`。
+- 下一步：若要實機驗收，需新的明確授權，只執行一次 4 天 post-fix Word repro；不跑其他天數，失敗不重試。成功後才可檢查同次 DOCX／PDF／PNG 的內容、QR removal、12 pt、尾端空白行與分頁視覺契約。
+- 阻塞點：本回合依核准計畫在完整離線驗證後停止。full-cell direct path 是否已跨過私人 master 的 T4/R1/C2 仍屬未驗證，不能把離線綠燈宣稱為 Word 實機成功。
+
 ## 2026-08-18 LIST full-cell highlight offline implementation plan review
 
 - 一句話現況：OP 已核准 T4/R1/C2 full-cell highlight 書面規格；離線實作計畫已建立，明定 terminator-aware visible range、full-cell direct yellow path 與 embedded/repeated Find 保留契約，目前等待 OP 核准計畫，尚未修改 PowerShell／tests。

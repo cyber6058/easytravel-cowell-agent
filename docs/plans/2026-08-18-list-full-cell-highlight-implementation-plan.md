@@ -2,7 +2,8 @@
 
 日期：2026-08-18
 
-狀態：書面規格已由 OP 核准；本計畫待 OP 核准後才可執行 repo 內離線實作
+狀態：書面規格與本計畫均已由 OP 核准；離線實作於 2026-08-18 完成並通過完整
+驗證。Word 實機 repro 仍是獨立關卡。
 
 依據：
 `docs/specs/2026-08-18-list-full-cell-highlight-design.md`
