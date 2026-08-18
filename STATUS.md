@@ -1,5 +1,39 @@
 # STATUS
 
+## 2026-08-18 LIST title stage codes and 4-day source blocker
+
+- 一句話現況：LIST title 已離線細分為 source／plan／post-reopen 三種安全錯誤碼並
+  通過完整 suite；隨後唯一一次 4 天 Word repro 安全失敗於
+  `LIST_SOURCE_HEADER_TITLE_CHANGED`，未跑 5／6／7／8／12 天，也沒有重試或可供
+  視覺驗收的 DOCX／PDF／PNG。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；先新增 red
+  regression test，再將兩個來源標題檢查改為
+  `LIST_SOURCE_HEADER_TITLE_CHANGED`、兩個 plan contract 檢查改為
+  `LIST_TITLE_PLAN_INVALID`、save-reopen 後的標題檢查改為
+  `LIST_POST_REOPEN_TITLE_CHANGED`，並移除這三段的舊共用碼。程式 commit 為
+  `f2bc33b`。離線關卡全綠後，doctor 確認 Word COM、pdftoppm、schema-2
+  calibration、master SHA-256 與 normalized structure 均 `ok`，才只執行 opt-in
+  integration test 的 `[4]` node，且使用 `-x`。
+- 驗證：新增測試先得到預期 `1 failed`，修正後同一測試 `1 passed`；focused Word
+  tests 為 `72 passed`，PowerShell parser 為 `0 errors`，完整 suite 為
+  `544 passed, 8 skipped in 22.89s`，compileall 與 `git diff --check` 通過。唯一一次
+  Word 原始結果為 `1 failed`，adapter evidence 是 `WORD_GENERATION_FAILED`／
+  `LIST_SOURCE_HEADER_TITLE_CHANGED`／return code 30／stage `run-action`。新的 QA root
+  只有空的 `day-004` directory，file count 0；WINWORD 前後與事後均為原本的 1，
+  owned hidden Word 已清理。事後 doctor 再確認 `master_sha256_matches: true`。
+- 根因進度：新碼已排除 plan final assertion 與 post-reopen assertion；錯誤仍在兩個
+  source checks 之一。`build_list_patch_plan` 固定輸出 exact `日本精緻假期`，而
+  `Get-ListTitleFontPoints` 又在 `Set-HeaderParagraph` 前執行；結合前次 full
+  `Range.Text` 可 Trim 成 exact title 的證據，下一個最小離線調查點是 getter 以
+  `Range.End` 減去 `Range.Text` terminator 數量的 boundary 算法。這是依 call order
+  與既有證據的推論，尚未由新的 Word coordinate 診斷直接證實。
+- 下一步：若要修復，先另行核准離線將 title token range 與 Word character-position
+  boundary 分離並加入 regression tests；完整 suite 通過後，新的 Word repro 仍需
+  另一個當次明確授權。
+- 阻塞點：本次唯一 4 天 Word repro 授權已消耗且失敗，不得重跑；沒有任何可交付
+  Word 產物。沒有修改私人 master／calibration，沒有 GET、JMA、Yating、ffmpeg、
+  LINE、upload、publish、deploy、push 或 Cowell；5／6／7／8／12 天均未執行。
+
 ## 2026-08-18 LIST source title Range.Text diagnosis handoff
 
 - 一句話現況：OP 核准的唯一一次 read-only LIST title `Range.Text` 格式診斷已完成；
