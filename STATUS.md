@@ -1,5 +1,30 @@
 # STATUS
 
+## 2026-08-18 LIST exact-title 4-day repro remains source-blocked
+
+- 一句話現況：exact-title range 離線修正後獲准的唯一一次 4 天 Word repro 仍以
+  `LIST_SOURCE_HEADER_TITLE_CHANGED` 安全失敗；沒有重試、沒有跑其他天數，也沒有
+  DOCX／PDF／PNG 可供逐頁視覺驗收。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；doctor 先確認
+  Word COM、pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure
+  均 `ok`。只執行 opt-in integration test 的 `[4]` node，使用新的 OS temp QA root
+  與 `-x`；5／6／7／8／12 天完全未進入。
+- 驗證：pytest 原始結果為 `1 failed`，adapter evidence 是
+  `WORD_GENERATION_FAILED`／`LIST_SOURCE_HEADER_TITLE_CHANGED`／return code 30／stage
+  `run-action`。QA root 只有空的 `day-004` directory，file count 0。WINWORD 執行前、
+  執行後與事後均為原本的 1；owned hidden Word 已清理。事後 doctor 再確認
+  `master_sha256_matches: true` 與 normalized structure fingerprint 正常。
+- 根因進度：commit `cfd6c78` 移除 text-length／Range-position 混算後，observable
+  blocker 仍未改變，因此該修正不足以解除 Word source-title failure。現行同一 safe
+  code 仍可能由 source font getter、immutable header check 或 pre-save title-font restore
+  三個 checkpoint 回傳；這次 evidence 無法再區分，不能宣稱 exact finder 本身就是
+  失敗點。
+- 下一步：若要繼續，建議先另行核准離線把上述三個 source checkpoint 細分為不同
+  safe codes 並跑完整 suite；之後任何新的 Word repro 仍需另一個當次明確授權。
+- 阻塞點：本次唯一 4 天 Word repro 授權已消耗且失敗，不得重跑。沒有修改程式、
+  私人 master 或 calibration，沒有 GET、JMA、Yating、ffmpeg、LINE、upload、publish、
+  deploy、push 或 Cowell。
+
 ## 2026-08-18 LIST exact-title range offline fix handoff
 
 - 一句話現況：已依既有核准規格完成 LIST exact-title range 的最小離線修正並通過
