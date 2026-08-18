@@ -1,5 +1,13 @@
 # STATUS
 
+## 2026-08-18 LIST leader-cell manual-line-break design review
+
+- 一句話現況：4 天 repro 的 T1/R2/C3 blocker 已離線重現為領隊欄 patch payload 內的 `U+000D`；OP 已確認姓名與手機維持兩行，選定以 `U+000B` manual line break 保持單一 paragraph，目前書面規格待 OP 審閱，尚未改程式。
+- 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`；讀回既有 LIST normalization 規格／計畫與實際 builder／adapter／tests。實際 4 天 synthetic plan 的 tight loop 先得到 `T1_R2_C3_CODEPOINTS=U+000D`，再連續三次得到 `RUN_CODEPOINTS=U+000D|U+000D|U+000D`；現有 `test_list_cell_replaces_only_visible_text_and_asserts_one_paragraph` 仍為 `1 passed`，證實缺少 payload-level regression。
+- 設計：新增 `docs/specs/2026-08-18-list-leader-cell-manual-line-break-fix-design.md`；只在 Python plan source 將領隊欄的 intentional break 改為 `U+000B`，並在 ordinary cell plan boundary fail closed 拒絕 CR／LF／BEL，不在 PowerShell 靜默轉換，也不放寬一段落 assertion。
+- 下一步：OP 審閱並明確核准書面規格後，再建立離線實作計畫；未核准前不修改 source／tests。
+- 阻塞點：書面規格審閱關卡尚未通過；本次沒有 Word、私人 master／calibration、GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST 4-day repro localizes write-time cell T1/R2/C3
 
 - 一句話現況：獲准的唯一一次 4 天 Word repro 已把原本的 generic cell paragraph blocker 精確定位為 write-time 的 `LIST_CELL_EXTRA_PARAGRAPH_SET_T1_R2_C3`；依約沒有重試、沒有跑其他天數，也沒有 DOCX／PDF／PNG 可供視覺驗收。
