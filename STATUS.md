@@ -1,5 +1,33 @@
 # STATUS
 
+## 2026-08-18 LIST source title Range.Text diagnosis handoff
+
+- 一句話現況：OP 核准的唯一一次 read-only LIST title `Range.Text` 格式診斷已完成；
+  source master 的標題 Range 完全符合預期，已排除 leading spaces、VML shape marker、
+  其他 control／零寬字元造成初始 title compare 失敗，問題範圍縮小到後續 Word
+  mutation／save-reopen 之後的 final presentation assertion。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；用本次 owned
+  hidden Word 將私人 master 以 read-only 開啟，只讀 table 1／row 1／cell 1／paragraph
+  1，不 SaveAs、不產生 DRAFT、不執行 integration。probe 不輸出原文，只依已知
+  exact title token 回報 Range 長度、token match 數與分類位置。
+- 驗證：Range length 25；segments 為 `ASCII_SPACE [0,18)` 共 18、
+  `EXPECTED_TITLE_TOKEN [18,24)` 共 6、`PARAGRAPH_MARK [24,25)` 共 1；exact title
+  match count 1、start 18、known boundary trim exact match 為 true。沒有
+  `OBJECT_MARKER`、`OTHER_CONTROL`、`OTHER_WHITESPACE` 或其他文字。假設 1 VML marker、
+  假設 2 額外 control、假設 3 token 被拆開均被否定；假設 4「來源正常、錯誤在後續
+  mutation／reopen」成立。
+- 清理與完整性：診斷命令 finally 已 Close read-only document 並 Quit owned Word；
+  Word 退出為非同步，命令結束瞬間 count 由 1 暫為 2，後續檢查已回到原本 1。
+  事後 doctor 確認 `master_sha256_matches: true`、normalized structure、Word COM 與
+  pdftoppm 均 `ok`。沒有原文、master path 或私人內容寫入 repo／STATUS。
+- 下一步：先離線把共用 `LIST_HEADER_TITLE_CHANGED` 細分為 source、plan 與
+  post-reopen output 的安全錯誤碼，加入 regression tests 並跑完整 suite；之後若獲
+  新授權，只跑最小 4 天 Word repro 取得 final assertion 的精確 safe code，不先重跑
+  5／6／7／8／12 天矩陣。
+- 阻塞點：本次 read-only Word 診斷授權已消耗，沒有修碼或重跑整合。六天數 Word
+  output 仍未通過，也沒有可視覺驗收的 DOCX／PDF／PNG；沒有 GET、JMA、Yating、
+  ffmpeg、LINE、upload、publish、deploy、push 或 Cowell。
+
 ## 2026-08-18 LIST title spacing fix and second integration blocker
 
 - 一句話現況：已依核准規格完成 leading-space 最小離線修正並通過完整 suite，但
