@@ -54,7 +54,7 @@ from .word_list import (
 from .word_qa import render_list_word_for_qa
 
 
-WORKFLOW_VERSION = "travel-briefing/0.2.0"
+WORKFLOW_VERSION = "travel-briefing/0.2.1"
 
 
 @dataclass(frozen=True, slots=True)

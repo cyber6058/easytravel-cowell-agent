@@ -13,7 +13,7 @@ from travel_briefing import __version__
 REPO = Path(__file__).parents[2]
 PACKAGE = REPO / "packaging" / "easytravel-briefing-materials"
 PLUGIN_NAME = "easytravel-briefing-materials"
-EXPECTED_VERSION = "0.2.0"
+EXPECTED_VERSION = "0.2.1"
 REFERENCE_NAMES = {
     "audio-and-template.md",
     "cli.md",
@@ -152,6 +152,25 @@ def test_one_generation_request_authorizes_one_bounded_local_draft():
     assert "calibration_manifest" in template_reference
     assert "every QA page" in template_reference
     assert "WAV, TXT, and SRT" in template_reference
+
+
+def test_briefing_skill_requires_qr_free_twelve_point_list_output():
+    skill = _read(CANONICAL_SKILL)
+    template_reference = _read(
+        PACKAGE / "shared" / "references" / "audio-and-template.md"
+    )
+
+    assert "QR-free output copy" in skill
+    for required_text in (
+        "no QR code",
+        "no reserved QR space",
+        "日本精緻假期",
+        "12 pt",
+        "no extra trailing blank paragraph",
+        "automatic wrapping",
+    ):
+        assert required_text in template_reference
+    assert "first-page QR" not in template_reference
 
 
 def test_one_request_policy_is_recorded_in_project_rules_and_readme():

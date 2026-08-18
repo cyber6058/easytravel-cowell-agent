@@ -42,9 +42,10 @@ populate weather. Bind every OP value and conflict decision to the exact draft I
   allow a URL-only DRAFT; stop for conflicts, source integrity failure, or drift.
 - `briefing check-script`: validate the locally written narration. Stop until
   every blocking issue is cleared.
-- `briefing render`: create DRAFT Word and local Yating artifacts. Stop for
-  Word, visual, speech, duration, or subtitle failure. Missing ffmpeg leaves MP3
-  incomplete but preserves a reviewable Word/WAV/TXT/SRT DRAFT.
+- `briefing render`: create a QR-free output copy of the DRAFT Word and local
+  Yating artifacts. Stop for Word, visual, speech, duration, or subtitle failure.
+  Missing ffmpeg leaves MP3 incomplete but preserves a reviewable
+  Word/WAV/TXT/SRT DRAFT.
 - `briefing render --confirm-draft-id`: copy an exact verified DRAFT into local
   CONFIRMED artifacts. Stop unless the OP gives current explicit approval for
   that exact draft ID.

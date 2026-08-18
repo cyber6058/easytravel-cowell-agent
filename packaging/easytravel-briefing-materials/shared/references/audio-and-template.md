@@ -21,8 +21,15 @@ The current one-request DRAFT authorization allows rendering to start one hidden
 owned Word instance. It opens the canonical LIST master read-only, creates a new
 DOCX, dynamically creates the verified number of daily rows, and checks the
 table, anchor, merged-cell, QR, section, A4 portrait, calibration hash, and
-layout contracts. Word decides the page count from content; long trips continue
-at normal readable settings.
+layout contracts. The calibrated QR candidate is a source-master validation
+anchor only. The generated output copy has no QR code and no reserved QR space,
+so the group name and other header text use the full available width.
+
+Every visible output character is 12 pt except the exact first line
+`日本精緻假期`, whose master font size is preserved. Filling a cell must leave
+no extra trailing blank paragraph. Keep the intentional group-name manual line
+break when supplied, and otherwise rely on automatic wrapping. Word decides the
+page count from content; long trips continue at these readable settings.
 
 Daily rows preserve the complete itinerary title from the source page, including
 route arrows and parenthetical details. The hotel cell uses only the first hotel
@@ -31,9 +38,10 @@ an included meal or `X` for no meal/self-arranged dining; meal descriptions stay
 in the source-bound draft data and are not printed in those cells.
 
 Automated checks do not prove visual correctness. Inspect every QA page at
-readable resolution for cropping, table borders, merged cells, first-page QR,
-continuation identity/header, daily rows, and yellow fields. Never confirm a
-draft with an unviewed Word QA page.
+readable resolution for cropping, table borders, merged cells, full-width header
+text with no QR or reserved gap, the preserved title size, 12 pt non-title text,
+no extra blank line in patched cells, continuation identity/header, daily rows,
+and yellow fields. Never confirm a draft with an unviewed Word QA page.
 
 ## Audio
 

@@ -71,12 +71,12 @@ python -m venv .venv
 Microsoft Yating 本機語音與字幕。缺值、來源衝突、範本漂移或 QA 失敗都會保留為
 review，不猜值、不使用雲端 TTS，也不自動傳 LINE。
 
-0.2.0 校準後，使用者在同一則要求提供新魅力 URL／PDF 並要求產生說明會資料，
+0.2.1 使用既有 0.2.0 校準；使用者在同一則要求提供新魅力 URL／PDF 並要求產生說明會資料，
 即可授權 one local DRAFT：系統使用唯一 canonical LIST master，依來源實際天數動態
 建列並安全續頁，接著完成逐頁 QA 與 Yating 語音。校準、CONFIRMED、LINE、上傳、
 部署與 Cowell 仍各自需要獨立授權。
 
-建立獨立 `0.2.0` 安裝包：
+建立獨立 `0.2.1` 安裝包：
 
 ~~~powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_easytravel_briefing_package.ps1

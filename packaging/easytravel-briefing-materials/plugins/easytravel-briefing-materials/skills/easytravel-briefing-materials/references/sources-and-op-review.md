@@ -9,7 +9,7 @@
 - Keep a URL-only product region unknown unless the page states it or the OP
   explicitly chooses Osaka, Tohoku, or Hokkaido for the current draft.
 - A PDF-only run does not authorize searching for or fetching a matching page.
-- Version 0.2.0 does not silently fetch or inject JMA data. Keep weather in
+- Version 0.2.1 does not silently fetch or inject JMA data. Keep weather in
   review until an approved enrichment step supplies official evidence.
 - Never retain raw HTML or JMA XML. The local manifest stores hashes, locations,
   parser versions, timestamps, and bounded field evidence.
