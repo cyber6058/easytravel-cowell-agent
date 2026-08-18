@@ -1,5 +1,13 @@
 # STATUS
 
+## 2026-08-18 LIST embedded Find boundary offline diagnosis and design review
+
+- 一句話現況：T1/R2/C2 回歸已離線縮小為 full-cell 修正把 terminator-aware visible boundary 同時套到 embedded Word Find；已完成 boundary split 書面規格，等待 OP 審閱，尚未修改 production 或 tests。
+- 這次做了什麼：先執行 `git pull --ff-only`，結果為 `Already up to date.`；比較 full-cell 修正前後的 `Set-TokenHighlight`，確認先前實機已通過的 embedded Find boundary 由 `[int]$Range.End - 1` 改成 `Get-ListVisibleRangeEnd`。現有三個針對性離線測試仍輸出 `... [100%]`，因此確認 source-contract test 沒有區分 direct visible boundary 與 embedded Find boundary。無 COM model 證明 paragraph 的兩種 boundary 差值為 0、cell 差值為 1，4 天 plan 仍應分流為 5 個 embedded Find 與 2 個 full-cell direct cases。新增 `docs/specs/2026-08-18-list-embedded-find-boundary-design.md`，選定 `$visibleBoundary` 只供 exact/direct path、`$findBoundary = [int]$Range.End - 1` 只供 embedded Find；不寫死座標。
+- 誠實邊界：本輪沒有啟動 Word、沒有重跑已消耗的一次性 repro、沒有讀寫私人 master／calibration、沒有產生 DOCX／PDF／PNG，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。根因目前仍是由實機前後故障位置與離線差分支持的最佳推論，不是新的 Word 實證。
+- 下一步：OP 審閱並同意書面規格後，才建立離線實作計畫；計畫核准前不修改 PowerShell 或 tests。未來若完成離線修正，仍須另一個明確的一次性 4 天 Word 授權才能驗證，成功或失敗都不重試。
+- 阻塞點：書面規格審閱關卡；Word 成功仍未驗證。
+
 ## 2026-08-18 LIST full-cell post-fix 4-day repro regresses first embedded highlight
 
 - 一句話現況：獲准的唯一一次 4 天 post-fix Word repro 已失敗於 `LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T1_R2_C2`；這是 execution order 的第一個 embedded token cell，流程尚未到 T4/R1/C2，因此 full-cell direct path 未獲實機驗證，也沒有 DOCX／PDF／PNG 可供視覺 QA。
