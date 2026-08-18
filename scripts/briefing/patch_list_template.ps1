@@ -1452,7 +1452,10 @@ function Get-ListTitleFontPoints {
             $visibleEnd -= 1
         }
         $range.End = $visibleEnd
-        if ([string]$range.Text -cne $ExpectedTitle) {
+        $normalizedTitle = ([string]$range.Text).Trim(
+            [char[]]@([char]13, [char]7, [char]32, [char]9)
+        )
+        if ($normalizedTitle -cne $ExpectedTitle) {
             throw "LIST_HEADER_TITLE_CHANGED"
         }
         $fontPoints = [double]$range.Font.Size
@@ -1613,7 +1616,10 @@ function Assert-ListOutputPresentationContract {
             }
             $titleRange.End = [int]$titleRange.End - 1
         }
-        if ([string]$titleRange.Text -cne $expectedTitle) {
+        $normalizedTitle = ([string]$titleRange.Text).Trim(
+            [char[]]@([char]13, [char]7, [char]32, [char]9)
+        )
+        if ($normalizedTitle -cne $expectedTitle) {
             throw "LIST_HEADER_TITLE_CHANGED"
         }
         $titleFontPointsAfter = [double]$titleRange.Font.Size

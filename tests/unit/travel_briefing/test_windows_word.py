@@ -343,6 +343,29 @@ def test_output_font_contract_is_twelve_points_except_exact_title():
     assert 'throw "LIST_NON_TITLE_FONT_CHANGED"' in assertion
 
 
+def test_title_font_contract_accepts_calibrated_leading_spaces():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    getter = script.split("function Get-ListTitleFontPoints {", 1)[1].split(
+        "function Set-ListOutputFontContract {", 1
+    )[0]
+    assertion = script.split(
+        "function Assert-ListOutputPresentationContract {", 1
+    )[1].split("function Set-DailyRowCount {", 1)[0]
+
+    assert '$normalizedTitle = ([string]$range.Text).Trim(' in getter
+    assert "$normalizedTitle -cne $ExpectedTitle" in getter
+    assert (
+        '$normalizedTitle = ([string]$titleRange.Text).Trim('
+        in assertion
+    )
+    assert "$normalizedTitle -cne $expectedTitle" in assertion
+    for function in (getter, assertion):
+        assert "[char]13" in function
+        assert "[char]7" in function
+        assert "[char]32" in function
+        assert "[char]9" in function
+
+
 def test_patch_action_requires_schema_three_and_reports_normalization_evidence():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
     function = script.split("function Invoke-Patch {", 1)[1].split(
