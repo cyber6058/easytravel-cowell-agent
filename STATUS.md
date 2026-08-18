@@ -1,5 +1,13 @@
 # STATUS
 
+## 2026-08-18 Get-ExactListTitleRange branch-safe codes handoff
+
+- 一句話現況：`Get-ExactListTitleRange` 現在會保留 source／pre-save／post-reopen 階段，並把失敗細分為 `PARAGRAPH_MISMATCH`、`FIND_FALSE`、`FIND_RESULT_MISMATCH`；離線驗證完成，尚未執行 Word。
+- 這次做了什麼：先以 regression test 取得 `1 failed` 紅燈，再讓 helper 接受受限的 `FailurePrefix`，三個 caller 分別傳入 `LIST_SOURCE_TITLE`、`LIST_PRE_SAVE_TITLE`、`LIST_POST_REOPEN_TITLE`，形成九種階段／分支安全碼；舊的 `*_RANGE_NOT_FOUND` 與 `LIST_POST_REOPEN_TITLE_CHANGED` 已從正式腳本移除。實作 commit 是 `1abc15c`。
+- 驗證：目標 regression test `1 passed`；focused Word 離線測試 73 個測試點全綠；PowerShell parser `PARSER_ERROR_COUNT=0`；完整 suite `545 passed, 8 skipped in 19.40s`；`compileall` 與 `git diff --check` exit 0。沒有啟動 Word，既有 `WINWORD` process count 維持 1，也沒有存取私人 master。
+- 下一步：若要辨認先前 4 天案例實際落在哪個 branch，需要新的明確授權後只跑一次 4 天 Word repro，維持不跑其他天數、失敗不重試。
+- 阻塞點：本次授權明確要求完整測試後停止、不執行 Word，因此實際 Word branch 尚未驗證；GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 與 public remote push 也都不在本次範圍。
+
 ## 2026-08-18 LIST 4-day repro localizes source title getter failure
 
 - 一句話現況：三個 source checkpoint 細分後獲准的唯一一次 4 天 Word repro 已明確
