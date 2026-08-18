@@ -1,5 +1,26 @@
 # STATUS
 
+## 2026-08-18 LIST source checkpoint code split handoff
+
+- 一句話現況：三個 LIST source-title checkpoint 已依 OP 核准範圍完成離線安全碼
+  細分並通過完整 suite；本次明確不執行 Word，因此尚未取得下一次 4 天實機的精確
+  checkpoint 結果。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`。immutable
+  header compare 保留 `LIST_SOURCE_HEADER_TITLE_CHANGED`；master 原字級 getter 改為
+  `LIST_SOURCE_TITLE_RANGE_NOT_FOUND`；pre-save title-font restore 改為
+  `LIST_PRE_SAVE_TITLE_RANGE_NOT_FOUND`。既有 stage regression test 同時鎖定這三碼、
+  plan 的 `LIST_TITLE_PLAN_INVALID` 與 post-reopen 的
+  `LIST_POST_REOPEN_TITLE_CHANGED`。程式 commit 為 `4a6d395`。
+- 驗證：更新後的 regression test 先得到預期 `1 failed`，兩個 safe code 完成替換後
+  同一測試 `1 passed`；focused Word tests 為 `73 passed`，PowerShell parser 為
+  `0 errors`，完整 suite 為 `545 passed, 8 skipped in 21.18s`，compileall 與
+  `git diff --check` 通過。
+- 下一步：若要實機定位，需要新的當次明確授權，只執行一次 4 天 Word repro、使用
+  `-x`、不跑其他天數且未知結果不重試；新 adapter code 將可直接指出失敗 checkpoint。
+- 阻塞點：Word COM 尚未用新碼驗證，沒有 DOCX／PDF／PNG 可交付。本次沒有啟動
+  Word、沒有修改私人 master／calibration，也沒有 GET、JMA、Yating、ffmpeg、LINE、
+  upload、publish、deploy、push 或 Cowell。
+
 ## 2026-08-18 LIST exact-title 4-day repro remains source-blocked
 
 - 一句話現況：exact-title range 離線修正後獲准的唯一一次 4 天 Word repro 仍以
