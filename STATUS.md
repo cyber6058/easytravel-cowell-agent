@@ -1,5 +1,13 @@
 # STATUS
 
+## 2026-08-18 LIST cell paragraph checkpoint and coordinate codes handoff
+
+- 一句話現況：`LIST_CELL_EXTRA_PARAGRAPH` 已離線細分為 write-time 的 `LIST_CELL_EXTRA_PARAGRAPH_SET_T<table>_R<row>_C<column>` 與 post-reopen 的 `LIST_CELL_EXTRA_PARAGRAPH_POST_REOPEN_T<table>_R<row>_C<column>`；尚未執行新的 Word repro，因此實際失敗座標仍未知。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；新增受限 prefix 的 `Get-ListCellExtraParagraphCode`，座標只接受正整數，否則 fail closed 為 `LIST_CELL_COORDINATE_INVALID`。`Set-ListCell` 與 `Assert-ListOutputPresentationContract` 兩個原 generic throw site 都改傳入 table／row／column，且不輸出欄位文字。實作 commit 是 `9597372`。
+- 驗證：regression test 先因缺少 builder 得到 `1 failed`，最小修正後 `1 passed`；focused Word 離線測試 `44 + 31` 全綠；PowerShell parser `PARSER_ERROR_COUNT=0`；兩個 checkpoint 範例皆通過 adapter safe-code regex；完整 suite `547 passed, 8 skipped in 23.57s`；`compileall` 與 `git diff --check` exit 0。WINWORD process count 維持原本的 1，沒有存取私人 master。
+- 下一步：若要取得上次 4 天案例的確切 checkpoint 與 cell 座標，需要新的明確授權，只執行一次 4 天 Word repro、不跑其他天數、失敗不重試。
+- 阻塞點：本次授權明確要求完整測試後停止、不執行 Word，所以尚未確認是 write-time 或 post-reopen，也不知道 table／row／column；沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST title post-fix Word repro reaches cell paragraph blocker
 
 - 一句話現況：獲准的唯一一次 4 天 post-fix Word repro 已跨過 `LIST_SOURCE_TITLE_PARAGRAPH_MISMATCH`，但後續失敗於 `LIST_CELL_EXTRA_PARAGRAPH`；依約沒有重試、沒有跑其他天數，也沒有 DOCX／PDF／PNG 可供視覺驗收。
