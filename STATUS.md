@@ -1,5 +1,34 @@
 # STATUS
 
+## 2026-08-18 LIST title spacing fix and second integration blocker
+
+- 一句話現況：已依核准規格完成 leading-space 最小離線修正並通過完整 suite，但
+  隨後獲准的新一輪私人 master Word COM 矩陣仍在第一個 4 天 case 以相同
+  `LIST_HEADER_TITLE_CHANGED` 失敗；`-x` 已安全停止，5／6／7／8／12 天未執行，
+  沒有 DOCX／PDF／PNG 可驗收。
+- 這次做了什麼：新增 source-shape regression test，先得到預期紅測，再讓
+  `Get-ListTitleFontPoints` 與 final presentation assertion 在 exact compare 前 Trim
+  CR／BEL／space／tab；不刪 18 個前置空格、不改 master 或校準。修正 commit 為
+  `d775099`。離線關卡全綠後，doctor 再確認 Word／pdftoppm／master hash／schema-2
+  calibration 正常，才執行一次新的六案例 opt-in integration test。
+- 驗證：新增測試先為 `1 failed`，修正後 `1 passed`；Word contract focused tests 為
+  `71 passed`，PowerShell parser 0 errors，完整 suite 為
+  `543 passed, 8 skipped in 21.30s`，compileall 與 `git diff --check` 通過。新整合
+  test 原始結果仍為 `1 failed`，adapter evidence 是 `WORD_GENERATION_FAILED`／
+  `LIST_HEADER_TITLE_CHANGED`／return code 30／stage `run-action`；QA file count 0。
+  整合前後與事後 WINWORD process count 均為 1，owned Word 已清理。事後 doctor 再次
+  確認 `master_sha256_matches: true`。
+- 根因進度：唯讀 OOXML 已確認第一個 header paragraph 不只含 18 個 `U+0020` 與
+  `日本精緻假期`，還含 1 個舊式 VML `w:pict`／shape（QR）。空白 Trim 修正仍失敗，
+  表示 Word `Range.Text` 很可能含另一個 non-text shape/object marker；未經新的 Word
+  診斷不能把推論當成已確認 code point，也不應再猜著修改。
+- 下一步：取得一次唯讀 Word title `Range.Text` 字元格式診斷授權，只輸出段落長度、
+  code point 類型／位置與 exact-title token match，不輸出其他私人內容、不 SaveAs、
+  不產生 DRAFT。取得證據後再做離線修正；六天數矩陣仍需之後新的明確授權。
+- 阻塞點：本次第二輪 Word integration 授權已消耗，輸出仍未通過。沒有重跑、沒有
+  修改 master／calibration，沒有 GET、JMA、Yating、ffmpeg、LINE、upload、publish、
+  deploy 或 Cowell；公開 remote 未獲新的 push 例外。
+
 ## 2026-08-18 LIST title leading-space Word integration blocker
 
 - 一句話現況：OP 核准的 4／5／6／7／8／12 天私人 master Word COM 整合矩陣已用
