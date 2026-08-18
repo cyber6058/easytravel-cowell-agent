@@ -379,9 +379,12 @@ def test_highlight_failure_code_is_validated_before_empty_token_return():
     assert 'throw "LIST_HIGHLIGHT_TOKEN_MISSING"' not in script
 
     unchanged_statements = (
-        "$visibleBoundary = Get-ListVisibleRangeEnd -Range $Range",
         "$findBoundary = [int]$Range.End - 1",
         "$cursor = [int]$Range.Start",
+        "$visibleRange = $Range.Duplicate",
+        "$directEnd = [int]$visibleRange.End - 1",
+        "$visibleRange.End = $directEnd",
+        "[string]$visibleRange.Text -ceq $Token",
         "$search.Find.ClearFormatting()",
         "$search.Find.Text = $Token",
         "$search.Find.Forward = $true",
@@ -391,27 +394,79 @@ def test_highlight_failure_code_is_validated_before_empty_token_return():
     )
     positions = [function.index(statement) for statement in unchanged_statements]
     assert positions == sorted(positions)
+    assert "Get-ListVisibleRangeEnd" not in function
 
 
-def test_visible_highlight_range_is_terminator_aware():
+def test_full_cell_direct_range_reuses_one_position_retreat():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
-    helper = script.split(
-        "function Get-ListVisibleRangeEnd {", 1
-    )[1].split("function Set-TokenHighlight {", 1)[0]
+    function = script.split("function Set-TokenHighlight {", 1)[1].split(
+        "function Set-HeaderParagraph {", 1
+    )[0]
+    cell_setter = script.split("function Set-ListCell {", 1)[1].split(
+        "function Get-ExactListTitleRange {", 1
+    )[0]
 
-    for range_property in ("$Range.Start", "$Range.End", "$Range.Text"):
-        assert range_property in helper
-    assert "[char]13" in helper
-    assert "[char]7" in helper
-    assert "[char]11" not in helper
-    assert ".Trim(" not in helper
-    assert ".TrimEnd(" not in helper
-    assert "$Range.Text =" not in helper
-    assert "$Range.Duplicate" not in helper
-    assert ".SetRange(" not in helper
-    assert ".Find" not in helper
-    assert ".HighlightColorIndex" not in helper
-    assert helper.count('throw "LIST_HIGHLIGHT_RANGE_INVALID"') == 2
+    assert "function Get-ListVisibleRangeEnd {" not in script
+    assert "Get-ListVisibleRangeEnd -Range $Range" not in function
+    direct_statements = (
+        "$visibleRange = $Range.Duplicate",
+        "$directEnd = [int]$visibleRange.End - 1",
+        "$directEnd -lt [int]$visibleRange.Start",
+        'throw "LIST_HIGHLIGHT_RANGE_INVALID"',
+        "$visibleRange.End = $directEnd",
+        "[string]$visibleRange.Text -ceq $Token",
+        "$visibleRange.HighlightColorIndex = $WdYellow",
+        "$matches = 1",
+    )
+    direct_positions = [function.index(item) for item in direct_statements]
+    assert direct_positions == sorted(direct_positions)
+    assert function.count("$directEnd = [int]$visibleRange.End - 1") == 1
+
+    direct_path = function.split("if ($matches -eq 0)", 1)[0]
+    for forbidden in (
+        ".SetRange(",
+        ".Trim(",
+        ".TrimEnd(",
+        "[char]13",
+        "[char]7",
+        "T1_R2_C2",
+        "T4_R1_C2",
+    ):
+        assert forbidden not in direct_path
+
+    unchanged_find_statements = (
+        "$findBoundary = [int]$Range.End - 1",
+        "$search.SetRange($cursor, $findBoundary)",
+        "$search.Find.ClearFormatting()",
+        "$search.Find.Text = $Token",
+        "$search.Find.Forward = $true",
+        "$search.Find.Wrap = 0",
+        "$search.Find.Execute()",
+        "$matches += 1",
+        "$cursor = [int]$search.End",
+    )
+    find_positions = [
+        function.index(item) for item in unchanged_find_statements
+    ]
+    assert find_positions == sorted(find_positions)
+    assert direct_positions[-1] < find_positions[1]
+
+    release = function.split("finally {", 1)[1].split(
+        "if ($matches -eq 0)", 1
+    )[0]
+    assert "FinalReleaseComObject" in release
+    assert "$visibleRange" in release
+
+    post_write_statements = (
+        "$postRange = $cell.Range.Duplicate",
+        "$postRange.End = [int]$postRange.End - 1",
+        "[string]$postRange.Text -cne [string]$Patch.text",
+        'throw "LIST_CELL_TEXT_MISMATCH"',
+    )
+    post_write_positions = [
+        cell_setter.index(item) for item in post_write_statements
+    ]
+    assert post_write_positions == sorted(post_write_positions)
 
 
 def test_full_cell_highlight_is_direct_and_embedded_tokens_keep_find():
@@ -436,9 +491,11 @@ def test_full_cell_highlight_is_direct_and_embedded_tokens_keep_find():
         "$cursor = [int]$search.End",
     )
     direct_statements = (
-        "$visibleBoundary = Get-ListVisibleRangeEnd -Range $Range",
         "$visibleRange = $Range.Duplicate",
-        "$visibleRange.SetRange([int]$Range.Start, $visibleBoundary)",
+        "$directEnd = [int]$visibleRange.End - 1",
+        "$directEnd -lt [int]$visibleRange.Start",
+        'throw "LIST_HIGHLIGHT_RANGE_INVALID"',
+        "$visibleRange.End = $directEnd",
         "[string]$visibleRange.Text -ceq $Token",
         "$visibleRange.HighlightColorIndex = $WdYellow",
         "$matches = 1",
@@ -462,6 +519,7 @@ def test_full_cell_highlight_is_direct_and_embedded_tokens_keep_find():
     assert "FinalReleaseComObject" in release
     assert "$visibleRange" in release
     assert "$boundary =" not in function
+    assert "Get-ListVisibleRangeEnd" not in function
     assert "T1_R2_C2" not in function
     assert "T4_R1_C2" not in function
     assert "throw $FailureCode" in function
@@ -531,7 +589,17 @@ def test_list_cell_replaces_only_visible_text_and_asserts_one_paragraph():
     assert "$visibleRange.Text = [string]$Patch.text" in function
     assert "$cell.Range.Paragraphs.Count -ne 1" in function
     assert '-FailurePrefix "LIST_CELL_EXTRA_PARAGRAPH_SET"' in function
+    assert "$postRange = $cell.Range.Duplicate" in function
+    assert "$postRange.End = [int]$postRange.End - 1" in function
+    assert (
+        "[string]$postRange.Text -cne [string]$Patch.text" in function
+    )
     assert 'throw "LIST_CELL_TEXT_MISMATCH"' in function
+    post_write = function.split("$postRange = $null", 1)[1].split(
+        "$highlightFailureCode", 1
+    )[0]
+    assert "FinalReleaseComObject" in post_write
+    assert "$postRange" in post_write
 
 
 def test_cell_paragraph_failures_identify_checkpoint_and_coordinates():

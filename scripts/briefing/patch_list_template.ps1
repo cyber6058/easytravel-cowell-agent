@@ -1339,33 +1339,6 @@ function Get-ListHighlightMissingCode {
     throw "LIST_HIGHLIGHT_CONTEXT_INVALID"
 }
 
-function Get-ListVisibleRangeEnd {
-    param(
-        [Parameter(Mandatory = $true)]$Range
-    )
-    $rangeStart = [int]$Range.Start
-    $rangeEnd = [int]$Range.End
-    $rangeText = [string]$Range.Text
-    if ($rangeEnd -lt $rangeStart) {
-        throw "LIST_HIGHLIGHT_RANGE_INVALID"
-    }
-    $terminatorCount = 0
-    for ($index = $rangeText.Length - 1; $index -ge 0; $index -= 1) {
-        if (
-            [int][char]$rangeText[$index] -notin @(
-                [int][char]13, [int][char]7
-            )
-        ) {
-            break
-        }
-        $terminatorCount += 1
-    }
-    if ($terminatorCount -gt ($rangeEnd - $rangeStart)) {
-        throw "LIST_HIGHLIGHT_RANGE_INVALID"
-    }
-    return $rangeEnd - $terminatorCount
-}
-
 function Set-TokenHighlight {
     param(
         [Parameter(Mandatory = $true)]$Range,
@@ -1385,14 +1358,17 @@ function Set-TokenHighlight {
     if ([string]::IsNullOrEmpty($Token)) {
         return
     }
-    $visibleBoundary = Get-ListVisibleRangeEnd -Range $Range
     $findBoundary = [int]$Range.End - 1
     $cursor = [int]$Range.Start
     $matches = 0
     $visibleRange = $null
     try {
         $visibleRange = $Range.Duplicate
-        $visibleRange.SetRange([int]$Range.Start, $visibleBoundary)
+        $directEnd = [int]$visibleRange.End - 1
+        if ($directEnd -lt [int]$visibleRange.Start) {
+            throw "LIST_HIGHLIGHT_RANGE_INVALID"
+        }
+        $visibleRange.End = $directEnd
         if ([string]$visibleRange.Text -ceq $Token) {
             $visibleRange.HighlightColorIndex = $WdYellow
             $matches = 1
