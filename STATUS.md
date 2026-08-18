@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-08-18 LIST highlight-token safe-code offline implementation handoff
+
+- 一句話現況：shared highlight missing-token failure 已離線改為 caller-bound safe code：header 使用 `LIST_HIGHLIGHT_TOKEN_MISSING_HEADER_P<paragraph>`，ordinary cell 使用 `LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T<table>_R<row>_C<column>`；無效或混合 metadata 固定 fail closed 為 `LIST_HIGHLIGHT_CONTEXT_INVALID`。完整離線 suite 全綠，但私人 master 的 Word 實機結果仍未驗證。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`。production 只修改 `scripts/briefing/patch_list_template.ps1`：新增不接觸 token/text 的 `Get-ListHighlightMissingCode`，在 `Set-TokenHighlight` 的 empty-token return 前驗證 contextual pattern 與 80-character adapter safe-code contract，zero match 改 throw 已驗證的 caller code；header／cell callers 只傳自己持有的位置。Word Find range／loop、黃色 highlight、內容、layout、schema、私人 master／calibration 均未修改。實作 commit 是 `f07d86e`。
+- TDD 證據：先新增兩個核准的 source-contract regressions；修正前原始結果為 `2 failed`，第一案是 helper 尚不存在的 `IndexError`，第二案指出 mandatory `FailureCode` 尚未存在且 generic throw 仍在。最小修正後同一組為 `2 passed`；完整 `test_windows_word.py` 執行 exit 0，collect 輸出 `46 tests collected in 0.03s`。
+- 完整驗證：PowerShell AST parser 輸出 `PARSER_ERROR_COUNT=0`；第一次巢狀 parser wrapper 因引號被 shell 吃掉而把 script 當命令，但在 mandatory `JobPath` parameter binding 即停止，未進入 script body 或 Word，改用目前的 no-profile PowerShell 直接 `ParseFile` 後通過。完整 suite 為 `553 passed, 8 skipped in 22.27s`；`compileall` 輸出 `COMPILEALL_OK`，`git diff --check HEAD^ HEAD` exit 0，standalone generic throw 搜尋輸出 `STANDALONE_GENERIC_THROW_COUNT=0`。
+- 額外安全驗證：只抽取 helper source 的無 Word probe 得到 `HELPER_CODES=LIST_HIGHLIGHT_TOKEN_MISSING_HEADER_P2|LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T1_R2_C3`、`HELPER_INVALID_CASES=8`、`HELPER_MAX_LENGTH=69`；驗證結束時 `WINWORD_END_COUNT=1`，本回合未執行任何帶 `JobPath` 的 patch／COM 路徑。
+- 下一步：若要確認私人路徑實際會回報哪個 contextual code，需要新的明確授權，只執行一次 4 天 post-fix Word repro；不跑其他天數，失敗不重試。成功後才可檢查同次 DOCX／PDF／PNG 的內容、QR、12 pt、尾端空白行與分頁視覺契約。
+- 阻塞點：本回合依核准計畫在完整離線驗證後停止；沒有讀取或修改私人 master／calibration／DRAFT，沒有 GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。Word blocker 是否解除仍屬未驗證。
+
 ## 2026-08-18 LIST highlight-token safe-code offline implementation plan review
 
 - 一句話現況：OP 已核准 caller-bound highlight safe-code 書面規格；離線實作計畫已建立，明定 header paragraph、ordinary cell table／row／column 與固定 context-invalid regression，現等待 OP 核准計畫，尚未修改 PowerShell／tests。
