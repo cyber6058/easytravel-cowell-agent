@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-08-18 LIST highlight post-fix 4-day repro localizes guide-name cell
+
+- 一句話現況：獲准的唯一一次 4 天 post-fix Word repro 已把 generic highlight blocker 精確定位為 `LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T4_R1_C2`；這是 table 4 的日本聯絡人／緊急聯絡人姓名 cell。依約沒有重試、沒有跑其他天數，也沒有 DOCX／PDF／PNG 可供視覺驗收。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；唯讀 doctor 確認 Word COM、pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure 均正常，唯一 warning 是本測試不使用的 ffmpeg。selector collect-only 精確為 `1 test collected`，WINWORD baseline 是使用者原本的 1。正式執行只選 `test_calibrated_master_renders_gate_v_day_counts[4]`、使用全新 OS temp QA root 與 `-x`；5／6／7／8／12 天完全未進入。
+- 驗證：pytest 原始結果為 `1 failed`；adapter evidence 是 `WORD_GENERATION_FAILED`／`LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T4_R1_C2`／HRESULT `-2146233087`／return code 30／stage `run-action`，外層 `WORD_REPRO_EXIT=1`。QA root `C:\Users\cance\AppData\Local\Temp\easytravel-word-highlight-postfix-05265b8976c648d1b51fc0a8730c70ce` 只有空的 `day-004` directory，`QA_ENTRY_COUNT=1`，沒有可渲染或交付的 artifact。
+- 定位結論：離線 source mapping 證明 `_build_guide_cells` 以 `CellPatch(4, 1, 2, ...)` 寫入 `emergency_contact_name`；synthetic draft 未確認該 OP 欄位時，cell text 與 highlight token 都是固定 `WAITING_FOR_OP`。本次證據只證明 Word Find 在這個 full-cell token 路徑回報 zero match，尚未證明原因或修法。
+- 事後狀態：WINWORD count 回到 baseline 1。doctor 再確認 `master_sha256_matches: true` 與 normalized structure fingerprint 正常；`LIST-master.docx` 維持 36,262 bytes／SHA-256 `08B4393B8E7782F9F1425A4A265A4F2737CB1DEC7F1813F1B1C2EDE88DAAE468`，manifest 維持 3,096 bytes／SHA-256 `EDF2300B7FECB34662482291BC1DE37F2502E6FEB4F54AEC00895B0354D80593`，mtime 均仍為 2026-08-17 17:25:55。
+- 下一步：若要繼續，先離線診斷 T4/R1/C2 的 full-cell token Range boundary／Find 行為，提出最小修正與 regression；任何新的 Word repro 都需要另一個單次明確授權。
+- 阻塞點：本次唯一 Word repro 授權已消耗且失敗，不得重跑。沒有修改程式或私人 master／calibration，沒有 GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST highlight-token safe-code offline implementation handoff
 
 - 一句話現況：shared highlight missing-token failure 已離線改為 caller-bound safe code：header 使用 `LIST_HIGHLIGHT_TOKEN_MISSING_HEADER_P<paragraph>`，ordinary cell 使用 `LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T<table>_R<row>_C<column>`；無效或混合 metadata 固定 fail closed 為 `LIST_HIGHLIGHT_CONTEXT_INVALID`。完整離線 suite 全綠，但私人 master 的 Word 實機結果仍未驗證。
