@@ -376,6 +376,25 @@ def test_qr_removal_is_bounded_to_square_candidates_in_header_cell():
     assert 'throw "LIST_OUTPUT_QR_SURVIVED"' in function
 
 
+def test_expected_list_title_is_windows_powershell_ansi_safe():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    title_constant = script.split("$ExpectedListTitle = -join @(", 1)[1].split(
+        ")", 1
+    )[0]
+    output_assertion = script.split(
+        "function Assert-ListOutputPresentationContract {", 1
+    )[1].split("function Set-DailyRowCount {", 1)[0]
+    patch_action = script.split("function Invoke-Patch {", 1)[1].split(
+        "function Invoke-Action {", 1
+    )[0]
+
+    assert "日本精緻假期" not in script
+    for code_point in ("65E5", "672C", "7CBE", "7DFB", "5047", "671F"):
+        assert f"[char]0x{code_point}" in title_constant
+    assert "$expectedTitle -cne $ExpectedListTitle" in output_assertion
+    assert patch_action.count("-ExpectedTitle $ExpectedListTitle") == 2
+
+
 def test_output_font_contract_is_twelve_points_except_exact_title():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
     setter = script.split("function Set-ListOutputFontContract {", 1)[1].split(
@@ -389,7 +408,7 @@ def test_output_font_contract_is_twelve_points_except_exact_title():
     assert "$header.Range.Font.Size = $FontPoints" in setter
     assert "$footer.Range.Font.Size = $FontPoints" in setter
     assert "$titleRange.Font.Size = $TitleFontPoints" in setter
-    assert '"日本精緻假期"' in assertion
+    assert "$ExpectedListTitle" in assertion
     assert 'throw "LIST_TITLE_PLAN_INVALID"' in assertion
     assert '-FailurePrefix "LIST_POST_REOPEN_TITLE"' in assertion
     assert 'throw "LIST_TITLE_FONT_CHANGED"' in assertion

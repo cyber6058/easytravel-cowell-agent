@@ -16,6 +16,14 @@ public static class EasyTravelWordNativeMethods {
 "@
 
 $ExpectedHeaderCells = "1:1,2:1,2:2,2:3,3:1,4:1,4:2"
+$ExpectedListTitle = -join @(
+    [char]0x65E5,
+    [char]0x672C,
+    [char]0x7CBE,
+    [char]0x7DFB,
+    [char]0x5047,
+    [char]0x671F
+)
 $WdAlertsNone = 0
 $WdFormatDocumentDefault = 16
 $WdHeaderFooterPrimary = 1
@@ -1649,7 +1657,7 @@ function Assert-ListOutputPresentationContract {
         throw "LIST_TITLE_PLAN_INVALID"
     }
     $expectedTitle = [string]$titlePatch[0].text
-    if ($expectedTitle -cne "日本精緻假期") {
+    if ($expectedTitle -cne $ExpectedListTitle) {
         throw "LIST_TITLE_PLAN_INVALID"
     }
     $paragraphRange = $null
@@ -2604,7 +2612,7 @@ function Invoke-Patch {
             Get-ListTitleFontPoints `
                 -HeaderCell $headerCell `
                 -ParagraphNumber ([int]$Job.plan.preserved_title_paragraph) `
-                -ExpectedTitle "日本精緻假期"
+                -ExpectedTitle $ExpectedListTitle
         )
         foreach ($patch in $Job.plan.header_paragraphs) {
             Set-HeaderParagraph -HeaderCell $headerCell -Patch $patch
@@ -2635,7 +2643,7 @@ function Invoke-Patch {
             -FontPoints ([double]$Job.plan.output_font_points) `
             -TitleFontPoints $titleFontPointsBefore `
             -TitleParagraph ([int]$Job.plan.preserved_title_paragraph) `
-            -ExpectedTitle "日本精緻假期"
+            -ExpectedTitle $ExpectedListTitle
         Set-ListPaginationGuards -Document $document
         $outputInspection = Get-ListInspection `
             -Document $document `
