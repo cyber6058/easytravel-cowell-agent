@@ -1,5 +1,37 @@
 # STATUS
 
+## 2026-08-18 OSA0526D7459 one-shot unknown-date DRAFT handoff
+
+- 一句話現況：指定 URL 的唯一一次正式日期未知 DRAFT GET 與唯一一次本機
+  render 均已消耗且沒有重試；prepare 成功建立 `DRAFT_READY`，Yating／SRT／TXT
+  完成並通過 QA，但 Word QA 回傳 `VALIDATION_FAILED`，最終 draft 因此為
+  `BLOCKED`，不能交付 DOCX 為完成品。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；doctor 的
+  Yating、Word registry、pdftoppm 與 schema-2 LIST calibration 均 `ok`，只有
+  ffmpeg warning。唯一一次 GET 建立 run `20260817T212104+0800`，draft ID
+  `294eabb306f494d2deb56099427db9f32f6ed4cdbcb422cfc53be62d9c25a17a`；解析為
+  5 天、2 段航班、0 conflicts，5 個 day dates 全空白，只保留
+  `SOURCE_CITY_MISSING`／`SOURCE_DATE_MISSING`。narration input `ready: true`，
+  18 個 protected facts 依固定八段建立最小稿；`check-script` 回傳
+  `ready: true`、`issue_codes: []`、估計 444.2 秒。
+- 驗證：唯一一次 render 建立 run `20260817T212519+0800`，draft ID
+  `2f46fb3745c856509ce71ce2a2dd25b701a773eb4c90f5702b65611cde9dc318`。
+  Word DOCX 實體檔雖存在，但 artifact 為 `blocked`，`word-evidence`、Word-QA PDF、
+  QA index 與全頁 PNG 都缺少；safe error 只保留 stage `word`、code
+  `VALIDATION_FAILED`、exception `ValueError`，因此沒有視覺驗收也不得宣稱 Word
+  完成。Yating WAV／SRT／TXT 均 `completed`；WAV 為 PCM mono 16 kHz、426.109438
+  秒，落在 360–480 秒；三份 SHA-256 全與 metadata 相符，SRT 91 cues 與 segment
+  count 一致，末碼 426.108 秒貼合音訊結尾。開頭／中段／結尾各 12 秒已抽聽，
+  可辨且無明顯截斷或異常空白；WINWORD 0。暫存 helper 與 QA clips 已刪除。
+- 下一步：若 OP 要繼續修 Word，需另行核准一次「只用既有 blocked DOCX 的
+  Word-QA 診斷」或核准修正設計；不得把本次 no-retry 擴張成自動重跑 GET 或
+  render。音訊三件可供內部 review，但整體說明會包仍是 `BLOCKED`。
+- 阻塞點：Word QA 沒留下 PDF／PNG 或具體 assertion，現有 safe error 無法判定是
+  page count、required text、QR、day-page map 或其他哪一條 ValueError；在新授權前
+  不重跑。ffmpeg 未設定，MP3 仍為 `missing`，日期未知與 Word blocked 都阻擋
+  CONFIRMED。沒有 JMA、LINE、upload、publish、deploy、push 或 Cowell 動作；公開
+  remote 未獲 push 例外。
+
 ## 2026-08-17 unknown-date DRAFT implementation handoff
 
 - 一句話現況：A「日期未知 DRAFT」已依核准規格完成 TDD 實作、完整離線驗證、
