@@ -1,5 +1,18 @@
 # STATUS
 
+## 2026-08-18 LIST direct-range post-fix 4-day repro crosses highlight and fails page-count QA
+
+- 一句話現況：唯一一次獲准的 4 天 post-fix Word repro 已越過 T4/R1/C2 full-cell highlight blocker並產生 `LIST.docx`，但在 Word report 與 PDF inspection 的頁數一致性檢查失敗；因此沒有完成 DOCX／PDF／PNG QA，也不得重試。
+- 前檢：開工 `git pull --ff-only` 為 `Already up to date.`，HEAD 為 `043e9a23623a75b35b2a380ae86ed9a9172b43e9`，working tree 乾淨。private master、manifest、pdftoppm 都存在；master 為 36,262 bytes／SHA-256 `08b4393b8e7782f9f1425a4a265a4f2737cb1dec7f1813f1b1c2ede88daae468`，manifest 為 3,096 bytes／SHA-256 `edf2300b7fecb34662482291bc1de37f2502e6feb4f54aec00895b0354d80593`，WINWORD baseline 是使用者既有的 1。
+- Selector gate：全新 QA root `C:\Users\cance\projects\easytravel-cowell-agent\output\word-repro-direct-range-postfix-8c7371491c99459d9c0b83e008165cf2` 建立後為空；collect-only 原文為 `1 test collected in 0.95s`，唯一 node 是 `test_calibrated_master_renders_gate_v_day_counts[4]`，collect 後 WINWORD 仍為 1。
+- 唯一正式 run：只呼叫一次上述 `[4]` selector並使用 `-x -vv`；5／6／7／8／12 天完全未進入。原文為 `1 failed in 35.45s`、`WORD_REPRO_EXIT=1`，依 OP 約束沒有重試。
+- 新 blocker：`backend.render_word` 已完成 patch並進入 `render_list_word_for_qa`。Word report 的 `computed_page_count` 通過 `expected_page_count=2` check，接著 `inspect_list_pdf` 回傳不同頁數，最終為 `ValueError: Word report and PDF LIST page count do not match`。exception 沒有揭露 PDF inspection 的實際頁數，且 temporary PDF 隨失敗清理；不得以第二次 Word run 補證。
+- Artifact／QA：QA root 只有 `day-004` directory 與 32,768-byte `day-004\LIST.docx`；DOCX 1、PDF 0、PNG 0、index 0。因正式 run 非零，不符合「若成功才完成同次 QA」條件，沒有另行 render、開啟或交付該 DOCX，也沒有用替代工具補產 PDF／PNG。
+- Postflight：WINWORD 回到 baseline 1；private master／manifest 的大小與 SHA-256 完全未變。git working tree 在寫入本 STATUS 前仍乾淨，沒有修改 production 或 tests。
+- 判讀：實機已支持 one-retreat direct path 能跨過先前 T4/R1/C2 blocker；目前尚不能宣稱 4 天 Word artifact 合格，因 pagination report 與實際 PDF page count 矛盾。這是新的最早失敗邊界，不是視覺 QA 結果。
+- 下一步：若要繼續，先另行核准 4 天 `expected_page_count=2`／PDF inspection mismatch 的純離線診斷與書面修正規格；未核准前不修改 production／tests，也不再執行 Word。沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。
+- 阻塞點：本次唯一 Word repro 授權已消耗且失敗；PDF inspection 實際頁數未知，DOCX／PDF／PNG QA 未完成。
+
 ## 2026-08-18 LIST full-cell direct range offline implementation handoff
 
 - 一句話現況：`Set-TokenHighlight` 的 exact full-cell direct path 已離線改為 duplicate 只退一個自己的 `End` position，並移除把 cell 尾端兩個文字碼點錯當成兩個 Range positions 的 `Get-ListVisibleRangeEnd`；完整離線驗證全綠，但 Word 實機仍未驗證。
