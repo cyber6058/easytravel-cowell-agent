@@ -1,5 +1,17 @@
 # STATUS
 
+## 2026-08-18 LIST full-cell direct range offline implementation handoff
+
+- 一句話現況：`Set-TokenHighlight` 的 exact full-cell direct path 已離線改為 duplicate 只退一個自己的 `End` position，並移除把 cell 尾端兩個文字碼點錯當成兩個 Range positions 的 `Get-ListVisibleRangeEnd`；完整離線驗證全綠，但 Word 實機仍未驗證。
+- TDD 證據：implementation baseline 為 `ad791d0dd15d99c986db5dee798a702d40b14e86`，開工 `git pull --ff-only` 為 `Already up to date.`。先只替換 primary regression，red 原文為 `.F [100%]`：content-shape control 通過，adapter 因 helper 仍存在而失敗。最小 production change 後同一 command 為 `.. [100%]`；對齊 preservation contracts 後五個 target tests 為 `..... [100%]`。
+- 實作內容：production 完整移除唯一 caller 的 helper；direct duplicate 只計算一次 `$directEnd = [int]$visibleRange.End - 1`，以 `LIST_HIGHLIGHT_RANGE_INVALID` fail closed 後直接指定 `End`，再沿用 case-sensitive equality／黃色／`$matches = 1`。embedded／repeated Find boundary、settings、counter、cursor、caller-bound safe codes 與 cleanup 均未改。implementation commit 為 `7cb8c0b`。
+- 無 COM／focused 驗證：compound-marker model 為 paragraph selected span 7、cell text terminator code points 2、cell range terminator span 1、removed algorithm span 6、selected span 7、over-retreat 1，前後 WINWORD 都是 1；兩個 focused files 的 84 tests 全綠，PowerShell parser 為 `PARSER_ERROR_COUNT=0`。
+- Non-change 證據：第一次唯讀 wrapper 因 PowerShell `.Split()` 把 delimiter 當字元集合，將 direct／Find count 誤報 0 並 exit 1；未改檔。改用 `IndexOf`／`Substring` 後重跑，得到 plan builder、`test_word_list.py`、header caller、cell caller 全部 unchanged，helper definition／call 0、direct retreat／Find boundary 各 1、coordinate／forbidden 0、changed files 精確為核准兩檔，`GIT_DIFF_CHECK_OK`。
+- 完整驗證：`556 passed, 8 skipped in 25.98s`、`COMPILEALL_OK`、`GIT_DIFF_CHECK_OK`；validation 後 WINWORD count 仍為 1。沒有新增 skip、弱化或刪除 tests。
+- 範圍界線：沒有啟動 Word、讀寫私人 master／calibration／DRAFT、產生 DOCX／PDF／PNG、GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push；沒有修改內容、schema、QR policy、12 pt、paragraph、pagination、layout 或 installed runtime。
+- 下一步：若要確認 blocker 是否解除，需要新的明確授權，只執行一次 4 天 post-fix Word repro；不跑其他天數，成功或失敗都不重試。只有成功產生同次 DOCX／PDF／PNG 後才能完成內容與視覺 QA。
+- 阻塞點：Word 實機與 artifacts 未驗證；本輪依核准計畫在離線 handoff 停止。
+
 ## 2026-08-18 LIST full-cell direct range offline implementation plan review
 
 - 一句話現況：OP 已核准 T4/R1/C2 full-cell direct range 書面規格；離線實作計畫已建立並等待 OP 核准，尚未修改 production 或 tests。

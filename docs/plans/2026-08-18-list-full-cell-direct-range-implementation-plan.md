@@ -2,7 +2,8 @@
 
 日期：2026-08-18
 
-狀態：書面規格已由 OP 核准；本計畫等待 OP 核准，尚未修改 production 或 tests。
+狀態：書面規格與本計畫均已由 OP 核准；離線實作於 2026-08-18 完成並通過完整
+驗證。Word 實機 repro 仍是獨立關卡。
 
 依據：
 `docs/specs/2026-08-18-list-full-cell-direct-range-design.md`
@@ -357,6 +358,41 @@ git log -3 --oneline
 
 working tree 必須乾淨。本計畫不執行 push；push 是另一個明確授權關卡。
 
+## 實作結果（2026-08-18）
+
+- implementation baseline 為 `ad791d0dd15d99c986db5dee798a702d40b14e86`；開工
+  `git pull --ff-only` 為 `Already up to date.`，working tree 乾淨。
+- primary red command 原文為 `.F [100%]`。content-shape control 通過；adapter
+  regression 因 `function Get-ListVisibleRangeEnd {` 仍存在而失敗，符合計畫後才修改
+  production。
+- 最小 production change 完整移除該 helper；direct duplicate 計算一次
+  `$directEnd = [int]$visibleRange.End - 1`，safe check 後直接指定 `End`。同一 red command
+  轉為 `.. [100%]`。
+- 對齊 preservation contracts 後，五個 target tests 為 `..... [100%]`；沒有第二個
+  production change。
+- 無 COM model 輸出 `PARAGRAPH_SELECTED_VISIBLE_SPAN=7`、
+  `CELL_TEXT_TERMINATOR_CODEPOINTS=2`、`CELL_RANGE_TERMINATOR_SPAN=1`、
+  `CELL_REMOVED_ALGORITHM_VISIBLE_SPAN=6`、`CELL_SELECTED_VISIBLE_SPAN=7`、
+  `CELL_REMOVED_ALGORITHM_OVER_RETREAT=1`、`SELECTED_DIRECT_END_RETREAT=1`，前後
+  WINWORD count 都是 1。cell range span 仍來自先前 live invariant，不是本輪新 Word
+  evidence。
+- 兩個 focused files 的 84 tests 全綠；PowerShell parser 輸出
+  `PARSER_ERROR_COUNT=0`。
+- 第一次唯讀 non-change wrapper 因 PowerShell `.Split()` 把 delimiter 當字元集合，令
+  direct／Find occurrence 誤計為 0 並以 exit 1 停止；未修改任何檔案。改用
+  `IndexOf`／`Substring` 後重新執行，所有 checks 通過。
+- final non-change proof 為 `PLAN_BUILDER_UNCHANGED=True`、
+  `TEST_WORD_LIST_UNCHANGED=True`、`HEADER_CALLER_UNCHANGED=True`、
+  `CELL_CALLER_UNCHANGED=True`、helper definition／call 均為 0、direct retreat／Find
+  boundary 均為 1、coordinate／direct-forbidden counts 均為 0、
+  `CHANGED_FILE_COUNT=2`、`CHANGED_FILES_EXACT=True` 與 `GIT_DIFF_CHECK_OK`。
+- 完整 suite 為 `556 passed, 8 skipped in 25.98s`；另有 `COMPILEALL_OK` 與
+  `GIT_DIFF_CHECK_OK`，validation 後 WINWORD count 仍為 1。
+- implementation commit 為 `7cb8c0b`（`fix(briefing): retreat LIST direct highlight
+  range once`）；只修改核准的 PowerShell adapter 與 source-contract tests。
+- 沒有啟動 Word、讀寫私人 master／calibration／DRAFT、產生 DOCX／PDF／PNG、使用網路、
+  installed runtime 或外部系統，也沒有 push。Word blocker 是否解除仍未驗證。
+
 ## 4. Failure handling
 
 - primary red adapter regression 未按預期失敗：停止，不改 production。
@@ -393,7 +429,7 @@ working tree 必須乾淨。本計畫不執行 push；push 是另一個明確授
 
 ## 6. 計畫核准關卡
 
-OP 回覆下列用語後，才可開始 Task 1 的離線 test edit。該核准只涵蓋本計畫列出的
+OP 已於 2026-08-18 使用下列用語核准本計畫。該核准只涵蓋本計畫列出的
 production／test change、離線驗證與本機 commits，不涵蓋 Word 或其他外部關卡：
 
 ```text

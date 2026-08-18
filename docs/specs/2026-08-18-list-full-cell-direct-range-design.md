@@ -3,9 +3,9 @@
 ## Status
 
 Offline diagnosis and the selected correction design were written on
-2026-08-18. OP approved this document on 2026-08-18 for creation of an offline
-implementation plan only. It does not authorize production or test changes,
-Word COM, or another reproduction.
+2026-08-18. OP approved this document and then the separate implementation
+plan on 2026-08-18. Offline implementation is complete and validated; Word COM
+and another reproduction remain unauthorized and unverified.
 
 ## Authorized scope
 
