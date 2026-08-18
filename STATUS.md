@@ -1,5 +1,14 @@
 # STATUS
 
+## 2026-08-18 LIST title post-fix Word repro reaches cell paragraph blocker
+
+- 一句話現況：獲准的唯一一次 4 天 post-fix Word repro 已跨過 `LIST_SOURCE_TITLE_PARAGRAPH_MISMATCH`，但後續失敗於 `LIST_CELL_EXTRA_PARAGRAPH`；依約沒有重試、沒有跑其他天數，也沒有 DOCX／PDF／PNG 可供視覺驗收。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；前檢 doctor 確認 Word COM、pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure 均 `ok`，WINWORD baseline 為使用者原本的 1。只執行 opt-in integration 的 `[4]` node，使用新 OS temp QA root 與 `-x`，5／6／7／8／12 天完全未進入。
+- 驗證：pytest 原始結果為 `1 failed`，adapter evidence 是 `WORD_GENERATION_FAILED`／`LIST_CELL_EXTRA_PARAGRAPH`／return code 30／stage `run-action`。QA root `C:\Users\cance\AppData\Local\Temp\easytravel-word-postfix-acaaaa53cfb34273a082904b06c715c4` 只有空的 `day-004` directory。事後 WINWORD count 回到 1；doctor 再確認 `master_sha256_matches: true` 與 normalized structure fingerprint 正常。
+- 結論：commit `4e9d37d` 的 ANSI-safe title 修正已讓同一實機路徑通過原本的 title getter checkpoint；新 blocker 位於欄位填值後的 cell paragraph contract，與使用者要求移除填值後額外換行的區域一致，但本回合沒有猜測是哪個 cell，也沒有修改程式。
+- 下一步：先另行核准離線把 `LIST_CELL_EXTRA_PARAGRAPH` 定位到安全的 table／row／column 或 patch checkpoint，建立紅測並最小修正；任何新的 Word repro 仍需新的單次授權。
+- 阻塞點：本次唯一 Word repro 授權已消耗且失敗；未產生可交付檔案，沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST title ANSI decoding root-cause fix handoff
 
 - 一句話現況：唯一一次 4 天 Word repro 已把 getter 失敗精確定位為 `LIST_SOURCE_TITLE_PARAGRAPH_MISMATCH`；根因已證實並離線修正，但修正後尚未獲授權重跑 Word，因此 DOCX／PDF／PNG 成功仍未驗證。
