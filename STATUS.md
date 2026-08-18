@@ -1,5 +1,14 @@
 # STATUS
 
+## 2026-08-18 LIST embedded Find boundary offline implementation plan review
+
+- 一句話現況：OP 已核准 embedded Find boundary split 書面規格；離線實作計畫已建立並等待 OP 核准，尚未修改 production 或 tests。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；重新核對 `08647d3` 規格、現行 `Set-TokenHighlight`、既有 content-shape control 與兩個錯誤接受 shared boundary 的 source-contract tests。新增 `docs/plans/2026-08-18-list-embedded-find-boundary-implementation-plan.md`，拆成 test-first red、最小兩變數 source change、target green、無 COM boundary model、focused/parser/non-change、完整 suite 與 handoff 六個 tasks。
+- 計畫選擇：只修改 `tests/unit/travel_briefing/test_windows_word.py` 與 `scripts/briefing/patch_list_template.ps1`；既有 `test_word_list.py` 的 5 embedded＋2 full-cell control 僅執行、不修改。`$visibleBoundary` 專供 exact/direct path，`$findBoundary = [int]$Range.End - 1` 專供 embedded／repeated Find；不新增 helper、不寫死座標、不改 caller／schema／formatting。
+- 誠實邊界：本輪只有文件；沒有修改或執行 production/tests，沒有啟動 Word、讀寫私人 master／calibration、產生 DOCX／PDF／PNG，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。Word 成功仍未驗證。
+- 下一步：OP 核准本計畫後才開始離線 TDD；完整離線驗證通過即停止。其後若要驗證實機，仍需另一個明確的一次性 4 天 Word 授權，不跑其他天數，成功或失敗都不重試。
+- 阻塞點：離線實作計畫核准關卡。
+
 ## 2026-08-18 LIST embedded Find boundary offline diagnosis and design review
 
 - 一句話現況：T1/R2/C2 回歸已離線縮小為 full-cell 修正把 terminator-aware visible boundary 同時套到 embedded Word Find；已完成 boundary split 書面規格，等待 OP 審閱，尚未修改 production 或 tests。
