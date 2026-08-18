@@ -379,7 +379,7 @@ def test_highlight_failure_code_is_validated_before_empty_token_return():
     assert 'throw "LIST_HIGHLIGHT_TOKEN_MISSING"' not in script
 
     unchanged_statements = (
-        "$boundary = [int]$Range.End - 1",
+        "$boundary = Get-ListVisibleRangeEnd -Range $Range",
         "$cursor = [int]$Range.Start",
         "$search.Find.ClearFormatting()",
         "$search.Find.Text = $Token",
@@ -390,6 +390,73 @@ def test_highlight_failure_code_is_validated_before_empty_token_return():
     )
     positions = [function.index(statement) for statement in unchanged_statements]
     assert positions == sorted(positions)
+
+
+def test_visible_highlight_range_is_terminator_aware():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    helper = script.split(
+        "function Get-ListVisibleRangeEnd {", 1
+    )[1].split("function Set-TokenHighlight {", 1)[0]
+
+    for range_property in ("$Range.Start", "$Range.End", "$Range.Text"):
+        assert range_property in helper
+    assert "[char]13" in helper
+    assert "[char]7" in helper
+    assert "[char]11" not in helper
+    assert ".Trim(" not in helper
+    assert ".TrimEnd(" not in helper
+    assert "$Range.Text =" not in helper
+    assert "$Range.Duplicate" not in helper
+    assert ".SetRange(" not in helper
+    assert ".Find" not in helper
+    assert ".HighlightColorIndex" not in helper
+    assert helper.count('throw "LIST_HIGHLIGHT_RANGE_INVALID"') == 2
+
+
+def test_full_cell_highlight_is_direct_and_embedded_tokens_keep_find():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    function = script.split("function Set-TokenHighlight {", 1)[1].split(
+        "function Set-HeaderParagraph {", 1
+    )[0]
+
+    unchanged_find_statements = (
+        "$cursor = [int]$Range.Start",
+        "$search = $Range.Duplicate",
+        "$search.SetRange($cursor, $boundary)",
+        "$search.Find.ClearFormatting()",
+        "$search.Find.Text = $Token",
+        "$search.Find.Forward = $true",
+        "$search.Find.Wrap = 0",
+        "$search.Find.Execute()",
+        "$search.HighlightColorIndex = $WdYellow",
+        "$matches += 1",
+        "$cursor = [int]$search.End",
+    )
+    direct_statements = (
+        "$boundary = Get-ListVisibleRangeEnd -Range $Range",
+        "$visibleRange = $Range.Duplicate",
+        "$visibleRange.SetRange([int]$Range.Start, $boundary)",
+        "[string]$visibleRange.Text -ceq $Token",
+        "$visibleRange.HighlightColorIndex = $WdYellow",
+        "$matches = 1",
+    )
+
+    direct_positions = [function.index(item) for item in direct_statements]
+    assert direct_positions == sorted(direct_positions)
+    find_positions = [
+        function.index(item) for item in unchanged_find_statements
+    ]
+    assert find_positions == sorted(find_positions)
+    assert direct_positions[-1] < find_positions[1]
+    assert "if ($matches -eq 0)" in function.split(
+        "$matches = 1", 1
+    )[1].split("while ($cursor -lt $boundary)", 1)[0]
+    release = function.split("finally {", 1)[1].split(
+        "if ($matches -eq 0)", 1
+    )[0]
+    assert "FinalReleaseComObject" in release
+    assert "$visibleRange" in release
+    assert "throw $FailureCode" in function
 
 
 def test_title_range_failures_identify_stage_and_exact_branch():

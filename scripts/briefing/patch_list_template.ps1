@@ -1339,6 +1339,33 @@ function Get-ListHighlightMissingCode {
     throw "LIST_HIGHLIGHT_CONTEXT_INVALID"
 }
 
+function Get-ListVisibleRangeEnd {
+    param(
+        [Parameter(Mandatory = $true)]$Range
+    )
+    $rangeStart = [int]$Range.Start
+    $rangeEnd = [int]$Range.End
+    $rangeText = [string]$Range.Text
+    if ($rangeEnd -lt $rangeStart) {
+        throw "LIST_HIGHLIGHT_RANGE_INVALID"
+    }
+    $terminatorCount = 0
+    for ($index = $rangeText.Length - 1; $index -ge 0; $index -= 1) {
+        if (
+            [int][char]$rangeText[$index] -notin @(
+                [int][char]13, [int][char]7
+            )
+        ) {
+            break
+        }
+        $terminatorCount += 1
+    }
+    if ($terminatorCount -gt ($rangeEnd - $rangeStart)) {
+        throw "LIST_HIGHLIGHT_RANGE_INVALID"
+    }
+    return $rangeEnd - $terminatorCount
+}
+
 function Set-TokenHighlight {
     param(
         [Parameter(Mandatory = $true)]$Range,
@@ -1358,22 +1385,44 @@ function Set-TokenHighlight {
     if ([string]::IsNullOrEmpty($Token)) {
         return
     }
-    $boundary = [int]$Range.End - 1
+    $boundary = Get-ListVisibleRangeEnd -Range $Range
     $cursor = [int]$Range.Start
     $matches = 0
-    while ($cursor -lt $boundary) {
-        $search = $Range.Duplicate
-        $search.SetRange($cursor, $boundary)
-        $search.Find.ClearFormatting()
-        $search.Find.Text = $Token
-        $search.Find.Forward = $true
-        $search.Find.Wrap = 0
-        if (-not $search.Find.Execute()) {
-            break
+    $visibleRange = $null
+    try {
+        $visibleRange = $Range.Duplicate
+        $visibleRange.SetRange([int]$Range.Start, $boundary)
+        if ([string]$visibleRange.Text -ceq $Token) {
+            $visibleRange.HighlightColorIndex = $WdYellow
+            $matches = 1
         }
-        $search.HighlightColorIndex = $WdYellow
-        $matches += 1
-        $cursor = [int]$search.End
+    }
+    finally {
+        if ($null -ne $visibleRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $visibleRange
+                )
+            }
+            catch {
+            }
+        }
+    }
+    if ($matches -eq 0) {
+        while ($cursor -lt $boundary) {
+            $search = $Range.Duplicate
+            $search.SetRange($cursor, $boundary)
+            $search.Find.ClearFormatting()
+            $search.Find.Text = $Token
+            $search.Find.Forward = $true
+            $search.Find.Wrap = 0
+            if (-not $search.Find.Execute()) {
+                break
+            }
+            $search.HighlightColorIndex = $WdYellow
+            $matches += 1
+            $cursor = [int]$search.End
+        }
     }
     if ($matches -eq 0) {
         throw $FailureCode

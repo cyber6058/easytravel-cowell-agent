@@ -63,7 +63,8 @@ assertions 均已通過。
 
 新增 `test_patch_plan_classifies_highlight_tokens_by_content_shape`：
 
-1. 使用既有 `draft(4)` 與 `build_list_patch_plan`，不讀私人檔案；
+1. 使用既有 `draft(4)`，把 OP fields 改為與 Word integration repro 相同的全部未確認
+   synthetic values，再呼叫 `build_list_patch_plan`；不讀私人檔案；
 2. 依 patch execution order 收集所有 `highlight_text` 非空的 ordinary cells；
 3. assert 共 7 格，前 5 格的 `text` 只包含 token、但不等於 token；
 4. assert 最後兩格精確為 T4/R1/C2、T4/R1/C3，且兩者 `text == highlight_text ==

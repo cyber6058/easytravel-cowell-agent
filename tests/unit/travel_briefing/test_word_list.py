@@ -163,6 +163,58 @@ def test_patch_plan_maps_any_positive_trip_to_dynamic_daily_rows(day_count):
     assert plan.cell(4, 1, 2).highlight_text == WAITING_FOR_OP
 
 
+def test_patch_plan_classifies_highlight_tokens_by_content_shape():
+    source = draft(4)
+    source = replace(
+        source,
+        op_fields=tuple(
+            missing_op_field(field.name) for field in source.op_fields
+        ),
+    ).with_recomputed_id()
+
+    plan = build_list_patch_plan(
+        source,
+        expected_layout_fingerprint="a" * 64,
+    )
+    highlighted = [patch for patch in plan.cells if patch.highlight_text]
+
+    assert [
+        (patch.table, patch.row, patch.column) for patch in highlighted
+    ] == [
+        (1, 2, 2),
+        (1, 2, 3),
+        (1, 3, 1),
+        (1, 4, 1),
+        (1, 4, 2),
+        (4, 1, 2),
+        (4, 1, 3),
+    ]
+    assert all(
+        patch.highlight_text in patch.text
+        and patch.text != patch.highlight_text
+        for patch in highlighted[:5]
+    )
+    assert all(
+        patch.text == patch.highlight_text == WAITING_FOR_OP
+        for patch in highlighted[5:]
+    )
+    assert plan.cell(1, 2, 3).text.count(WAITING_FOR_OP) == 2
+    assert all(
+        marker not in patch.text and marker not in patch.highlight_text
+        for patch in highlighted[5:]
+        for marker in ("\r", "\n", "\a")
+    )
+    assert tuple(ord(character) for character in WAITING_FOR_OP) == (
+        0x5F85,
+        0x20,
+        0x4F,
+        0x50,
+        0x20,
+        0x78BA,
+        0x8A8D,
+    )
+
+
 def test_patch_plan_uses_manual_line_break_for_leader_cell():
     plan = build_list_patch_plan(
         draft(4),
