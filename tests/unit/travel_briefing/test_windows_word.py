@@ -366,6 +366,9 @@ def test_output_font_contract_is_twelve_points_except_exact_title():
 
 def test_title_font_contract_accepts_calibrated_leading_spaces():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    finder = script.split("function Get-ExactListTitleRange {", 1)[1].split(
+        "function Get-ListTitleFontPoints {", 1
+    )[0]
     getter = script.split("function Get-ListTitleFontPoints {", 1)[1].split(
         "function Set-ListOutputFontContract {", 1
     )[0]
@@ -373,18 +376,41 @@ def test_title_font_contract_accepts_calibrated_leading_spaces():
         "function Assert-ListOutputPresentationContract {", 1
     )[1].split("function Set-DailyRowCount {", 1)[0]
 
-    assert '$normalizedTitle = ([string]$range.Text).Trim(' in getter
-    assert "$normalizedTitle -cne $ExpectedTitle" in getter
-    assert (
-        '$normalizedTitle = ([string]$titleRange.Text).Trim('
-        in assertion
-    )
-    assert "$normalizedTitle -cne $expectedTitle" in assertion
-    for function in (getter, assertion):
-        assert "[char]13" in function
-        assert "[char]7" in function
-        assert "[char]32" in function
-        assert "[char]9" in function
+    assert '$normalizedTitle = ([string]$candidate.Text).Trim(' in finder
+    assert "$normalizedTitle -cne $ExpectedTitle" in finder
+    assert "Get-ExactListTitleRange" in getter
+    assert "Get-ExactListTitleRange" in assertion
+    assert "[char]13" in finder
+    assert "[char]7" in finder
+    assert "[char]32" in finder
+    assert "[char]9" in finder
+
+
+def test_title_font_range_uses_word_find_not_text_length_position_math():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+    finder = script.split("function Get-ExactListTitleRange {", 1)[1].split(
+        "function Get-ListTitleFontPoints {", 1
+    )[0]
+    getter = script.split("function Get-ListTitleFontPoints {", 1)[1].split(
+        "function Set-ListOutputFontContract {", 1
+    )[0]
+    setter = script.split("function Set-ListOutputFontContract {", 1)[1].split(
+        "function Assert-VisibleRangeFontContract {", 1
+    )[0]
+    assertion = script.split(
+        "function Assert-ListOutputPresentationContract {", 1
+    )[1].split("function Set-DailyRowCount {", 1)[0]
+
+    assert "$candidate = $ParagraphRange.Duplicate" in finder
+    assert '$normalizedTitle = ([string]$candidate.Text).Trim(' in finder
+    assert "$candidate.Find.Text = $ExpectedTitle" in finder
+    assert "if (-not $candidate.Find.Execute())" in finder
+    assert "[string]$candidate.Text -cne $ExpectedTitle" in finder
+    for function in (getter, setter, assertion):
+        assert "Get-ExactListTitleRange" in function
+    assert "$range.End = $visibleEnd" not in getter
+    for function in (setter, assertion):
+        assert "$titleRange.End = [int]$titleRange.End - 1" not in function
 
 
 def test_patch_action_requires_schema_three_and_reports_normalization_evidence():

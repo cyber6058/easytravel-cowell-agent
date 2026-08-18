@@ -1433,42 +1433,86 @@ function Set-ListCell {
     Set-TokenHighlight -Range $cell.Range -Token ([string]$Patch.highlight_text)
 }
 
+function Get-ExactListTitleRange {
+    param(
+        [Parameter(Mandatory = $true)]$ParagraphRange,
+        [Parameter(Mandatory = $true)][string]$ExpectedTitle
+    )
+    $candidate = $null
+    try {
+        $candidate = $ParagraphRange.Duplicate
+        $normalizedTitle = ([string]$candidate.Text).Trim(
+            [char[]]@([char]13, [char]7, [char]32, [char]9)
+        )
+        if ($normalizedTitle -cne $ExpectedTitle) {
+            return $null
+        }
+        $candidate.Find.ClearFormatting()
+        $candidate.Find.Text = $ExpectedTitle
+        $candidate.Find.Forward = $true
+        $candidate.Find.Wrap = 0
+        $candidate.Find.Format = $false
+        $candidate.Find.MatchCase = $true
+        $candidate.Find.MatchWholeWord = $false
+        if (-not $candidate.Find.Execute()) {
+            return $null
+        }
+        if ([string]$candidate.Text -cne $ExpectedTitle) {
+            return $null
+        }
+        $result = $candidate
+        $candidate = $null
+        return $result
+    }
+    finally {
+        if ($null -ne $candidate) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $candidate
+                )
+            }
+            catch {}
+        }
+    }
+}
+
 function Get-ListTitleFontPoints {
     param(
         [Parameter(Mandatory = $true)]$HeaderCell,
         [Parameter(Mandatory = $true)][int]$ParagraphNumber,
         [Parameter(Mandatory = $true)][string]$ExpectedTitle
     )
-    $paragraph = $HeaderCell.Range.Paragraphs.Item($ParagraphNumber)
-    $range = $null
+    $paragraphRange = $null
+    $titleRange = $null
     try {
-        $range = $paragraph.Range.Duplicate
-        $text = [string]$range.Text
-        $visibleEnd = [int]$range.End
-        for ($index = $text.Length - 1; $index -ge 0; $index -= 1) {
-            if ([int][char]$text[$index] -notin @([int][char]13, [int][char]7)) {
-                break
-            }
-            $visibleEnd -= 1
-        }
-        $range.End = $visibleEnd
-        $normalizedTitle = ([string]$range.Text).Trim(
-            [char[]]@([char]13, [char]7, [char]32, [char]9)
+        $paragraphRange = (
+            $HeaderCell.Range.Paragraphs.Item($ParagraphNumber).Range.Duplicate
         )
-        if ($normalizedTitle -cne $ExpectedTitle) {
+        $titleRange = Get-ExactListTitleRange `
+            -ParagraphRange $paragraphRange `
+            -ExpectedTitle $ExpectedTitle
+        if ($null -eq $titleRange) {
             throw "LIST_SOURCE_HEADER_TITLE_CHANGED"
         }
-        $fontPoints = [double]$range.Font.Size
+        $fontPoints = [double]$titleRange.Font.Size
         if ($fontPoints -le 0 -or $fontPoints -gt 72) {
             throw "LIST_TITLE_FONT_AMBIGUOUS"
         }
         return $fontPoints
     }
     finally {
-        if ($null -ne $range) {
+        if ($null -ne $titleRange) {
             try {
                 [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
-                    $range
+                    $titleRange
+                )
+            }
+            catch {}
+        }
+        if ($null -ne $paragraphRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $paragraphRange
                 )
             }
             catch {}
@@ -1482,7 +1526,8 @@ function Set-ListOutputFontContract {
         [Parameter(Mandatory = $true)]$HeaderCell,
         [Parameter(Mandatory = $true)][double]$FontPoints,
         [Parameter(Mandatory = $true)][double]$TitleFontPoints,
-        [Parameter(Mandatory = $true)][int]$TitleParagraph
+        [Parameter(Mandatory = $true)][int]$TitleParagraph,
+        [Parameter(Mandatory = $true)][string]$ExpectedTitle
     )
     if ([Math]::Abs($FontPoints - 12.0) -gt 0.01) {
         throw "LIST_OUTPUT_FONT_POLICY_INVALID"
@@ -1499,21 +1544,17 @@ function Set-ListOutputFontContract {
             $footer.Range.Font.Size = $FontPoints
         }
     }
+    $paragraphRange = $null
     $titleRange = $null
     try {
-        $titleRange = (
+        $paragraphRange = (
             $HeaderCell.Range.Paragraphs.Item($TitleParagraph).Range.Duplicate
         )
-        $titleText = [string]$titleRange.Text
-        for ($index = $titleText.Length - 1; $index -ge 0; $index -= 1) {
-            if (
-                [int][char]$titleText[$index] -notin @(
-                    [int][char]13, [int][char]7
-                )
-            ) {
-                break
-            }
-            $titleRange.End = [int]$titleRange.End - 1
+        $titleRange = Get-ExactListTitleRange `
+            -ParagraphRange $paragraphRange `
+            -ExpectedTitle $ExpectedTitle
+        if ($null -eq $titleRange) {
+            throw "LIST_SOURCE_HEADER_TITLE_CHANGED"
         }
         $titleRange.Font.Size = $TitleFontPoints
     }
@@ -1522,6 +1563,14 @@ function Set-ListOutputFontContract {
             try {
                 [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
                     $titleRange
+                )
+            }
+            catch {}
+        }
+        if ($null -ne $paragraphRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $paragraphRange
                 )
             }
             catch {}
@@ -1600,26 +1649,16 @@ function Assert-ListOutputPresentationContract {
     if ($expectedTitle -cne "日本精緻假期") {
         throw "LIST_TITLE_PLAN_INVALID"
     }
+    $paragraphRange = $null
     $titleRange = $null
     try {
-        $titleRange = (
+        $paragraphRange = (
             $headerCell.Range.Paragraphs.Item($titleParagraph).Range.Duplicate
         )
-        $titleText = [string]$titleRange.Text
-        for ($index = $titleText.Length - 1; $index -ge 0; $index -= 1) {
-            if (
-                [int][char]$titleText[$index] -notin @(
-                    [int][char]13, [int][char]7
-                )
-            ) {
-                break
-            }
-            $titleRange.End = [int]$titleRange.End - 1
-        }
-        $normalizedTitle = ([string]$titleRange.Text).Trim(
-            [char[]]@([char]13, [char]7, [char]32, [char]9)
-        )
-        if ($normalizedTitle -cne $expectedTitle) {
+        $titleRange = Get-ExactListTitleRange `
+            -ParagraphRange $paragraphRange `
+            -ExpectedTitle $expectedTitle
+        if ($null -eq $titleRange) {
             throw "LIST_POST_REOPEN_TITLE_CHANGED"
         }
         $titleFontPointsAfter = [double]$titleRange.Font.Size
@@ -1644,6 +1683,14 @@ function Assert-ListOutputPresentationContract {
             try {
                 [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
                     $titleRange
+                )
+            }
+            catch {}
+        }
+        if ($null -ne $paragraphRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $paragraphRange
                 )
             }
             catch {}
@@ -2586,7 +2633,8 @@ function Invoke-Patch {
             -HeaderCell $headerCell `
             -FontPoints ([double]$Job.plan.output_font_points) `
             -TitleFontPoints $titleFontPointsBefore `
-            -TitleParagraph ([int]$Job.plan.preserved_title_paragraph)
+            -TitleParagraph ([int]$Job.plan.preserved_title_paragraph) `
+            -ExpectedTitle "日本精緻假期"
         Set-ListPaginationGuards -Document $document
         $outputInspection = Get-ListInspection `
             -Document $document `
