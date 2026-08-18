@@ -1,5 +1,30 @@
 # STATUS
 
+## 2026-08-18 LIST 4-day repro localizes source title getter failure
+
+- 一句話現況：三個 source checkpoint 細分後獲准的唯一一次 4 天 Word repro 已明確
+  定位為 `LIST_SOURCE_TITLE_RANGE_NOT_FOUND`；immutable header 與 pre-save restore
+  尚未執行，沒有重試、沒有跑其他天數，也沒有 DOCX／PDF／PNG 可視覺驗收。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；doctor 先確認
+  Word COM、pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure
+  均 `ok`。只執行 opt-in integration test 的 `[4]` node，使用新的 OS temp QA root
+  與 `-x`；5／6／7／8／12 天完全未進入。
+- 驗證：pytest 原始結果為 `1 failed`，adapter evidence 是
+  `WORD_GENERATION_FAILED`／`LIST_SOURCE_TITLE_RANGE_NOT_FOUND`／return code 30／stage
+  `run-action`。QA root 只有空的 `day-004` directory，file count 0。WINWORD 執行前、
+  執行後與事後均為原本的 1；owned hidden Word 已清理。事後 doctor 再確認
+  `master_sha256_matches: true` 與 normalized structure fingerprint 正常。
+- 根因進度：新碼已排除 immutable header compare 與 pre-save title-font restore；
+  失敗點確定是 `Get-ListTitleFontPoints` 呼叫 `Get-ExactListTitleRange` 後取得 null。
+  helper 內仍有三個可能分支：完整 paragraph Trim 不等於 expected title、Word
+  `Find.Execute()` 回傳 false，或 Find 後 candidate text 不等於 exact title；本次 safe
+  evidence 無法再區分，不能猜定其中一個。
+- 下一步：若要繼續，建議先另行核准離線把 getter 內上述三個 null 分支細分為不同
+  safe codes 並跑完整 suite；之後任何新的 Word repro 仍需另一個當次明確授權。
+- 阻塞點：本次唯一 4 天 Word repro 授權已消耗且失敗，不得重跑。沒有修改程式、
+  私人 master 或 calibration，沒有 GET、JMA、Yating、ffmpeg、LINE、upload、publish、
+  deploy、push 或 Cowell。
+
 ## 2026-08-18 LIST source checkpoint code split handoff
 
 - 一句話現況：三個 LIST source-title checkpoint 已依 OP 核准範圍完成離線安全碼
