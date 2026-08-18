@@ -1,5 +1,14 @@
 # STATUS
 
+## 2026-08-18 LIST leader post-fix 4-day repro reaches highlight blocker
+
+- 一句話現況：獲准的唯一一次 4 天 post-fix Word repro 已跨過 `LIST_CELL_EXTRA_PARAGRAPH_SET_T1_R2_C3`，但後續在 `run-action` 失敗於 generic `LIST_HIGHLIGHT_TOKEN_MISSING`；依約沒有重試、沒有跑其他天數，也沒有 DOCX／PDF／PNG 可供視覺驗收。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；前檢 doctor 確認 Word COM、pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure 均 `ok`，WINWORD baseline 為使用者原本的 1。只執行 opt-in integration 的 `[4]` node，使用全新 OS temp QA root 與 `-x`，5／6／7／8／12 天完全未進入。
+- 驗證：pytest 原始結果為 `1 failed`；adapter evidence 是 `WORD_GENERATION_FAILED`／`LIST_HIGHLIGHT_TOKEN_MISSING`／HRESULT `-2146233087`／return code 30／stage `run-action`。QA root `C:\Users\cance\AppData\Local\Temp\easytravel-word-leader-postfix-3aa9f70a66b2409aa39e9565d08e807c` 只有空的 `day-004` directory，file count 0。事後 WINWORD count 回到 1；doctor 再確認 `master_sha256_matches: true` 與 normalized structure fingerprint 正常。
+- 結論：commit `021f124` 已讓同一實機路徑不再停在 T1/R2/C3 的 extra-paragraph assertion，符合離線 `U+000B` 修正預期；但 shared `Set-TokenHighlight` 目前對 header 與 ordinary cell 都只拋同一 generic code，因此這次證據無法安全指出實際 caller、paragraph 或 table／row／column，也不能宣稱整份 Word 已修好。
+- 下一步：若要繼續，先另行核准離線把 `LIST_HIGHLIGHT_TOKEN_MISSING` 細分為 header paragraph 與 ordinary cell table／row／column 的安全錯誤碼，建立 regression 並跑完整 suite；任何新的 Word repro 仍需另一個單次授權。
+- 阻塞點：本次唯一 Word repro 授權已消耗且失敗，不得重跑。沒有修改程式或私人 master，也沒有 GET、JMA、Yating、ffmpeg、installed runtime、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 LIST leader-cell manual-line-break offline fix handoff
 
 - 一句話現況：T1/R2/C3 的領隊姓名／台灣手機 patch payload 已離線由 `U+000D` 修正為 `U+000B` manual line break，保留兩行但維持單一 paragraph 語意；ordinary cell plan boundary 現在 fail closed 拒絕 CR／LF／BEL。完整離線 suite 全綠，但私人 master 的 Word 實機結果仍未驗證。
