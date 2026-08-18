@@ -1,5 +1,25 @@
 # STATUS
 
+## 2026-08-18 LIST Word output normalization implementation-plan handoff
+
+- 一句話現況：OP 已核准 output-time normalization 書面設計；五階段 TDD 實作計畫
+  已完成自審，等待 OP 核准後才開始 repo 內離線實作。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；建立
+  `docs/plans/2026-08-18-list-word-output-normalization-implementation-plan.md`，將工作
+  拆成 schema-3 Python contract、bounded Word mutation、zero-image PDF/workflow QA、
+  0.2.1 package 與完整回歸。計畫明定 calibration schema 2／master bytes 不變，
+  `list-word/3` 只在 output plan/report/evidence 啟用。
+- 驗證：focused collection 由程式計算為 135 tests；現行基線實跑 exit code 0，輸出為
+  `........................................................................ [ 53%]` 與
+  `............................................................... [100%]`。計畫 355 行、
+  最長 92 字元、無超過 100 字元的行，無 TBD／TODO／FIXME，`git diff --check` 通過。
+- 下一步：取得 OP「同意此實作計畫，開始離線實作」後，依 Task 1–5 以 red-green
+  順序修改與提交；完整離線驗證後停下。
+- 阻塞點：本次只獲准建立計畫，尚未獲准修改功能程式。私人 master 的 4／5／6／7／
+  8／12 天 Word COM 整合、installed runtime 同步及新正式 DRAFT 都保留為後續獨立
+  授權；沒有 Word、GET、JMA、Yating、LINE、upload、publish、deploy、push 或 Cowell
+  動作，公開 remote 未獲 push 例外。
+
 ## 2026-08-18 LIST Word output normalization design handoff
 
 - 一句話現況：OP 已選擇方案 1「輸出時正規化」；移除 QR 且不留空位、除第一行
