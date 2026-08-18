@@ -1,24 +1,35 @@
 # STATUS
 
-## 2026-08-18 LIST Word output normalization implementation-plan handoff
+## 2026-08-18 LIST Word output normalization implementation handoff
 
-- 一句話現況：OP 已核准 output-time normalization 書面設計；五階段 TDD 實作計畫
-  已完成自審，等待 OP 核准後才開始 repo 內離線實作。
-- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；建立
-  `docs/plans/2026-08-18-list-word-output-normalization-implementation-plan.md`，將工作
-  拆成 schema-3 Python contract、bounded Word mutation、zero-image PDF/workflow QA、
-  0.2.1 package 與完整回歸。計畫明定 calibration schema 2／master bytes 不變，
-  `list-word/3` 只在 output plan/report/evidence 啟用。
-- 驗證：focused collection 由程式計算為 135 tests；現行基線實跑 exit code 0，輸出為
-  `........................................................................ [ 53%]` 與
-  `............................................................... [100%]`。計畫 355 行、
-  最長 92 字元、無超過 100 字元的行，無 TBD／TODO／FIXME，`git diff --check` 通過。
-- 下一步：取得 OP「同意此實作計畫，開始離線實作」後，依 Task 1–5 以 red-green
-  順序修改與提交；完整離線驗證後停下。
-- 阻塞點：本次只獲准建立計畫，尚未獲准修改功能程式。私人 master 的 4／5／6／7／
-  8／12 天 Word COM 整合、installed runtime 同步及新正式 DRAFT 都保留為後續獨立
-  授權；沒有 Word、GET、JMA、Yating、LINE、upload、publish、deploy、push 或 Cowell
-  動作，公開 remote 未獲 push 例外。
+- 一句話現況：OP 核准的方案 1「輸出時正規化」已完成離線 TDD 實作；新產出的
+  LIST Word copy 會移除校準 header QR 且不留空位、除第一行 `日本精緻假期` 外所有
+  可見字固定 12 pt，程式填值也不再留下尾端空白段落。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`。source
+  calibration schema 2 與 master bytes 保持不變；output plan／patch report／workflow
+  evidence 升為 schema 3 與 `list-word/3`。PowerShell 只刪除 table 1 row 1 column 1
+  內、數量與 calibration 相符的方形 QR candidate，然後釋放完整 header 寬度、套用
+  12 pt contract、保留 exact title 原字級，並以 duplicate cell range 避免附加 CR／
+  cell marker。PDF QA 改為每頁 image count exact 0，0.2.1 package 與三份 Skill mirror
+  也鎖定同一契約。實作 commits 為 `f1902f4`、`f8f6d26`、`05a82f1`、`3515c63`。
+- 驗證：Task 1 focused 輸出
+  `........................................................................ [ 61%]`／
+  `.............................................. [100%]`；Task 2 為
+  `...................................................................... [100%]`；
+  Task 3 為 `........................................ssssss..........................
+  [ 93%]`／`..... [100%]`；Task 4 為 `.......... [100%]`。最終完整 suite 為
+  `542 passed, 8 skipped in 18.76s`；compileall、patch/build PowerShell parser 與
+  `git diff --check` 均通過。三份 Skill validator 都回傳 `Skill is valid!`。fresh OS
+  temp package 為 63 entries，SHA-256
+  `9c93f0f40969d42a50d199def48a4fd3b4a1f3edbfe3db9d6a0a4cb11df29fdc`；build 內建
+  allowlist 與敏感資料掃描通過，未安裝 package。
+- 下一步：若要驗證真實版面，需另行明確核准使用私人 canonical master 執行
+  4／5／6／7／8／12 天 Word COM 整合；通過後再另行決定是否同步 installed runtime
+  或產生新的正式 DRAFT。
+- 阻塞點：Word COM／私人 master integration 尚未驗證，installed runtime 尚未同步，
+  因此目前只能宣稱離線契約與模擬測試完成。這次沒有啟動 Word、GET、JMA、Yating、
+  ffmpeg、LINE、upload、publish、deploy 或 Cowell；公開 remote 未獲 push 例外，
+  所以只保留本機 commits。
 
 ## 2026-08-18 LIST Word output normalization design handoff
 
