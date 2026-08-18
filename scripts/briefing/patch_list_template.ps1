@@ -1436,7 +1436,14 @@ function Set-ListCell {
 function Get-ExactListTitleRange {
     param(
         [Parameter(Mandatory = $true)]$ParagraphRange,
-        [Parameter(Mandatory = $true)][string]$ExpectedTitle
+        [Parameter(Mandatory = $true)][string]$ExpectedTitle,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet(
+            "LIST_SOURCE_TITLE",
+            "LIST_PRE_SAVE_TITLE",
+            "LIST_POST_REOPEN_TITLE"
+        )]
+        [string]$FailurePrefix
     )
     $candidate = $null
     try {
@@ -1445,7 +1452,7 @@ function Get-ExactListTitleRange {
             [char[]]@([char]13, [char]7, [char]32, [char]9)
         )
         if ($normalizedTitle -cne $ExpectedTitle) {
-            return $null
+            throw ($FailurePrefix + "_PARAGRAPH_MISMATCH")
         }
         $candidate.Find.ClearFormatting()
         $candidate.Find.Text = $ExpectedTitle
@@ -1455,10 +1462,10 @@ function Get-ExactListTitleRange {
         $candidate.Find.MatchCase = $true
         $candidate.Find.MatchWholeWord = $false
         if (-not $candidate.Find.Execute()) {
-            return $null
+            throw ($FailurePrefix + "_FIND_FALSE")
         }
         if ([string]$candidate.Text -cne $ExpectedTitle) {
-            return $null
+            throw ($FailurePrefix + "_FIND_RESULT_MISMATCH")
         }
         $result = $candidate
         $candidate = $null
@@ -1490,10 +1497,8 @@ function Get-ListTitleFontPoints {
         )
         $titleRange = Get-ExactListTitleRange `
             -ParagraphRange $paragraphRange `
-            -ExpectedTitle $ExpectedTitle
-        if ($null -eq $titleRange) {
-            throw "LIST_SOURCE_TITLE_RANGE_NOT_FOUND"
-        }
+            -ExpectedTitle $ExpectedTitle `
+            -FailurePrefix "LIST_SOURCE_TITLE"
         $fontPoints = [double]$titleRange.Font.Size
         if ($fontPoints -le 0 -or $fontPoints -gt 72) {
             throw "LIST_TITLE_FONT_AMBIGUOUS"
@@ -1552,10 +1557,8 @@ function Set-ListOutputFontContract {
         )
         $titleRange = Get-ExactListTitleRange `
             -ParagraphRange $paragraphRange `
-            -ExpectedTitle $ExpectedTitle
-        if ($null -eq $titleRange) {
-            throw "LIST_PRE_SAVE_TITLE_RANGE_NOT_FOUND"
-        }
+            -ExpectedTitle $ExpectedTitle `
+            -FailurePrefix "LIST_PRE_SAVE_TITLE"
         $titleRange.Font.Size = $TitleFontPoints
     }
     finally {
@@ -1657,10 +1660,8 @@ function Assert-ListOutputPresentationContract {
         )
         $titleRange = Get-ExactListTitleRange `
             -ParagraphRange $paragraphRange `
-            -ExpectedTitle $expectedTitle
-        if ($null -eq $titleRange) {
-            throw "LIST_POST_REOPEN_TITLE_CHANGED"
-        }
+            -ExpectedTitle $expectedTitle `
+            -FailurePrefix "LIST_POST_REOPEN_TITLE"
         $titleFontPointsAfter = [double]$titleRange.Font.Size
         if (
             $titleFontPointsAfter -le 0 -or

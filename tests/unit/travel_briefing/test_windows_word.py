@@ -292,10 +292,13 @@ def test_header_patch_preserves_the_title_paragraph_for_font_exception():
     )[0]
 
 
-def test_title_failures_identify_all_source_plan_and_post_reopen_stages():
+def test_title_range_failures_identify_stage_and_exact_branch():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
     source_setter = script.split("function Set-HeaderParagraph {", 1)[1].split(
         "function Set-ListCell {", 1
+    )[0]
+    finder = script.split("function Get-ExactListTitleRange {", 1)[1].split(
+        "function Get-ListTitleFontPoints {", 1
     )[0]
     source_getter = script.split("function Get-ListTitleFontPoints {", 1)[1].split(
         "function Set-ListOutputFontContract {", 1
@@ -308,12 +311,30 @@ def test_title_failures_identify_all_source_plan_and_post_reopen_stages():
     )[1].split("function Set-DailyRowCount {", 1)[0]
 
     assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' in source_setter
-    assert 'throw "LIST_SOURCE_TITLE_RANGE_NOT_FOUND"' in source_getter
-    assert 'throw "LIST_PRE_SAVE_TITLE_RANGE_NOT_FOUND"' in pre_save_setter
+    for prefix in (
+        "LIST_SOURCE_TITLE",
+        "LIST_PRE_SAVE_TITLE",
+        "LIST_POST_REOPEN_TITLE",
+    ):
+        assert f'"{prefix}"' in finder
+    for suffix in (
+        "PARAGRAPH_MISMATCH",
+        "FIND_FALSE",
+        "FIND_RESULT_MISMATCH",
+    ):
+        assert f'throw ($FailurePrefix + "_{suffix}")' in finder
+    assert '-FailurePrefix "LIST_SOURCE_TITLE"' in source_getter
+    assert '-FailurePrefix "LIST_PRE_SAVE_TITLE"' in pre_save_setter
+    assert '-FailurePrefix "LIST_POST_REOPEN_TITLE"' in output_assertion
     assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' not in source_getter
     assert 'throw "LIST_SOURCE_HEADER_TITLE_CHANGED"' not in pre_save_setter
     assert output_assertion.count('throw "LIST_TITLE_PLAN_INVALID"') == 2
-    assert 'throw "LIST_POST_REOPEN_TITLE_CHANGED"' in output_assertion
+    for old_code in (
+        "LIST_SOURCE_TITLE_RANGE_NOT_FOUND",
+        "LIST_PRE_SAVE_TITLE_RANGE_NOT_FOUND",
+        "LIST_POST_REOPEN_TITLE_CHANGED",
+    ):
+        assert old_code not in script
     for function in (
         source_setter,
         source_getter,
@@ -370,7 +391,7 @@ def test_output_font_contract_is_twelve_points_except_exact_title():
     assert "$titleRange.Font.Size = $TitleFontPoints" in setter
     assert '"日本精緻假期"' in assertion
     assert 'throw "LIST_TITLE_PLAN_INVALID"' in assertion
-    assert 'throw "LIST_POST_REOPEN_TITLE_CHANGED"' in assertion
+    assert '-FailurePrefix "LIST_POST_REOPEN_TITLE"' in assertion
     assert 'throw "LIST_TITLE_FONT_CHANGED"' in assertion
     assert 'throw "LIST_NON_TITLE_FONT_CHANGED"' in assertion
 
