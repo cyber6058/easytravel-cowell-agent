@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-08-18 LIST boundary-split post-fix 4-day repro returns to full-cell blocker
+
+- 一句話現況：唯一一次獲准的 4 天 post-fix Word repro 已越過先前回歸的 T1 embedded highlights，但仍失敗於第一個 full-cell token `LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T4_R1_C2`；因此 boundary split 的 embedded 路徑獲得實機支持，full-cell direct path 仍未成功，也沒有可做視覺 QA 的 artifacts。
+- 前檢：開工 `git pull --ff-only` 為 `Already up to date.`；doctor 顯示 Word registry、configured pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure 均 `ok`，唯一 warning 是本測試不使用的 ffmpeg。collect-only 原文為 `1 test collected`，唯一 node 是 `test_calibrated_master_renders_gate_v_day_counts[4]`；WINWORD baseline 為使用者既有的 1。
+- 唯一正式 run：只呼叫一次上述 `[4]` selector 並使用 `-x`，5／6／7／8／12 天完全未進入。原文為 `1 failed in 23.37s`、`WORD_REPRO_EXIT=1`；adapter evidence 為 `WORD_GENERATION_FAILED`／`LIST_HIGHLIGHT_TOKEN_MISSING_CELL_T4_R1_C2`／HRESULT `-2146233087`／return code 30／stage `run-action`。依 OP 約束沒有重試。
+- Artifact／QA：同次 QA root `C:\Users\cance\AppData\Local\Temp\easytravel-word-boundary-split-postfix-5d25728cc4854b5c80c0e518d0ced685` 只有空的 `day-004` directory，`QA_ENTRY_COUNT=1`、`QA_FILE_COUNT=0`、DOCX／PDF／PNG 均為 0。因 run 未成功，未進入成功條件下的文件／圖片視覺 QA。
+- Postflight：WINWORD 回到 baseline 1；doctor 再次確認 master hash、normalized structure、schema-2 calibration、Word registry 與 pdftoppm 均正常。沒有修改私人 master／calibration、production 或 tests。
+- 判讀：實機 execution order 已重新跨過五個 embedded cases，表示 `$findBoundary = End - 1` 至少消除了 T1/R2/C2 回歸；流程回到修正前既有的 T4/R1/C2 full-cell blocker。這次結果沒有證明 direct visible-range highlight 為何未記錄 match，不能再靠同一授權探測或重跑。
+- 下一步：若要繼續，先另行核准 T4/R1/C2 full-cell direct path 的純離線診斷與書面修正規格；未核准前不修改 production／tests，也不再執行 Word。沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。
+
 ## 2026-08-18 LIST embedded Find boundary split offline implementation handoff
 
 - 一句話現況：`Set-TokenHighlight` 已離線分成 `$visibleBoundary` exact/direct path 與 `$findBoundary = [int]$Range.End - 1` embedded／repeated Find path；完整離線驗證全綠，但 Word 實機仍未驗證。
