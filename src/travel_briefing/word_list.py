@@ -39,6 +39,7 @@ _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _MEAL_NOT_INCLUDED = re.compile(
     r"(?:^\s*[x×無]\s*$|敬請自理|自理|方便逛街)", re.IGNORECASE
 )
+_FORBIDDEN_LIST_CELL_TEXT_MARKERS = ("\r", "\n", "\a")
 
 
 def format_list_day_date(value: str) -> str:
@@ -397,6 +398,8 @@ def build_list_patch_plan(
         _build_day_cells(draft, route_character_limit=route_character_limit)
     )
     cells.extend(_build_guide_cells(op_fields))
+    cell_patches = tuple(cells)
+    _validate_ordinary_cell_patches(cell_patches)
     return ListPatchPlan(
         schema_version=3,
         generator_version=LIST_WORD_GENERATOR_VERSION,
@@ -417,7 +420,7 @@ def build_list_patch_plan(
         expected_table_shapes=shapes,
         anchor_checks=_list_anchor_checks(),
         header_paragraphs=header_paragraphs,
-        cells=tuple(cells),
+        cells=cell_patches,
     )
 
 
@@ -600,6 +603,17 @@ def _meal_marker(value: str) -> str:
     return "O"
 
 
+def _validate_ordinary_cell_patches(patches: tuple[CellPatch, ...]) -> None:
+    if any(
+        marker in patch.text
+        for patch in patches
+        for marker in _FORBIDDEN_LIST_CELL_TEXT_MARKERS
+    ):
+        raise ValueError(
+            "LIST ordinary cell text contains a forbidden Word marker"
+        )
+
+
 def _validate_draft_shape(draft: BriefingDraft) -> None:
     day_count = draft.product.day_count
     if len(draft.days) != day_count or tuple(
@@ -642,7 +656,7 @@ def _build_header_cells(
     leader_phone = _op_display(op_fields, "tour_leader_phone")
     tag = _op_display(op_fields, "identification_or_luggage_tag")
     airport = _op_display(op_fields, "airport_representative")
-    leader_text = f"領隊姓名：{leader_name[0]}\r*台灣手機：{leader_phone[0]}"
+    leader_text = f"領隊姓名：{leader_name[0]}\v*台灣手機：{leader_phone[0]}"
     return (
         CellPatch(
             table=1,

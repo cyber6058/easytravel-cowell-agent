@@ -163,6 +163,48 @@ def test_patch_plan_maps_any_positive_trip_to_dynamic_daily_rows(day_count):
     assert plan.cell(4, 1, 2).highlight_text == WAITING_FOR_OP
 
 
+def test_patch_plan_uses_manual_line_break_for_leader_cell():
+    plan = build_list_patch_plan(
+        draft(4),
+        expected_layout_fingerprint="a" * 64,
+    )
+
+    assert plan.cell(1, 2, 3).text == (
+        f"領隊姓名：合成領隊\v*台灣手機：{WAITING_FOR_OP}"
+    )
+    assert all(
+        marker not in patch.text
+        for patch in plan.cells
+        for marker in ("\r", "\n", "\a")
+    )
+
+
+@pytest.mark.parametrize("marker", ["\r", "\n", "\a"])
+def test_patch_plan_rejects_forbidden_word_markers_in_ordinary_cells(marker):
+    secret = f"SYNTHETIC-SECRET{marker}VALUE"
+    source = draft(4)
+    source = replace(
+        source,
+        op_fields=tuple(
+            confirmed_op_field(field.name, secret)
+            if field.name == "meeting_place"
+            else field
+            for field in source.op_fields
+        ),
+    ).with_recomputed_id()
+
+    with pytest.raises(
+        ValueError,
+        match="^LIST ordinary cell text contains a forbidden Word marker$",
+    ) as error:
+        build_list_patch_plan(
+            source,
+            expected_layout_fingerprint="a" * 64,
+        )
+
+    assert "SYNTHETIC-SECRET" not in str(error.value)
+
+
 def test_patch_plan_highlights_every_unknown_source_date():
     source = draft()
     source = replace(
