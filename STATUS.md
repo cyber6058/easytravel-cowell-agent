@@ -1,5 +1,39 @@
 # STATUS
 
+## 2026-08-18 OSA05261201A second one-shot DRAFT handoff
+
+- 一句話現況：另一個日期完整的 NewAmazing 產品也在唯一一次 render 重現相同
+  Word `VALIDATION_FAILED`；Yating／SRT／TXT 完成並通過 QA，但 Word QA PDF／PNG
+  缺失，最終 draft 為 `BLOCKED`。這份對照證據表示問題不是日期未知特例，較可能
+  位於共用 Word PDF／頁面 QA 階段，但具體 assertion 仍未被安全錯誤記錄。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；doctor 的
+  Yating、Word registry、pdftoppm 與 schema-2 LIST calibration 均 `ok`，只有
+  ffmpeg warning。依 OP 新 URL 執行唯一一次 GET，prepare run
+  `20260818T090406+0800`、draft ID
+  `1b1d89d623eb1e038a472cd8233a2a9ea86c5503183372784290c35e67cd5134`；
+  解析為 5 天、2 段航班、全部日期存在、0 conflicts，warnings 為
+  `SOURCE_CITY_MISSING`／`SOURCE_REGION_MISSING`。narration input `ready: true`，
+  18 個 protected facts 依固定八段建立最小稿；`check-script` 回傳
+  `ready: true`、`issue_codes: []`、估計 452.8 秒。
+- 驗證：唯一一次 render 建立 run `20260818T090534+0800`，draft ID
+  `33142239bb3219f61aa0083d8a539222b5b0b1e6ca2b60e5e79da8ec419c65b0`。
+  DOCX 實體檔為 42,177 bytes，ZIP/OOXML 有 24 entries、0 個非目錄空 entry，且
+  `[Content_Types].xml`、`word/document.xml`、document relationships 與 media 均存在；
+  但 artifact 仍為 `blocked`，`word-evidence`、Word-QA PDF、QA index 與全頁 PNG
+  全部 missing。safe error 與前一產品相同：stage `word`、code
+  `VALIDATION_FAILED`、exception `ValueError`。Yating WAV／SRT／TXT 三份 SHA-256
+  全與 metadata 相符；WAV 為 mono 16 kHz、440.027812 秒，SRT 92 cues 與 segment
+  count 一致，末碼 440.032 秒只差約 4 ms。開頭／中段／結尾各 12 秒已抽聽，
+  可辨且無明顯截斷或異常空白；WINWORD 0。暫存 helper 與 QA clips 已刪除。
+- 下一步：若 OP 要定位共用 Word 問題，需另行核准「只用兩份既有 blocked DOCX
+  執行一次 Word-QA 診斷」；診斷應保留具體 fail-closed assertion，同時不得重新 GET、
+  重做 Yating 或把 blocked DOCX 當成正式交付。
+- 阻塞點：兩個不同產品（一個日期未知、一個日期完整）都缺 Word QA evidence，
+  因此目前不能逐頁視覺驗收或交付 DOCX。ffmpeg 未設定，MP3 仍 missing；review
+  另有 2 個來源必要事實、10 個 OP 欄位、1 個 weather unavailable 與 8 個發音項目。
+  沒有程式碼變更，沒有 JMA、LINE、upload、publish、deploy、push 或 Cowell 動作；
+  公開 remote 未獲 push 例外。
+
 ## 2026-08-18 OSA0526D7459 one-shot unknown-date DRAFT handoff
 
 - 一句話現況：指定 URL 的唯一一次正式日期未知 DRAFT GET 與唯一一次本機
