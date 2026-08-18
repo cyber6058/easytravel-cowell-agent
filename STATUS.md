@@ -1,5 +1,14 @@
 # STATUS
 
+## 2026-08-18 LIST title ANSI decoding root-cause fix handoff
+
+- 一句話現況：唯一一次 4 天 Word repro 已把 getter 失敗精確定位為 `LIST_SOURCE_TITLE_PARAGRAPH_MISMATCH`；根因已證實並離線修正，但修正後尚未獲授權重跑 Word，因此 DOCX／PDF／PNG 成功仍未驗證。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`；doctor 確認 Word COM、pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure 均正常。只執行 opt-in integration 的 `[4]` node、使用新 OS temp QA root 與 `-x`，5／6／7／8／12 天未進入且沒有重試。失敗 evidence 是 `WORD_GENERATION_FAILED`／`LIST_SOURCE_TITLE_PARAGRAPH_MISMATCH`／return code 30／stage `run-action`。
+- 根因與修正：`patch_list_template.ps1` 是無 BOM UTF-8（首 bytes `112,97,114`），adapter 以 Windows PowerShell `5.1.26100.9168` 的 `powershell.exe -File` 執行；三處 `日本精緻假期` literal 被解析成 9 個錯誤 code points，而正確標題是 6 個 `U+65E5 U+672C U+7CBE U+7DFB U+5047 U+671F`。commit `4e9d37d` 改為只由這六個固定 code points 建構 `$ExpectedListTitle`，getter、pre-save 與 post-reopen 共用，正式 PowerShell source 不再含該非 ASCII literal。
+- 驗證：新增 ANSI-safe regression 先 `1 failed`、修正後 `1 passed`；focused Word 離線測試 `43 + 31` 全綠；PowerShell parser `PARSER_ERROR_COUNT=0`；完整 suite `546 passed, 8 skipped in 23.30s`；`compileall` 與 `git diff --check` exit 0。事後 doctor 仍確認 master hash／structure 正常，`WINWORD` process count 維持原本的 1。QA root `C:\Users\cance\AppData\Local\Temp\easytravel-word-repro-cb0ee74e2bcb499897ef0783eb5a476d` 只有空的 `day-004` directory，file count 0。
+- 下一步：若要驗收本修正，需要新的明確授權，只執行一次 4 天 post-fix Word repro，不跑其他天數、失敗不重試；成功後才能進行 DOCX／PDF／PNG 視覺 QA。
+- 阻塞點：本次唯一 Word repro 授權已消耗，修正後 Word 實機結果仍屬未驗證；沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 public remote push。
+
 ## 2026-08-18 Get-ExactListTitleRange branch-safe codes handoff
 
 - 一句話現況：`Get-ExactListTitleRange` 現在會保留 source／pre-save／post-reopen 階段，並把失敗細分為 `PARAGRAPH_MISMATCH`、`FIND_FALSE`、`FIND_RESULT_MISMATCH`；離線驗證完成，尚未執行 Word。
