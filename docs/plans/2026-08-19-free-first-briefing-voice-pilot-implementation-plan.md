@@ -8,7 +8,8 @@
 設計基線 commit：
 `fa5e6dd914e5589d878a379e88fd8a69bd0bd6e1`
 
-狀態：書面設計已核准；本實作計畫及一項上游相容性修正待使用者審閱。
+狀態：書面設計、5 至 10 秒 reference 修正及本計畫已核准；Tasks 1–4 的 Gate I
+離線安全骨架已完成並停在 Gate D 下載／安裝授權前。
 本文件只是一份計畫，不授權下載、安裝、抽音、合成、訓練、上傳、付款、正式
 整合或 push。
 
@@ -23,12 +24,11 @@ v3.7.0 原始契約後，發現：
 - 定稿參考音訊會由原始媒體直接建立為 24 kHz、單聲道、16-bit WAV。
 
 因此實作時必須把第一個固定 reference 改成 **5 至 10 秒**。這不是品質調參，
-而是避免與已鎖定工具的輸入契約矛盾。使用者若不接受，計畫停在文件階段；不得
+而是避免與已鎖定工具的輸入契約矛盾。使用者已於 2026-08-19 書面核准此修正；不得
 硬送 2 至 3 秒、改用未鎖定舊版或跳過工具的 quality gate。
 
-核准後，設計文件的該一行會在離線 implementation documentation commit 中同步
-修正，並附上 SmartSub v3.7.0 pinned-source 證據；其餘盲測、一次調整上限與正式
-整合邊界不變。
+設計文件的該一行已在 Gate I documentation commit 同步修正；其餘盲測、一次調整
+上限與正式整合邊界不變。
 
 ## 1. 成果與停止範圍
 
@@ -156,8 +156,8 @@ registry edit、firewall rule 或系統設定，立即停止回到 plan review�
 
 | 關卡 | 內容 | 本計畫核准後是否自動授權 |
 |---|---|---|
-| P | 書面計畫與 5–10 秒 reference 修正 | 否，等待使用者核准 |
-| I | Tasks 1–4：synthetic-only 離線骨架、tests、local commits | 需精確核准 |
+| P | 書面計畫與 5–10 秒 reference 修正 | 已核准 |
+| I | Tasks 1–4：synthetic-only 離線骨架、tests、local commits | 已核准並完成 |
 | D | Task 5：下載三個 pinned assets、安裝 SmartSub／model | 需新的精確核准 |
 | R | Tasks 6–9：讀影片、選 reference、Yating／ZipVoice 各一次、盲測 | 需新的精確核准及中途人工確認 |
 | A | Task 10：第一次未過時只改一個變數再試一次 | 需使用者指定唯一變數 |
@@ -397,6 +397,24 @@ pass／skip count與duration，不使用預估數字。
 
 兩個 commits 都只留本機，不 push。Gate I 完成後必須停止並提出 Gate D exact asset
 approval；不得因 tests green 就下載。
+
+## Gate I 實際證據（2026-08-19）
+
+- 實作基線：`4f2d51428377cdcfd96c877832c5982ff2c87930`；開工時 SmartSub／WINWORD
+  process count 均為 `0`，`git pull --ff-only` 為 `Already up to date.`。
+- implementation commit：`100ede1ae3b5d88f7743f8e779621744d59412ae`；只包含
+  `.gitignore`、`scripts/voice_pilot/` 與 `tests/unit/voice_pilot/test_pilot.py`。
+- `git check-ignore -v --no-index` 證明 MP4／M4A／AAC／FLAC／SVOICE／ONNX／
+  SmartSub installer／ZipVoice archive 均被忽略，新 Python 原始碼不被忽略。
+- TDD focused tests：`20 passed`；既有 Yating unchanged controls：`25 passed`。
+- 完整離線 suite：`614 passed, 8 skipped in 22.80s`；`compileall` exit `0`。
+- `src/` 及既有 `tests/unit/travel_briefing/` 相對基線均為 0 diff；新目錄對
+  network／cloud／LINE／Cowell 關鍵字掃描為 0 命中；`git diff --check` 通過。
+- SmartSub／WINWORD 在完整 suite 前後均為 `0 / 0`。沒有下載、安裝、讀取影片、
+  抽音、啟動 Yating／SmartSub、合成、上傳、付款、正式整合或 push。
+
+Gate I 到此完成，只證明安全骨架及 synthetic 契約；不證明 SmartSub 可安裝、
+ZipVoice 效能／品質、本人相似度或真實音訊自然度。下一步仍須新的 Gate D 精確授權。
 
 ## Task 5：Gate D pinned download、安裝與本機 capability proof
 
@@ -652,16 +670,14 @@ score identity map與output永不進Git。session結束確認`git status`沒有�
 
 Gate I green 只證明安全骨架可用，不證明 SmartSub可安裝、ZipVoice有品質或音訊自然。
 
-## 6. 本計畫審閱關卡
+## 6. 核准紀錄與下一關卡
 
-使用者需同時確認：
+使用者已於 2026-08-19 同時核准 5 至 10 秒 reference 修正、本計畫及只執行
+Tasks 1–4 的 synthetic-only Gate I。Gate I 已完成，授權已消耗，不能延伸為下載、
+安裝、讀取影片或合成。
 
-1. 接受 reference由原規格的約2–3秒修正為5–10秒；
-2. 接受 ZipVoice／Emilia license紅旗使結果只限內部試聽，不能正式商用；
-3. 核准本計畫後第一階段仍只執行synthetic-only離線骨架。
-
-下一個精確授權語句為：
+若要進入 Gate D，下一個精確授權語句為：
 
 ```text
-同意參考片段改為 5 至 10 秒，核准此實作計畫；只執行 Task 1–4 的離線安全骨架與測試，不下載、不安裝、不讀取或抽出本人影片、不啟動 Yating／SmartSub、不合成語音、不推送。
+核准 Gate D：只從實作計畫列出的三個官方 GitHub URL 下載固定 assets，驗證 bytes、SHA-256 與 installer 簽章，並依 Task 5 以 per-user 方式安裝 SmartSub 3.7.0 及固定 ZipVoice model，完成本機 capability proof 後停止；不讀取或抽出本人影片、不建立音色、不啟動 Yating、不合成語音、不下載 ASR／CUDA／Vulkan 或其他模型、不登入、不上傳、不推送。
 ```

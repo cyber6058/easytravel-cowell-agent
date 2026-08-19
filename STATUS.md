@@ -1,11 +1,11 @@
 # STATUS
 
-## 2026-08-19 free-first voice pilot implementation plan awaiting review
+## 2026-08-19 free-first voice pilot Gate I completed; stopped before downloads
 
-- 一句話現況：使用者已核准免費優先語音試驗的書面設計並要求實作計畫；計畫已完成，但唯讀上游查證發現 SmartSub v3.7.0 會阻擋有效語音少於 3 秒且建議 5–10 秒，因此 reference 時長修正及整份計畫正等待使用者書面審閱，尚未授權實作。
-- 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`；鎖定 SmartSub v3.7.0／commit `27459b3fd0652bc5447ccf4ab30cb398014c35f7`、Windows installer與ZipVoice model／vocoder三個官方GitHub assets的bytes及SHA-256，合計 `291,164,777` bytes／`277.68 MiB`；確認本機i7-8565U、8 GB、Intel UHD 620、C槽可用38.17 GiB且未安裝／執行SmartSub；把synthetic-only安全骨架、獨立下載安裝關卡、single-cue 60–90秒試驗、Yating／ZipVoice各一次、盲測及唯一一次調整寫入 `docs/plans/2026-08-19-free-first-briefing-voice-pilot-implementation-plan.md`。
-- 下一步：使用者先確認5–10秒reference修正、Emilia訓練資料的非商用license紅旗及本計畫；精確核准後只執行Tasks 1–4的離線程式與synthetic tests，完成後再次停在三個pinned assets的下載／安裝授權前。
-- 阻塞點：ZipVoice model card標示Apache-2.0，但模型訓練資料Emilia官方條款是CC BY-NC-4.0且原始音訊權利保留，故本試驗最多只能作私人內部評估，正式商用仍受license釐清阻擋；CPU實際速度、本人相似度及A／B聽感也均未驗證。未下載、未安裝、未抽音、未啟動Yating／SmartSub、未合成、未上傳、未付款、未修改正式管線、未push；既有OSA LIST QA阻擋保持獨立。
+- 一句話現況：使用者已書面核准5–10秒reference修正及實作計畫；Tasks 1–4的synthetic-only Gate I已完成並建立本機implementation commit `100ede1ae3b5d88f7743f8e779621744d59412ae`，目前安全停止在三個pinned assets的下載／安裝授權前。
+- 這次做了什麼：從基線`4f2d51428377cdcfd96c877832c5982ff2c87930`新增私人media／model Git ignore、防竄改script freeze與single-cue SRT、exact-ack Yating wrapper、PCM16 mono／duration／silence／clipping檢查、-23 dBFS RMS／-1 dBFS peak等音量、A／B sealed reveal及identity-leak驗證；TDD focused為`20 passed`，既有Yating controls為`25 passed`，完整suite為`614 passed, 8 skipped in 22.80s`，compile exit 0，SmartSub／WINWORD before-after均`0 / 0`，`src/`與既有travel briefing tests為0 diff。
+- 下一步：若使用者要繼續，須另行精確核准Gate D，才可從計畫固定的三個官方GitHub URL下載共`291,164,777` bytes／`277.68 MiB`、驗證hash／簽章並安裝SmartSub 3.7.0與固定ZipVoice model；Gate D完成後仍再次停止，不能讀影片、建音色或合成。
+- 阻塞點：ZipVoice／Emilia商用license仍未釐清；CPU實際速度、本人相似度及A／B聽感均未驗證。未下載、未安裝、未讀取或抽出本人影片、未啟動Yating／SmartSub、未合成、未上傳、未付款、未修改正式管線、未push；既有OSA LIST QA阻擋保持獨立。
 
 ## 2026-08-19 free-first briefing voice pilot design awaiting written review
 
