@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+import travel_briefing.word_list as word_list_module
+from travel_briefing.errors import WordGenerationError
 from travel_briefing.models import (
     BriefingDraft,
     Conflict,
@@ -116,6 +118,88 @@ def confirmed_op_field(name: str, value: str) -> OpField:
     )
 
 
+@pytest.mark.parametrize(
+    ("day_count", "chinese_days", "total"),
+    [
+        (1, "一", "300"),
+        (4, "四", "1,200"),
+        (5, "五", "1,500"),
+        (6, "六", "1,800"),
+        (7, "七", "2,100"),
+        (8, "八", "2,400"),
+        (10, "十", "3,000"),
+        (11, "十一", "3,300"),
+        (12, "十二", "3,600"),
+        (20, "二十", "6,000"),
+        (21, "二十一", "6,300"),
+    ],
+)
+def test_service_fee_notice_formats_positive_day_counts_without_duration_allowlist(
+    day_count,
+    chinese_days,
+    total,
+):
+    expected = (
+        "2. 本行程不接受在台灣事先支付導遊司機的服務費，因為尚未服務，"
+        "本行程導遊司機的服務費每人每天新台幣 300 元，"
+        f"{chinese_days}天共新台幣 {total} 元，請一律在日本當地支付給導遊"
+    )
+
+    assert word_list_module.format_list_service_fee_notice(day_count) == expected
+
+    for arbitrary_day_count in range(1, 367):
+        notice = word_list_module.format_list_service_fee_notice(
+            arbitrary_day_count
+        )
+        chinese_day_text, amount_text = notice.split(
+            "本行程導遊司機的服務費每人每天新台幣 300 元，",
+            maxsplit=1,
+        )[1].split("天共新台幣 ", maxsplit=1)
+        amount = amount_text.split(" 元，", maxsplit=1)[0]
+        assert chinese_day_text
+        assert not any(character.isascii() and character.isdigit()
+                       for character in chinese_day_text)
+        assert int(amount.replace(",", "")) == arbitrary_day_count * 300
+        assert WAITING_FOR_OP not in notice
+
+
+@pytest.mark.parametrize("invalid", [True, False, 0, -1, 1.0, "4", None])
+def test_service_fee_notice_rejects_invalid_day_counts(invalid):
+    with pytest.raises(ValueError, match="positive integer"):
+        word_list_module.format_list_service_fee_notice(invalid)
+
+
+def test_patch_plan_contains_one_dynamic_service_fee_body_paragraph():
+    four_day = build_list_patch_plan(
+        draft(4),
+        expected_layout_fingerprint="a" * 64,
+    )
+    twelve_day = build_list_patch_plan(
+        draft(12),
+        expected_layout_fingerprint="a" * 64,
+    )
+
+    assert four_day.schema_version == 4
+    assert four_day.generator_version == "list-word/4"
+    assert len(four_day.body_paragraphs) == 1
+    patch = four_day.body_paragraphs[0]
+    assert patch.field_id == "service_fee_notice"
+    assert patch.anchor_prefix == (
+        "2. 本行程不接受在台灣事先支付導遊司機的服務費"
+    )
+    assert patch.expected_source_text == (
+        "2. 本行程不接受在台灣事先支付導遊司機的服務費，因為尚未服務，"
+        "本行程導遊司機的服務費每人每天新台幣300元，"
+        "六天共新台幣1,800元，請一律在日本當地支付給導遊"
+    )
+    assert "四天共新台幣 1,200 元" in patch.text
+    assert patch.text != patch.expected_source_text
+    assert all(marker not in patch.text for marker in ("\r", "\n", "\a", "\v"))
+    assert len(twelve_day.body_paragraphs) == 1
+    assert "十二天共新台幣 3,600 元" in twelve_day.body_paragraphs[0].text
+    assert four_day.to_dict()["body_paragraphs"] == [patch.to_dict()]
+
+
 @pytest.mark.parametrize("day_count", [1, 4, 5, 6, 7, 8, 12])
 def test_patch_plan_maps_any_positive_trip_to_dynamic_daily_rows(day_count):
     plan = build_list_patch_plan(
@@ -135,8 +219,8 @@ def test_patch_plan_maps_any_positive_trip_to_dynamic_daily_rows(day_count):
         ),
     )
 
-    assert plan.schema_version == 3
-    assert plan.generator_version == "list-word/3"
+    assert plan.schema_version == 4
+    assert plan.generator_version == "list-word/4"
     assert plan.expected_source_header_qr_candidate_count == 1
     assert plan.output_qr_policy == "removed"
     assert plan.output_font_points == 12.0
@@ -433,6 +517,8 @@ class SyntheticWordAdapter:
         day_page_map=None,
         continuation_group_header=True,
         repeated_daily_header=True,
+        report_overrides=None,
+        report_remove_keys=(),
     ) -> None:
         self.source_inspection = source_inspection
         self.output_inspection = output_inspection
@@ -441,11 +527,15 @@ class SyntheticWordAdapter:
         self.day_page_map = day_page_map
         self.continuation_group_header = continuation_group_header
         self.repeated_daily_header = repeated_daily_header
+        self.report_overrides = report_overrides or {}
+        self.report_remove_keys = report_remove_keys
         self.jobs = []
+        self.job_payloads = []
 
     def run(self, job_path: Path, *, timeout_seconds: int) -> None:
         self.jobs.append((job_path, timeout_seconds))
         job = json.loads(job_path.read_text(encoding="utf-8"))
+        self.job_payloads.append(job)
         output = Path(job["output_docx"])
         output.write_bytes(b"synthetic docx package")
         target_days = job["plan"]["target_day_count"]
@@ -457,37 +547,39 @@ class SyntheticWordAdapter:
             }
             for number in range(1, target_days + 1)
         ]
-        Path(job["report_path"]).write_text(
-            json.dumps(
-                {
-                    "schema_version": 3,
-                    "action": "patch",
-                    "word_version": "synthetic",
-                    "source_inspection": self.source_inspection.to_dict(),
-                    "output_inspection": self.output_inspection.to_dict(),
-                    "selected_layout_profile": self.selected_profile,
-                    "computed_page_count": self.page_count,
-                    "day_page_map": day_page_map,
-                    "continuation_group_header": (
-                        self.continuation_group_header
-                    ),
-                    "repeated_daily_header": self.repeated_daily_header,
-                    "qr_policy": "removed",
-                    "source_header_qr_candidate_count": (
-                        self.source_inspection.header_qr_candidate_count
-                    ),
-                    "output_header_qr_candidate_count": (
-                        self.output_inspection.header_qr_candidate_count
-                    ),
-                    "non_title_font_points": 12.0,
-                    "title_font_points_before": 22.0,
-                    "title_font_points_after": 22.0,
-                    "patched_cell_count": len(job["plan"]["cells"]),
-                    "extra_trailing_paragraph_count": 0,
-                    "output_bytes": output.stat().st_size,
-                },
-                ensure_ascii=False,
+        report = {
+            "schema_version": 4,
+            "action": "patch",
+            "word_version": "synthetic",
+            "source_inspection": self.source_inspection.to_dict(),
+            "output_inspection": self.output_inspection.to_dict(),
+            "selected_layout_profile": self.selected_profile,
+            "computed_page_count": self.page_count,
+            "day_page_map": day_page_map,
+            "continuation_group_header": self.continuation_group_header,
+            "repeated_daily_header": self.repeated_daily_header,
+            "qr_policy": "removed",
+            "source_header_qr_candidate_count": (
+                self.source_inspection.header_qr_candidate_count
             ),
+            "output_header_qr_candidate_count": (
+                self.output_inspection.header_qr_candidate_count
+            ),
+            "non_title_font_points": 12.0,
+            "title_font_points_before": 22.0,
+            "title_font_points_after": 22.0,
+            "patched_cell_count": len(job["plan"]["cells"]),
+            "patched_body_paragraph_count": len(
+                job["plan"]["body_paragraphs"]
+            ),
+            "extra_trailing_paragraph_count": 0,
+            "output_bytes": output.stat().st_size,
+        }
+        report.update(self.report_overrides)
+        for key in self.report_remove_keys:
+            report.pop(key, None)
+        Path(job["report_path"]).write_text(
+            json.dumps(report, ensure_ascii=False),
             encoding="utf-8",
         )
 
@@ -620,6 +712,8 @@ def test_build_list_word_uses_a_temp_job_and_publishes_exclusively(tmp_path):
     assert result.non_title_font_points == 12.0
     assert result.title_font_points_before == 22.0
     assert result.title_font_points_after == 22.0
+    assert result.generator_version == "list-word/4"
+    assert result.patched_body_paragraph_count == 1
     assert result.extra_trailing_paragraph_count == 0
     assert result.source_layout_fingerprint == layout_fingerprint(source_inspection)
     assert result.output_layout_fingerprint == layout_fingerprint(
@@ -629,6 +723,53 @@ def test_build_list_word_uses_a_temp_job_and_publishes_exclusively(tmp_path):
     assert timeout == 90
     assert received_job.name == "word-job.json"
     assert not received_job.exists()
+    received_plan = adapter.job_payloads[0]["plan"]
+    assert received_plan["schema_version"] == 4
+    assert received_plan["generator_version"] == "list-word/4"
+    assert len(received_plan["body_paragraphs"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("report_overrides", "report_remove_keys"),
+    [
+        ({"schema_version": 3}, ()),
+        ({}, ("patched_body_paragraph_count",)),
+        ({"patched_body_paragraph_count": True}, ()),
+        ({"patched_body_paragraph_count": 0}, ()),
+        ({"patched_body_paragraph_count": 2}, ()),
+        ({"unexpected_key": "unexpected"}, ()),
+    ],
+)
+def test_word_report_requires_exactly_one_service_fee_body_patch(
+    tmp_path,
+    report_overrides,
+    report_remove_keys,
+):
+    template = tmp_path / "private-template.docx"
+    template.write_bytes(b"synthetic private template")
+    output = tmp_path / "new-output.docx"
+    source_inspection = template_inspection(1)
+    output_inspection = replace(
+        template_inspection(4),
+        header_qr_candidate_count=0,
+    )
+    adapter = SyntheticWordAdapter(
+        source_inspection,
+        output_inspection,
+        report_overrides=report_overrides,
+        report_remove_keys=report_remove_keys,
+    )
+
+    with pytest.raises(WordGenerationError, match="schema version 4"):
+        build_list_word(
+            draft(4),
+            template_path=template,
+            output_docx=output,
+            expected_layout_fingerprint=layout_fingerprint(source_inspection),
+            adapter=adapter,
+        )
+
+    assert not output.exists()
 
 
 def test_build_list_word_refuses_existing_output_before_calling_word(tmp_path):

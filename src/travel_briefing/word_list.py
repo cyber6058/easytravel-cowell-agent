@@ -30,16 +30,49 @@ from .template_contract import (
 
 
 WAITING_FOR_OP = "待 OP 確認"
-LIST_WORD_GENERATOR_VERSION = "list-word/3"
+LIST_WORD_GENERATOR_VERSION = "list-word/4"
 LIST_OUTPUT_QR_POLICY = "removed"
 LIST_OUTPUT_FONT_POINTS = 12.0
 LIST_PRESERVED_TITLE_PARAGRAPH = 1
+LIST_SERVICE_FEE_DAILY_RATE_NTD = 300
+LIST_SERVICE_FEE_FIELD_ID = "service_fee_notice"
+LIST_SERVICE_FEE_ANCHOR_PREFIX = (
+    "2. 本行程不接受在台灣事先支付導遊司機的服務費"
+)
+LIST_SERVICE_FEE_EXPECTED_SOURCE_TEXT = (
+    f"{LIST_SERVICE_FEE_ANCHOR_PREFIX}，因為尚未服務，"
+    "本行程導遊司機的服務費每人每天新台幣300元，"
+    "六天共新台幣1,800元，請一律在日本當地支付給導遊"
+)
+_LIST_SERVICE_FEE_TARGET_PREFIX = (
+    f"{LIST_SERVICE_FEE_ANCHOR_PREFIX}，因為尚未服務，"
+    "本行程導遊司機的服務費每人每天"
+)
+_LIST_SERVICE_FEE_TARGET_SUFFIX = "，請一律在日本當地支付給導遊"
 DEFAULT_ROUTE_CHARACTER_LIMIT = 256
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _MEAL_NOT_INCLUDED = re.compile(
     r"(?:^\s*[x×無]\s*$|敬請自理|自理|方便逛街)", re.IGNORECASE
 )
 _FORBIDDEN_LIST_CELL_TEXT_MARKERS = ("\r", "\n", "\a")
+_FORBIDDEN_BODY_PARAGRAPH_MARKERS = ("\r", "\n", "\a", "\v")
+_TRADITIONAL_CHINESE_DIGITS = "零一二三四五六七八九"
+_TRADITIONAL_CHINESE_SMALL_UNITS = ("", "十", "百", "千")
+_TRADITIONAL_CHINESE_SECTION_UNITS = (
+    "",
+    "萬",
+    "億",
+    "兆",
+    "京",
+    "垓",
+    "秭",
+    "穰",
+    "溝",
+    "澗",
+    "正",
+    "載",
+    "極",
+)
 
 
 def format_list_day_date(value: str) -> str:
@@ -50,6 +83,72 @@ def format_list_day_date(value: str) -> str:
     if parsed.isoformat() != value:
         return value
     return f"{parsed.month}/{parsed.day}"
+
+
+def format_list_service_fee_notice(day_count: int) -> str:
+    if (
+        isinstance(day_count, bool)
+        or not isinstance(day_count, int)
+        or day_count <= 0
+    ):
+        raise ValueError("LIST service fee day count must be a positive integer")
+    chinese_days = _format_traditional_chinese_integer(day_count)
+    total = day_count * LIST_SERVICE_FEE_DAILY_RATE_NTD
+    return (
+        f"{_LIST_SERVICE_FEE_TARGET_PREFIX}"
+        f"新台幣 {LIST_SERVICE_FEE_DAILY_RATE_NTD:,} 元，"
+        f"{chinese_days}天共新台幣 {total:,} 元"
+        f"{_LIST_SERVICE_FEE_TARGET_SUFFIX}"
+    )
+
+
+def _format_traditional_chinese_integer(value: int) -> str:
+    sections: list[int] = []
+    remainder = value
+    while remainder:
+        remainder, section = divmod(remainder, 10_000)
+        sections.append(section)
+
+    result = ""
+    zero_pending = False
+    for section_index in range(len(sections) - 1, -1, -1):
+        section = sections[section_index]
+        if section == 0:
+            if result:
+                zero_pending = True
+            continue
+        if result and (zero_pending or section < 1_000):
+            result += _TRADITIONAL_CHINESE_DIGITS[0]
+        result += _format_traditional_chinese_section(section)
+        result += _traditional_chinese_section_unit(section_index)
+        zero_pending = False
+    if result.startswith("一十"):
+        result = result[1:]
+    return result
+
+
+def _format_traditional_chinese_section(value: int) -> str:
+    result = ""
+    zero_pending = False
+    for position in range(3, -1, -1):
+        divisor = 10 ** position
+        digit = value // divisor % 10
+        if digit == 0:
+            if result and value % divisor:
+                zero_pending = True
+            continue
+        if zero_pending:
+            result += _TRADITIONAL_CHINESE_DIGITS[0]
+            zero_pending = False
+        result += _TRADITIONAL_CHINESE_DIGITS[digit]
+        result += _TRADITIONAL_CHINESE_SMALL_UNITS[position]
+    return result
+
+
+def _traditional_chinese_section_unit(section_index: int) -> str:
+    if section_index < len(_TRADITIONAL_CHINESE_SECTION_UNITS):
+        return _TRADITIONAL_CHINESE_SECTION_UNITS[section_index]
+    return "萬" * section_index
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +162,22 @@ class HeaderParagraphPatch:
             "paragraph": self.paragraph,
             "text": self.text,
             "highlight_text": self.highlight_text,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class BodyParagraphPatch:
+    field_id: str
+    anchor_prefix: str
+    expected_source_text: str
+    text: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "field_id": self.field_id,
+            "anchor_prefix": self.anchor_prefix,
+            "expected_source_text": self.expected_source_text,
+            "text": self.text,
         }
 
 
@@ -119,6 +234,7 @@ class ListPatchPlan:
     expected_table_shapes: tuple[TableShape, ...]
     anchor_checks: tuple[AnchorCheck, ...]
     header_paragraphs: tuple[HeaderParagraphPatch, ...]
+    body_paragraphs: tuple[BodyParagraphPatch, ...]
     cells: tuple[CellPatch, ...]
 
     def header_paragraph(self, paragraph: int) -> HeaderParagraphPatch:
@@ -166,6 +282,7 @@ class ListPatchPlan:
             ],
             "anchor_checks": [item.to_dict() for item in self.anchor_checks],
             "header_paragraphs": [item.to_dict() for item in self.header_paragraphs],
+            "body_paragraphs": [item.to_dict() for item in self.body_paragraphs],
             "cells": [item.to_dict() for item in self.cells],
         }
 
@@ -193,6 +310,7 @@ class ListWordBuildResult:
     title_font_points_before: float
     title_font_points_after: float
     patched_cell_count: int
+    patched_body_paragraph_count: int
     extra_trailing_paragraph_count: int
 
 
@@ -400,8 +518,20 @@ def build_list_patch_plan(
     cells.extend(_build_guide_cells(op_fields))
     cell_patches = tuple(cells)
     _validate_ordinary_cell_patches(cell_patches)
+    body_paragraphs = (
+        BodyParagraphPatch(
+            field_id=LIST_SERVICE_FEE_FIELD_ID,
+            anchor_prefix=LIST_SERVICE_FEE_ANCHOR_PREFIX,
+            expected_source_text=LIST_SERVICE_FEE_EXPECTED_SOURCE_TEXT,
+            text=format_list_service_fee_notice(draft.product.day_count),
+        ),
+    )
+    _validate_body_paragraph_patches(
+        body_paragraphs,
+        day_count=draft.product.day_count,
+    )
     return ListPatchPlan(
-        schema_version=3,
+        schema_version=4,
         generator_version=LIST_WORD_GENERATOR_VERSION,
         draft_id=draft.draft_id,
         document_status=draft.status.value,
@@ -420,6 +550,7 @@ def build_list_patch_plan(
         expected_table_shapes=shapes,
         anchor_checks=_list_anchor_checks(),
         header_paragraphs=header_paragraphs,
+        body_paragraphs=body_paragraphs,
         cells=cell_patches,
     )
 
@@ -515,6 +646,9 @@ def build_list_word(
                 plan.expected_source_header_qr_candidate_count
             ),
             expected_patched_cell_count=len(plan.cells),
+            expected_patched_body_paragraph_count=len(
+                plan.body_paragraphs
+            ),
         )
         if not temporary_docx.is_file() or temporary_docx.stat().st_size == 0:
             raise WordGenerationError(
@@ -572,6 +706,9 @@ def build_list_word(
         title_font_points_before=report["title_font_points_before"],
         title_font_points_after=report["title_font_points_after"],
         patched_cell_count=report["patched_cell_count"],
+        patched_body_paragraph_count=report[
+            "patched_body_paragraph_count"
+        ],
         extra_trailing_paragraph_count=report[
             "extra_trailing_paragraph_count"
         ],
@@ -612,6 +749,33 @@ def _validate_ordinary_cell_patches(patches: tuple[CellPatch, ...]) -> None:
         raise ValueError(
             "LIST ordinary cell text contains a forbidden Word marker"
         )
+
+
+def _validate_body_paragraph_patches(
+    patches: tuple[BodyParagraphPatch, ...],
+    *,
+    day_count: int,
+) -> None:
+    expected_target = format_list_service_fee_notice(day_count)
+    if (
+        len(patches) != 1
+        or patches[0].field_id != LIST_SERVICE_FEE_FIELD_ID
+        or patches[0].anchor_prefix != LIST_SERVICE_FEE_ANCHOR_PREFIX
+        or patches[0].expected_source_text
+        != LIST_SERVICE_FEE_EXPECTED_SOURCE_TEXT
+        or patches[0].text != expected_target
+        or patches[0].text == patches[0].expected_source_text
+        or any(
+            marker in value
+            for value in (
+                patches[0].anchor_prefix,
+                patches[0].expected_source_text,
+                patches[0].text,
+            )
+            for marker in _FORBIDDEN_BODY_PARAGRAPH_MARKERS
+        )
+    ):
+        raise ValueError("LIST service fee body paragraph patch is invalid")
 
 
 def _validate_draft_shape(draft: BriefingDraft) -> None:
@@ -861,6 +1025,7 @@ def _read_patch_report(
     approved_profiles: tuple[str, ...],
     expected_source_header_qr_candidate_count: int,
     expected_patched_cell_count: int,
+    expected_patched_body_paragraph_count: int,
 ) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -884,13 +1049,14 @@ def _read_patch_report(
         "title_font_points_before",
         "title_font_points_after",
         "patched_cell_count",
+        "patched_body_paragraph_count",
         "extra_trailing_paragraph_count",
         "output_bytes",
     }
     if (
         not isinstance(payload, dict)
         or set(payload) != expected_keys
-        or payload.get("schema_version") != 3
+        or payload.get("schema_version") != 4
         or payload.get("action") != "patch"
         or not isinstance(payload.get("word_version"), str)
         or not payload["word_version"]
@@ -922,6 +1088,9 @@ def _read_patch_report(
         != payload.get("title_font_points_before")
         or isinstance(payload.get("patched_cell_count"), bool)
         or payload.get("patched_cell_count") != expected_patched_cell_count
+        or isinstance(payload.get("patched_body_paragraph_count"), bool)
+        or payload.get("patched_body_paragraph_count")
+        != expected_patched_body_paragraph_count
         or isinstance(
             payload.get("extra_trailing_paragraph_count"), bool
         )
@@ -933,7 +1102,7 @@ def _read_patch_report(
     ):
         if (
             isinstance(payload, dict)
-            and payload.get("schema_version") == 3
+            and payload.get("schema_version") == 4
         ):
             if payload.get("computed_page_count") in {0, None}:
                 raise ValueError("LIST page count must be positive")
@@ -953,7 +1122,7 @@ def _read_patch_report(
             ):
                 raise ValueError("LIST output QR candidate count is invalid")
         raise WordGenerationError(
-            "Word patch report does not match schema version 3"
+            "Word patch report does not match schema version 4"
         )
     try:
         source = ListTemplateInspection.from_dict(payload["source_inspection"])
