@@ -2,7 +2,8 @@
 
 日期：2026-08-19
 
-狀態：書面規格已由 OP 核准；本計畫等待 OP 核准，尚未開始離線實作。
+狀態：書面規格與本計畫均已由 OP 核准；離線實作已完成並通過完整驗證。
+Word 實機 repro 仍是獨立關卡。
 
 依據：
 `docs/specs/2026-08-19-list-four-day-page-count-mismatch-design.md`
@@ -410,13 +411,49 @@ git log -3 --oneline
 
 working tree 必須乾淨。本計畫不執行 push；push 是另一個明確授權關卡。
 
-## OP 實作核准關卡
+## OP 實作核准記錄
 
-OP 若同意本計畫，可回覆：
+OP 已於 2026-08-19 回覆：
 
 ```text
 同意此實作計畫，開始離線實作
 ```
 
 該句只授權依本計畫修改四個 implementation files、執行純離線驗證並建立本機
-commits；不授權 Word 或任何其他外部／integration 關卡。
+commits；沒有授權 Word 或任何其他外部／integration 關卡。
+
+## 實作結果（2026-08-19）
+
+- implementation baseline 為
+  `80dcb4f23723b3f61ee3f29923bfd7324f9351f3`；開工
+  `git pull --ff-only` 為 `Already up to date.`，working tree 乾淨，
+  `RUN_BRIEFING_WORD_INTEGRATION=0`，WINWORD baseline 為使用者既有的 1。
+- QA primary regression 先建立 synthetic render report page count 2、實際 one-page
+  PDF，且不傳 independent expectation。Red 原文為 `F [100%]`，停在
+  `ValueError: Word report and PDF LIST page count do not match`。
+- `word_qa.py` 只移除 Word-statistic equality gate，改為 PDF inspection 後才驗證
+  explicit expectation，並以 `inspection.page_count` 控制 legacy／PNG set／QA index。
+  Primary 轉為 `. [100%]`；既有 explicit expected 2／PDF 1 blocking control 仍為
+  `. [100%]`，兩者合跑為 `.. [100%]`。
+- Backend composition test 保留 build statistic 2、改用 QA PDF count 1，並要求 QA
+  kwargs 不含 `expected_page_count`。Red 原文為 `F [100%]`，精確 assertion 顯示
+  kwargs 仍含 `expected_page_count: 2`；`workflow.py` 移除唯一該 kwarg 後轉為
+  `. [100%]`，三個 target tests 合跑為 `... [100%]`。
+- 兩個核准 focused files 為 `...................... [100%]`；Word LIST、Windows
+  adapter 與 synthetic workflow unchanged controls 最後為
+  `............................... [100%]`；PowerShell parser 為
+  `PARSER_ERROR_COUNT=0`。
+- Baseline non-change command exit 0：`word_list.py`、兩個 Word PowerShell adapters
+  與 Gate V integration test 對 baseline diff 為零。production／test changed files
+  精確為計畫核准四檔；report／index schema、formatting、pagination、master 與
+  calibration 均未改。
+- 完整離線 suite 原文為 `557 passed, 8 skipped in 45.89s`；`compileall` exit 0，
+  `git diff --check` 通過。驗證後 WINWORD count 仍為 1，Word opt-in 仍為 0。
+- implementation commit 為
+  `499e2e11d9723eae09318e8affcd28ae25cd3c78`（`fix(briefing): trust exported LIST
+  page count`），只含四個核准 implementation files。
+- 本輪沒有啟動 Word、讀寫 private master／calibration、產生 DRAFT／DOCX／正式
+  PDF／PNG、修改 installed runtime，亦沒有 GET、JMA、Yating、ffmpeg、LINE、
+  Cowell、deploy、publish 或 push。
+- Word 實機與 DOCX／PDF／PNG QA 仍未驗證。下一步若要驗證，必須取得新的明確
+  授權，只執行一次 4 天 post-fix Word repro；不跑其他天數，成功或失敗都不重試。

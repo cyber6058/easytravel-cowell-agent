@@ -1,5 +1,19 @@
 # STATUS
 
+## 2026-08-19 LIST exported-page authority offline implementation handoff
+
+- 一句話現況：LIST QA 已離線改為以 PyMuPDF inspected PDF page count 控制 PNG set、QA index 與 final evidence；Word `computed_page_count` 只保留為正整數診斷，explicit independent expectation 仍 strict，完整離線驗證全綠，但 Word 實機尚未驗證。
+- 開工證據：implementation baseline 為 `80dcb4f23723b3f61ee3f29923bfd7324f9351f3`，`git pull --ff-only` 為 `Already up to date.`，working tree 乾淨，`RUN_BRIEFING_WORD_INTEGRATION=0`，WINWORD baseline 是使用者既有的 1。
+- QA red→green：新 synthetic seam 建立 render report 2／one-page PDF 1且不傳 expectation，先為 `F [100%]`／`ValueError: Word report and PDF LIST page count do not match`；最小修改 `word_qa.py` 後轉為 `. [100%]`。既有 explicit expected 2／PDF 1 control 仍為 `. [100%]`，兩者合跑 `.. [100%]`。
+- Backend red→green：既有 composition test 保留 build statistic 2、QA artifact count 1，並新增 kwargs non-presence assertion；先為 `F [100%]`，精確顯示 `expected_page_count: 2` 仍存在。`workflow.py` 只移除該 kwarg 後轉為 `. [100%]`；三個 targets 合跑 `... [100%]`。
+- 實作內容：`render_list_word_for_qa()` 先驗證 report／PDF bytes並完成 PDF inspection；只有 caller 明示 expectation 時才與 `inspection.page_count` 比較，通過後 artifact required count 一律取 inspected PDF。`ListWordQaResult.computed_page_count`、report/index schema、page map、date token、A4、content、image、publish 與 exclusive-output checks 不變。`LocalRenderBackend` 不再把 `built.computed_page_count` 傳成 expectation。
+- Focused／non-change：兩個核准 test files 為 `...................... [100%]`；Word LIST、Windows adapter 與 synthetic workflow controls 最後為 `............................... [100%]`；PowerShell parser `PARSER_ERROR_COUNT=0`。`word_list.py`、兩個 Word PowerShell adapters、Gate V integration 對 baseline diff 為零，changed production／test files 精確為核准四檔。
+- 完整驗證：`557 passed, 8 skipped in 45.89s`、compileall exit 0、`git diff --check` 通過；驗證後 WINWORD 仍為 1且 Word opt-in 仍為 0。沒有弱化、skip 或刪除 tests。
+- Commits：implementation commit `499e2e11d9723eae09318e8affcd28ae25cd3c78`（`fix(briefing): trust exported LIST page count`）只含 `word_qa.py`、`workflow.py` 與兩個核准 tests；本段由緊接的本機 handoff 文件 commit 保存，hash 以 `git log` 為準。
+- 範圍界線：沒有啟動 Word、讀寫 private master／calibration、產生 DRAFT／DOCX／正式 PDF／PNG、修改 installed runtime，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。離線綠燈不能宣稱 4 天 Word 已修好。
+- 下一步：若要實機驗證，需新的明確授權「同意只執行一次 4 天 post-fix Word repro；不跑其他天數；若成功，完成同次 DOCX／PDF／PNG QA；成功或失敗都不重試。」
+- 阻塞點：Word 實機與 artifacts 未驗證；本輪依核准計畫在離線 handoff 停止。
+
 ## 2026-08-19 LIST exported-page authority offline implementation plan review
 
 - 一句話現況：OP 已核准 4 天 exported-page authority 書面規格；離線實作計畫已建立並等待 OP 核准，尚未修改或執行 production／tests。

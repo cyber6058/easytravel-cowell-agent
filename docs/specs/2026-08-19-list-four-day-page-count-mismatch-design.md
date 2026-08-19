@@ -3,9 +3,9 @@
 ## Status
 
 Offline diagnosis and the selected correction design were written on
-2026-08-19. OP approved this document on 2026-08-19; the separate offline
-implementation plan is waiting for OP approval. Production, tests, Word COM,
-and another reproduction remain unchanged and unauthorized.
+2026-08-19. OP approved this document and the separate offline implementation
+plan on 2026-08-19. Offline implementation is complete and validated; Word
+COM and another reproduction remain unchanged, unauthorized, and unverified.
 
 ## Authorized scope
 
@@ -334,3 +334,7 @@ OP approved this document on 2026-08-19 with:
 That approval authorized only creation of the separate offline implementation
 plan. It did not authorize editing production or tests, running Word, or any
 later integration.
+
+OP subsequently approved the separate implementation plan with
+`同意此實作計畫，開始離線實作`. The four-file offline correction completed at
+commit `499e2e1`; that approval did not authorize Word or any later integration.
