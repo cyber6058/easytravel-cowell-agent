@@ -740,16 +740,130 @@ def test_title_font_range_uses_word_find_not_text_length_position_math():
         assert "$titleRange.End = [int]$titleRange.End - 1" not in function
 
 
-def test_patch_action_requires_schema_three_and_reports_normalization_evidence():
+def test_service_fee_body_patch_is_main_story_exact_and_bounded():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+
+    assert "$WdMainTextStory = 1" in script
+    assert "$WdWithInTable = 12" in script
+    assert "function Get-ListServiceFeeParagraphRange {" in script
+    assert "function Set-ListServiceFeeBodyParagraph {" in script
+    locator = script.split(
+        "function Get-ListServiceFeeParagraphRange {", 1
+    )[1].split("function Get-ListMainStoryParagraphCount {", 1)[0]
+    setter = script.split(
+        "function Set-ListServiceFeeBodyParagraph {", 1
+    )[1].split("function Assert-ListServiceFeePostReopenContract {", 1)[0]
+
+    assert "$Document.StoryRanges.Item($WdMainTextStory)" in locator
+    assert "$mainStory.Paragraphs.Item($paragraphIndex)" in locator
+    assert "$candidate = $paragraph.Range.Duplicate" in locator
+    assert "$candidate.End = [int]$candidate.End - 1" in locator
+    assert "StartsWith(" in locator
+    assert "[StringComparison]::Ordinal" in locator
+    assert "$visibleText -cne $expectedText" in locator
+    assert "$candidate.Information($WdWithInTable)" in locator
+    for code in (
+        "LIST_SERVICE_FEE_SOURCE_PARAGRAPH_MISSING",
+        "LIST_SERVICE_FEE_SOURCE_PARAGRAPH_MULTIPLE",
+        "LIST_SERVICE_FEE_SOURCE_PARAGRAPH_CHANGED",
+        "LIST_SERVICE_FEE_RANGE_INVALID",
+        "LIST_SERVICE_FEE_SOURCE_IN_TABLE",
+    ):
+        assert f'throw "{code}"' in locator
+    assert '-Phase "SOURCE"' in setter
+    assert "$verifiedRange.Text = [string]$Patch.text" in setter
+    assert setter.index('-Phase "SOURCE"') < setter.index(
+        "$verifiedRange.Text = [string]$Patch.text"
+    )
+    for forbidden in (
+        "ReplaceAll",
+        "wdReplaceAll",
+        ".Find",
+        ".Headers",
+        ".Footers",
+        ".Tables",
+    ):
+        assert forbidden not in locator
+
+
+def test_service_fee_body_patch_revalidates_after_reopen():
+    script = PATCH_SCRIPT.read_text(encoding="utf-8")
+
+    assert "function Assert-ListServiceFeePostReopenContract {" in script
+    assertion = script.split(
+        "function Assert-ListServiceFeePostReopenContract {", 1
+    )[1].split("function Set-ListOutputFontContract {", 1)[0]
+    locator = script.split(
+        "function Get-ListServiceFeeParagraphRange {", 1
+    )[1].split("function Get-ListMainStoryParagraphCount {", 1)[0]
+    patch_action = script.split("function Invoke-Patch {", 1)[1].split(
+        "function Invoke-Action {", 1
+    )[0]
+
+    assert '-Phase "POST_REOPEN"' in assertion
+    assert "Get-ListMainStoryParagraphCount" in assertion
+    assert "$ExpectedParagraphCount" in assertion
+    assert "$Patch.expected_source_text" in assertion
+    for code in (
+        "LIST_SERVICE_FEE_POST_REOPEN_MISSING",
+        "LIST_SERVICE_FEE_POST_REOPEN_MULTIPLE",
+        "LIST_SERVICE_FEE_POST_REOPEN_CHANGED",
+    ):
+        assert f'throw "{code}"' in locator
+    assert 'throw "LIST_SERVICE_FEE_PARAGRAPH_COUNT_CHANGED"' in assertion
+
+    source_inspection = patch_action.index(
+        "$sourceServiceFeeRange = Get-ListServiceFeeParagraphRange"
+    )
+    resize = patch_action.index("Set-DailyRowCount", source_inspection)
+    header_patch = patch_action.index(
+        "foreach ($patch in $Job.plan.header_paragraphs)", resize
+    )
+    cell_patch = patch_action.index(
+        "foreach ($patch in $Job.plan.cells)", header_patch
+    )
+    body_patch = patch_action.index(
+        "$patchedBodyParagraphCount = Set-ListServiceFeeBodyParagraph",
+        cell_patch,
+    )
+    font_contract = patch_action.index(
+        "Set-ListOutputFontContract", body_patch
+    )
+    save = patch_action.index("$document.SaveAs2($outputDocx", font_contract)
+    reopen = patch_action.index("$Word.Documents.Open($outputDocx", save)
+    post_assertion = patch_action.index(
+        "Assert-ListServiceFeePostReopenContract", reopen
+    )
+    presentation = patch_action.index(
+        "Assert-ListOutputPresentationContract", post_assertion
+    )
+    report = patch_action.index("$report = [ordered]@{", presentation)
+    assert (
+        source_inspection
+        < resize
+        < header_patch
+        < cell_patch
+        < body_patch
+        < font_contract
+        < save
+        < reopen
+        < post_assertion
+        < presentation
+        < report
+    )
+
+
+def test_patch_action_requires_schema_four_and_reports_service_fee_evidence():
     script = PATCH_SCRIPT.read_text(encoding="utf-8")
     function = script.split("function Invoke-Patch {", 1)[1].split(
         "function Invoke-Action {", 1
     )[0]
 
-    assert "$Job.plan.schema_version -ne 3" in function
-    assert 'generator_version -cne "list-word/3"' in function
+    assert "$Job.plan.schema_version -ne 4" in function
+    assert 'generator_version -cne "list-word/4"' in function
+    assert 'throw "LIST_SERVICE_FEE_PLAN_INVALID"' in function
     assert 'output_qr_policy -cne "removed"' in function
-    assert "schema_version = 3" in function
+    assert "schema_version = 4" in function
     assert 'qr_policy = "removed"' in function
     for key in (
         "source_header_qr_candidate_count",
@@ -758,6 +872,7 @@ def test_patch_action_requires_schema_three_and_reports_normalization_evidence()
         "title_font_points_before",
         "title_font_points_after",
         "patched_cell_count",
+        "patched_body_paragraph_count",
         "extra_trailing_paragraph_count",
     ):
         assert key in function

@@ -29,7 +29,9 @@ $WdFormatDocumentDefault = 16
 $WdHeaderFooterPrimary = 1
 $WdHeaderFooterFirstPage = 2
 $WdLineSpaceExactly = 4
+$WdMainTextStory = 1
 $WdStatisticPages = 2
+$WdWithInTable = 12
 $WdYellow = 7
 $script:GateC5992Checkpoint = $null
 
@@ -1649,6 +1651,313 @@ function Get-ListTitleFontPoints {
     }
 }
 
+function Assert-ListServiceFeePlan {
+    param([Parameter(Mandatory = $true)]$Plan)
+    if (
+        -not ($Plan.PSObject.Properties.Name -contains "body_paragraphs") -or
+        @($Plan.body_paragraphs).Count -ne 1
+    ) {
+        throw "LIST_SERVICE_FEE_PLAN_INVALID"
+    }
+    $patch = @($Plan.body_paragraphs)[0]
+    $properties = @($patch.PSObject.Properties.Name | Sort-Object) -join ","
+    $expectedProperties = @(
+        "anchor_prefix",
+        "expected_source_text",
+        "field_id",
+        "text"
+    ) | Sort-Object
+    $expectedProperties = $expectedProperties -join ","
+    if (
+        $properties -cne $expectedProperties -or
+        [string]$patch.field_id -cne "service_fee_notice" -or
+        [string]::IsNullOrWhiteSpace([string]$patch.anchor_prefix) -or
+        [string]::IsNullOrWhiteSpace([string]$patch.expected_source_text) -or
+        [string]::IsNullOrWhiteSpace([string]$patch.text) -or
+        [string]$patch.expected_source_text -ceq [string]$patch.text -or
+        -not ([string]$patch.expected_source_text).StartsWith(
+            [string]$patch.anchor_prefix,
+            [StringComparison]::Ordinal
+        ) -or
+        -not ([string]$patch.text).StartsWith(
+            [string]$patch.anchor_prefix,
+            [StringComparison]::Ordinal
+        )
+    ) {
+        throw "LIST_SERVICE_FEE_PLAN_INVALID"
+    }
+    foreach ($value in @(
+        [string]$patch.anchor_prefix,
+        [string]$patch.expected_source_text,
+        [string]$patch.text
+    )) {
+        foreach ($marker in @([char]13, [char]10, [char]7, [char]11)) {
+            if ($value.IndexOf($marker) -ge 0) {
+                throw "LIST_SERVICE_FEE_PLAN_INVALID"
+            }
+        }
+    }
+    return $patch
+}
+
+function Get-ListServiceFeeParagraphRange {
+    param(
+        [Parameter(Mandatory = $true)]$Document,
+        [Parameter(Mandatory = $true)]$Patch,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("SOURCE", "POST_REOPEN")]
+        [string]$Phase
+    )
+    $mainStory = $null
+    $selectedParagraph = $null
+    $selectedRange = $null
+    $resultRange = $null
+    try {
+        try {
+            $mainStory = $Document.StoryRanges.Item($WdMainTextStory)
+        }
+        catch {
+            if ($Phase -ceq "SOURCE") {
+                throw "LIST_SERVICE_FEE_SOURCE_PARAGRAPH_MISSING"
+            }
+            throw "LIST_SERVICE_FEE_POST_REOPEN_MISSING"
+        }
+        $candidateParagraphIndexes = @()
+        for (
+            $paragraphIndex = 1;
+            $paragraphIndex -le [int]$mainStory.Paragraphs.Count;
+            $paragraphIndex += 1
+        ) {
+            $paragraph = $null
+            $candidate = $null
+            try {
+                $paragraph = $mainStory.Paragraphs.Item($paragraphIndex)
+                $candidate = $paragraph.Range.Duplicate
+                $rawText = [string]$candidate.Text
+                if (-not $rawText.StartsWith(
+                    [string]$Patch.anchor_prefix,
+                    [StringComparison]::Ordinal
+                )) {
+                    continue
+                }
+                if ([bool]$candidate.Information($WdWithInTable)) {
+                    if ($Phase -ceq "SOURCE") {
+                        throw "LIST_SERVICE_FEE_SOURCE_IN_TABLE"
+                    }
+                    throw "LIST_SERVICE_FEE_POST_REOPEN_CHANGED"
+                }
+                if (
+                    [int]$candidate.End -le [int]$candidate.Start -or
+                    $rawText.Length -eq 0 -or
+                    [int][char]$rawText[$rawText.Length - 1] -ne 13
+                ) {
+                    if ($Phase -ceq "SOURCE") {
+                        throw "LIST_SERVICE_FEE_RANGE_INVALID"
+                    }
+                    throw "LIST_SERVICE_FEE_POST_REOPEN_CHANGED"
+                }
+                $candidate.End = [int]$candidate.End - 1
+                if ([int]$candidate.End -lt [int]$candidate.Start) {
+                    if ($Phase -ceq "SOURCE") {
+                        throw "LIST_SERVICE_FEE_RANGE_INVALID"
+                    }
+                    throw "LIST_SERVICE_FEE_POST_REOPEN_CHANGED"
+                }
+                $candidateParagraphIndexes += $paragraphIndex
+            }
+            finally {
+                if ($null -ne $candidate) {
+                    try {
+                        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                            $candidate
+                        )
+                    }
+                    catch {}
+                }
+                if ($null -ne $paragraph) {
+                    try {
+                        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                            $paragraph
+                        )
+                    }
+                    catch {}
+                }
+            }
+        }
+        if ($candidateParagraphIndexes.Count -eq 0) {
+            if ($Phase -ceq "SOURCE") {
+                throw "LIST_SERVICE_FEE_SOURCE_PARAGRAPH_MISSING"
+            }
+            throw "LIST_SERVICE_FEE_POST_REOPEN_MISSING"
+        }
+        if ($candidateParagraphIndexes.Count -ne 1) {
+            if ($Phase -ceq "SOURCE") {
+                throw "LIST_SERVICE_FEE_SOURCE_PARAGRAPH_MULTIPLE"
+            }
+            throw "LIST_SERVICE_FEE_POST_REOPEN_MULTIPLE"
+        }
+        $selectedParagraph = $mainStory.Paragraphs.Item(
+            [int]$candidateParagraphIndexes[0]
+        )
+        $selectedRange = $selectedParagraph.Range.Duplicate
+        $selectedRawText = [string]$selectedRange.Text
+        if (
+            [int]$selectedRange.End -le [int]$selectedRange.Start -or
+            $selectedRawText.Length -eq 0 -or
+            [int][char]$selectedRawText[$selectedRawText.Length - 1] -ne 13
+        ) {
+            if ($Phase -ceq "SOURCE") {
+                throw "LIST_SERVICE_FEE_RANGE_INVALID"
+            }
+            throw "LIST_SERVICE_FEE_POST_REOPEN_CHANGED"
+        }
+        $selectedRange.End = [int]$selectedRange.End - 1
+        $visibleText = [string]$selectedRange.Text
+        $expectedText = if ($Phase -ceq "SOURCE") {
+            [string]$Patch.expected_source_text
+        }
+        else {
+            [string]$Patch.text
+        }
+        if ($visibleText -cne $expectedText) {
+            if ($Phase -ceq "SOURCE") {
+                throw "LIST_SERVICE_FEE_SOURCE_PARAGRAPH_CHANGED"
+            }
+            throw "LIST_SERVICE_FEE_POST_REOPEN_CHANGED"
+        }
+        if ([bool]$selectedRange.Information($WdWithInTable)) {
+            if ($Phase -ceq "SOURCE") {
+                throw "LIST_SERVICE_FEE_SOURCE_IN_TABLE"
+            }
+            throw "LIST_SERVICE_FEE_POST_REOPEN_CHANGED"
+        }
+        $resultRange = $selectedRange.Duplicate
+        return $resultRange
+    }
+    finally {
+        if ($null -ne $selectedRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $selectedRange
+                )
+            }
+            catch {}
+        }
+        if ($null -ne $selectedParagraph) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $selectedParagraph
+                )
+            }
+            catch {}
+        }
+        if ($null -ne $mainStory) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $mainStory
+                )
+            }
+            catch {}
+        }
+    }
+}
+
+function Get-ListMainStoryParagraphCount {
+    param([Parameter(Mandatory = $true)]$Document)
+    $mainStory = $null
+    try {
+        $mainStory = $Document.StoryRanges.Item($WdMainTextStory)
+        return [int]$mainStory.Paragraphs.Count
+    }
+    finally {
+        if ($null -ne $mainStory) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $mainStory
+                )
+            }
+            catch {}
+        }
+    }
+}
+
+function Set-ListServiceFeeBodyParagraph {
+    param(
+        [Parameter(Mandatory = $true)]$Document,
+        [Parameter(Mandatory = $true)]$Patch
+    )
+    $verifiedRange = $null
+    $targetRange = $null
+    try {
+        $verifiedRange = Get-ListServiceFeeParagraphRange `
+            -Document $Document `
+            -Patch $Patch `
+            -Phase "SOURCE"
+        $verifiedRange.Text = [string]$Patch.text
+        $targetRange = Get-ListServiceFeeParagraphRange `
+            -Document $Document `
+            -Patch $Patch `
+            -Phase "POST_REOPEN"
+        return 1
+    }
+    finally {
+        if ($null -ne $targetRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $targetRange
+                )
+            }
+            catch {}
+        }
+        if ($null -ne $verifiedRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $verifiedRange
+                )
+            }
+            catch {}
+        }
+    }
+}
+
+function Assert-ListServiceFeePostReopenContract {
+    param(
+        [Parameter(Mandatory = $true)]$Document,
+        [Parameter(Mandatory = $true)]$Patch,
+        [Parameter(Mandatory = $true)][int]$ExpectedParagraphCount
+    )
+    if (
+        (Get-ListMainStoryParagraphCount -Document $Document) -ne
+            $ExpectedParagraphCount
+    ) {
+        throw "LIST_SERVICE_FEE_PARAGRAPH_COUNT_CHANGED"
+    }
+    $targetRange = $null
+    try {
+        $targetRange = Get-ListServiceFeeParagraphRange `
+            -Document $Document `
+            -Patch $Patch `
+            -Phase "POST_REOPEN"
+        if (
+            [string]$targetRange.Text -ceq
+                [string]$Patch.expected_source_text
+        ) {
+            throw "LIST_SERVICE_FEE_POST_REOPEN_CHANGED"
+        }
+        return 1
+    }
+    finally {
+        if ($null -ne $targetRange) {
+            try {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $targetRange
+                )
+            }
+            catch {}
+        }
+    }
+}
+
 function Set-ListOutputFontContract {
     param(
         [Parameter(Mandatory = $true)]$Document,
@@ -2676,20 +2985,21 @@ function Invoke-Patch {
         throw "LIST_OUTPUT_NOT_EXCLUSIVE"
     }
     if (
-        [int]$Job.plan.schema_version -ne 3 -or
-        [string]$Job.plan.generator_version -cne "list-word/3" -or
+        [int]$Job.plan.schema_version -ne 4 -or
+        [string]$Job.plan.generator_version -cne "list-word/4" -or
         [string]$Job.plan.output_qr_policy -cne "removed" -or
         [Math]::Abs([double]$Job.plan.output_font_points - 12.0) -gt 0.01 -or
         [int]$Job.plan.preserved_title_paragraph -ne 1 -or
         [int]$Job.plan.expected_source_header_qr_candidate_count -le 0
     ) {
-        throw "LIST_PATCH_PLAN_UNSUPPORTED"
+        throw "LIST_SERVICE_FEE_PLAN_INVALID"
     }
     foreach ($profile in $Job.plan.layout_profiles) {
         if ([Math]::Abs([double]$profile.body_font_points - 12.0) -gt 0.01) {
-            throw "LIST_PATCH_PLAN_UNSUPPORTED"
+            throw "LIST_SERVICE_FEE_PLAN_INVALID"
         }
     }
+    $serviceFeePatch = Assert-ListServiceFeePlan -Plan $Job.plan
     [IO.File]::Copy($template, $workingCopy, $false)
     $document = $null
     try {
@@ -2721,6 +3031,23 @@ function Invoke-Patch {
             -ExpectedHeaderQrCandidateCount (
                 [int]$Job.plan.expected_source_header_qr_candidate_count
             )
+        $sourceServiceFeeRange = $null
+        try {
+            $sourceServiceFeeRange = Get-ListServiceFeeParagraphRange `
+                -Document $document `
+                -Patch $serviceFeePatch `
+                -Phase "SOURCE"
+        }
+        finally {
+            if ($null -ne $sourceServiceFeeRange) {
+                try {
+                    [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                        $sourceServiceFeeRange
+                    )
+                }
+                catch {}
+            }
+        }
         $dayCount = [int]$Job.plan.target_day_count
         if ($dayCount -le 0) {
             throw "LIST_DAY_COUNT_UNSUPPORTED"
@@ -2739,6 +3066,12 @@ function Invoke-Patch {
         foreach ($patch in $Job.plan.cells) {
             Set-ListCell -Document $document -Patch $patch
         }
+        $mainStoryParagraphCountBefore = (
+            Get-ListMainStoryParagraphCount -Document $document
+        )
+        $patchedBodyParagraphCount = Set-ListServiceFeeBodyParagraph `
+            -Document $document `
+            -Patch $serviceFeePatch
         Remove-CalibratedHeaderQrCandidates `
             -Document $document `
             -HeaderCell $headerCell `
@@ -2817,6 +3150,11 @@ function Invoke-Patch {
             -RequiredAnchorLabels $requiredLabels `
             -RequiredDayCount $dayCount `
             -ExpectedHeaderQrCandidateCount 0
+        [void](Assert-ListServiceFeePostReopenContract `
+            -Document $document `
+            -Patch $serviceFeePatch `
+            -ExpectedParagraphCount $mainStoryParagraphCountBefore
+        )
         $presentationEvidence = Assert-ListOutputPresentationContract `
             -Document $document `
             -Plan $Job.plan `
@@ -2826,7 +3164,7 @@ function Invoke-Patch {
         if ($pageCount -le 0) { throw "LIST_PAGE_COUNT_INVALID" }
         $dayPageMap = Get-DayPageMap -DailyTable $dailyTable -DayCount $dayCount
         $report = [ordered]@{
-            schema_version = 3
+            schema_version = 4
             action = "patch"
             word_version = [string]$Word.Version
             source_inspection = $sourceInspection
@@ -2854,6 +3192,9 @@ function Invoke-Patch {
             )
             patched_cell_count = [int](
                 $presentationEvidence.patched_cell_count
+            )
+            patched_body_paragraph_count = [int](
+                $patchedBodyParagraphCount
             )
             extra_trailing_paragraph_count = [int](
                 $presentationEvidence.extra_trailing_paragraph_count
