@@ -50,6 +50,7 @@ from .word_list import (
     LIST_WORD_GENERATOR_VERSION,
     build_list_word,
     format_list_day_date,
+    format_list_service_fee_notice,
 )
 from .word_qa import render_list_word_for_qa
 
@@ -180,6 +181,9 @@ class LocalRenderBackend:
                 (
                     draft.product.code,
                     *(flight.number for flight in draft.flights if flight.number),
+                    format_list_service_fee_notice(
+                        draft.product.day_count
+                    ),
                 )
             )
         )

@@ -92,13 +92,14 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
         kwargs["output_docx"].write_bytes(b"docx")
         return SimpleNamespace(
             docx_path=kwargs["output_docx"],
-            generator_version="list-word/3",
+            generator_version="list-word/4",
             computed_page_count=2,
             day_page_map=(),
             output_header_qr_candidate_count=0,
             non_title_font_points=12.0,
             title_font_points_before=22.0,
             title_font_points_after=22.0,
+            patched_body_paragraph_count=1,
             extra_trailing_paragraph_count=0,
         )
 
@@ -160,7 +161,15 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
         value.calibration_manifest_sha256
     )
     assert "expected_page_count" not in calls["qa"][1]
-    assert calls["qa"][1]["required_text"] == ("SYN-OSA-260901", "SY100")
+    assert calls["qa"][1]["required_text"] == (
+        "SYN-OSA-260901",
+        "SY100",
+        (
+            "2. 本行程不接受在台灣事先支付導遊司機的服務費，因為尚未服務，"
+            "本行程導遊司機的服務費每人每天新台幣 300 元，"
+            "五天共新台幣 1,500 元，請一律在日本當地支付給導遊"
+        ),
+    )
     assert calls["qa"][1]["continuation_required_text"] == (
         "SYN-OSA-260901",
         "日期",
