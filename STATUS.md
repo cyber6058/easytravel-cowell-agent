@@ -1,5 +1,16 @@
 # STATUS
 
+## 2026-08-19 LIST 4-day failure-evidence post-fix one-shot repro
+
+- 一句話現況：依 OP 精確授權只執行一次 `test_calibrated_master_renders_gate_v_day_counts[4]`；Word 成功匯出一頁 A4 PDF，但流程以 `LIST_PDF_REQUIRED_TEXT_MISSING`／`1 failed in 32.29s` fail closed。保留證據證明正文並未遺失，而是 Word 在「每人每天」與「新台幣」之間自動換行，現行 raw substring QA 因而誤判；已遵守 no-retry 停止。
+- 開工與 selector：`git pull --ff-only` 為 `Already up to date.`，baseline `8f9db08b46f4a3fac5a505b61e3a9401d197d306`，working tree 原為乾淨的 `main...origin/main [ahead 82]`。doctor 確認 Word registry、configured pdftoppm、schema-2 calibration、master SHA 與 normalized structure 都是 `ok`；未使用的 ffmpeg 為 warning。fresh QA root 是 `output/word-repro-failure-evidence-postfix-20260819-113502`；collect-only 原文 `1 test collected in 0.33s`，唯一 node 是 `[4]`，沒有 5／6／7／8／12，且 QA root 仍空、WINWORD `0 / 0`。
+- 唯一實機結果：正式 selector 只呼叫一次並使用 `-x -vv`；原文為 `LIST QA PDF is missing required text`、outer `WORD_GENERATION_FAILED`、inner `LIST_PDF_REQUIRED_TEXT_MISSING`、`1 failed in 32.29s`、`WORD_REPRO_EXIT=1`。WINWORD 前後均為 0，opt-in 已清除，沒有第二次 Word／pytest 呼叫。
+- 同次 artifacts：`day-004/LIST.docx` 為 32,730 bytes／SHA-256 `c339cbb8ede4fb4a0842e9411aad97b647682ad417e9e3b173a5affee8d22b21`；`failed-qa/LIST-qa.failed.pdf` 為 119,882 bytes／SHA-256 `6f210b3dd5108f952338cdd4c8efabd5f830363fd0e76d6bd27e0aeb0f878a3f`；schema-1 `failure.json` 為 549 bytes／SHA-256 `34ab6e493ce69eb4d84114f2971dc2dd8374d5ba66316267b733a874bd032baa`，其 PDF bytes／SHA 與實檔一致。正常 `LIST-qa.pdf`、`pages/`、PNG 與 `index.json` 全部不存在。
+- 唯讀診斷：DOCX 有 4 個 tables、rows `4／3／5／1`、7 個 body paragraphs、0 media／0 inline shapes，完整四天服務費 token 存在。failed PDF 是 1 頁 A4 portrait（595.32 × 841.92 pt）、0 images；其文字實際為 `每人每天\n新台幣 300 元，四天共新台幣 1,200 元`。raw target 不匹配，但移除 whitespace 後完整匹配，因此目前 blocker 是 `inspect_list_pdf()` 的 raw substring 對合法版面換行敏感，不是 Word 漏填內容。
+- Postflight 與範圍：private master 仍為 36,262 bytes／SHA-256 `08b4393b8e7782f9f1425a4a265a4f2737cb1dec7f1813f1b1c2ede88daae468`；manifest 仍為 3,096 bytes／SHA-256 `edf2300b7fecb34662482291bc1de37f2502e6feb4f54aec00895b0354d80593`；WINWORD 0，Word opt-in 未設定。沒有修改 production／tests，沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish、push，也沒有執行其他天數。
+- 下一步：若 OP 要修正此 false negative，最小安全方向是先離線鎖定「required-text 比對時忽略 PDF layout whitespace，但仍要求完整非空白字元序列，day-token／page mapping 等其他 strict checks 不變」的書面規格；離線修正完成後，任何新 Word repro 仍需新的 one-shot 授權。
+- 阻塞點：4 天實機內容已存在，但 successful DOCX／PDF／PNG QA 尚未通過；本次唯一 Word 授權已消耗，不得重試。
+
 ## 2026-08-19 LIST PDF QA failure-evidence offline implementation handoff
 
 - 一句話現況：LIST PDF QA 已能以ordered-unique list指出缺少的required tokens；有效Word-exported PDF若在deterministic inspection失敗，會exclusive保存為`failed-qa/LIST-qa.failed.pdf`與hash-bound schema-1 `failure.json`，正常PDF／PNG／index保持不存在。離線實作與完整驗證已完成，但尚未重新執行Word實機repro。
