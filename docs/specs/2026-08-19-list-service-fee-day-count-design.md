@@ -2,9 +2,10 @@
 
 ## Status
 
-The OP approved the data rule and selected design in conversation on
-2026-08-19. This written specification is ready for OP review. No production
-or test implementation has been authorized or performed.
+The OP approved this written specification in conversation on 2026-08-19.
+The corresponding offline implementation plan is now written and awaits a
+separate OP approval. No production or test implementation has been authorized
+or performed.
 
 ## Authorized scope
 

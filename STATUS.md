@@ -1,5 +1,18 @@
 # STATUS
 
+## 2026-08-19 LIST dynamic service-fee notice offline implementation plan review
+
+- 一句話現況：OP 已核准 LIST 動態服務費正文書面規格；test-first 離線實作計畫已建立並完成自審，等待 OP 核准，尚未修改或執行 production／tests。
+- 開工狀態：`git pull --ff-only` 為 `Already up to date.`，planning baseline 為 `6e3c27d3170e89597367931d0855e7e801a9c2f0`，working tree 原為乾淨的 `main...origin/main [ahead 71]`。重新核對核准規格、現行 plan／report／workflow seam、直接相關 tests、版本鏈與既有 `docs/plans` 慣例。
+- 計畫文件：新增 `docs/plans/2026-08-19-list-service-fee-day-count-implementation-plan.md`，拆成 formatter／typed plan red→green、Python strict report red→green、PowerShell bounded main-story patch red→green、PDF required-text workflow red→green、focused／non-change、完整離線 suite 與 handoff 八個 tasks，規劃三個小型 implementation commits。
+- 最小實作範圍：未來獲准後只改 `word_list.py`、`patch_list_template.ps1`、`workflow.py` 與對應的 `test_word_list.py`、`test_windows_word.py`、`test_local_backend.py`。`word_qa.py`、render adapter、calibration、template contract、models、兩個 integration tests、private master 與 installed runtime 均為 unchanged controls；若需跨出六檔立即停止 review。
+- 契約與版本：`list-word/3` 升 `list-word/4`，patch plan／report schema 3 升 schema 4，新增唯一 typed `service_fee_notice` 與 `patched_body_paragraph_count=1`；outer job schema 1、calibration schema 2、persisted Word evidence schema 3、QA index schema 2、package／workflow `0.2.1` 不變。
+- Test-first 與安全邊界：formatter 會覆蓋 1／4／5／6／7／8／10／11／12／20／21 及 1..366 deterministic loop，拒絕 bool／非正整數且不設常見天數白名單；PowerShell patch 必須 main-story-only、unique exact anchor、完整 source equality、outside-table、只排除一個 paragraph mark，SaveAs/reopen 後再驗證 target、段落數與 12 pt；PDF QA 使用同一 formatter 的完整正文作 required text。
+- 自審：八個 tasks、三個 implementation commits、六個核准 implementation files、三項升版與五項 unchanged version contract 均一致；placeholder scan、fence／heading review 與 `git diff --check` 通過。計畫明列 primary red 的預期 failure、green commands、safe codes、non-change proof、完整 suite、compileall、static audit 與 no-Word stop point。
+- 誠實與範圍：本輪只有 plan、spec status 與本 STATUS；沒有修改或執行 production／tests，沒有啟動 Word、讀寫 private master／calibration、產生 DRAFT／DOCX／PDF／PNG，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。4 天動態正文尚未經實作或 Word artifact 驗證。
+- 下一步：OP 回覆「同意此實作計畫，開始離線實作」後才開始 Task 1 test edit；完整離線實作通過後，新的單次 4 天 Word repro 仍需另一個精確授權，成功或失敗都不重試。
+- 阻塞點：離線實作計畫 review gate；`writing-plans` Skill 目前不在可用清單，因此依 repo 既有 plan 格式建立等價計畫，沒有藉此擴張授權。
+
 ## 2026-08-19 LIST dynamic service-fee notice design review
 
 - 一句話現況：OP 已選定固定每人每天新台幣 300 元、由 `product.day_count` 計算總額並以中文天數顯示；完整離線書面規格已寫成並自審通過，等待 OP 審閱，尚未建立實作計畫或修改 production／tests。
