@@ -44,6 +44,14 @@ outputs/
 *.wav
 *.mp3
 *.srt
+*.mp4
+*.m4a
+*.aac
+*.flac
+*.svoice
+*.onnx
+SmartSub_Windows_*.exe
+sherpa-onnx-zipvoice-*.tar.bz2
 *_逐字稿.txt
 *.xlsx
 *.xls
