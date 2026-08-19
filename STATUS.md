@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-08-19 LIST dynamic service-fee 4-day one-shot Word repro failed at PDF text QA
+
+- 一句話現況：依 OP 精確授權只執行一次 `test_calibrated_master_renders_gate_v_day_counts[4]`；Word 成功產生部分 `LIST.docx`，但同次流程在 PDF required-text 檢查失敗，pytest 原文為 `ValueError: LIST QA PDF is missing required text` 與 `1 failed in 42.37s`，已遵守 no-retry 停止，不能宣稱 DOCX／PDF／PNG QA 通過。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`，working tree 原為乾淨的 `main...origin/main [ahead 76]`；doctor 確認 Word registry、configured pdftoppm、schema-2 calibration、master SHA 與 normalized structure 均為 `ok`。fresh QA root 是 `output/word-repro-service-fee-postfix-20260819-110511`；collect-only 原文為 `1 test collected in 0.65s`，只含 `[4]`，沒有 5／6／7／8／12，且 collect 前後 WINWORD 都是 0。
+- 唯一實機結果：正式 selector 只呼叫一次，exit 1；WINWORD 前後均為 0。流程只保留 `day-004/LIST.docx`，32,651 bytes，SHA-256 `4572e79c7f2a4d504119cc353496937376f716be6097fa6a00a75189b8ab2437`；沒有正式 `LIST-qa.pdf`、PNG 或 `index.json`，因此 success-only artifact QA 未執行，也沒有第二次 Word 呼叫。
+- 唯讀診斷：殘留 DOCX 的文字可讀到 `SYN-LIST-260901`、`JX820`、`JX821` 及完整「四天共新台幣 1,200 元」服務費正文；本次錯誤是 PDF inspection 的 aggregate required-text failure，臨時 PDF 已由流程清除，現有證據不足以安全判定究竟是哪個 PDF text token 缺失。沒有修改 production、tests、私人 master 或 calibration。
+- Postflight：doctor 仍只有本次不使用的 ffmpeg warning；master 維持 36,262 bytes／SHA-256 `08b4393b8e7782f9f1425a4a265a4f2737cb1dec7f1813f1b1c2ede88daae468`，manifest 維持 3,096 bytes／SHA-256 `edf2300b7fecb34662482291bc1de37f2502e6feb4f54aec00895b0354d80593`，WINWORD 為 0。沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。
+- 下一步：若要繼續，先另開一個不執行 Word的離線診斷／修正规格，讓失敗的暫存 PDF 文字或逐項 required token 能被保留為證據；修正與完整離線測試完成後，任何新的 Word repro 都必須重新取得一次性授權。
+- 阻塞點：同次 PDF／PNG／index 未產出，4 天 Word 路徑目前仍未驗證成功；本次授權已消耗且不會重試。
+
 ## 2026-08-19 LIST dynamic service-fee notice offline implementation handoff
 
 - 一句話現況：LIST generator 已離線升為 `list-word/4`，會依正整數 `product.day_count` 產生繁中天數與每人每日 300 元總額，以唯一 main-story exact body patch 寫入副本，並要求匯出 PDF 包含同一完整正文；完整離線驗證全綠，但 Word 實機尚未驗證。
