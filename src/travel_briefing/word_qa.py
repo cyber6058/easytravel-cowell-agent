@@ -23,6 +23,14 @@ ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 _PAGE_SIZE_TOLERANCE_POINTS = 2.0
 
 
+class _ListPdfRequiredTextError(ValueError):
+    def __init__(self, missing_required_text: tuple[str, ...]) -> None:
+        if not missing_required_text:
+            raise ValueError("missing required text evidence must not be empty")
+        self.missing_required_text = missing_required_text
+        super().__init__("LIST QA PDF is missing required text")
+
+
 @dataclass(frozen=True, slots=True)
 class ListPdfPageInspection:
     page_number: int
@@ -156,8 +164,13 @@ def inspect_list_pdf(
                 )
             )
         whole_text = "\n".join(page_texts)
-        if any(value not in whole_text for value in required_text):
-            raise ValueError("LIST QA PDF is missing required text")
+        missing_required_text = tuple(
+            dict.fromkeys(
+                value for value in required_text if value not in whole_text
+            )
+        )
+        if missing_required_text:
+            raise _ListPdfRequiredTextError(missing_required_text)
         if continuation_required_text:
             identity_text = continuation_required_text[0]
             daily_header_text = continuation_required_text[1:]

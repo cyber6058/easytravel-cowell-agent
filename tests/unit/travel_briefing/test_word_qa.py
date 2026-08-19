@@ -216,6 +216,34 @@ def test_pdf_inspection_requires_a4_text_and_no_images(tmp_path):
     assert inspection.page_height_points == pytest.approx(841.89, abs=0.1)
 
 
+def test_pdf_inspection_reports_missing_required_text_once_in_input_order(
+    tmp_path,
+):
+    pdf = tmp_path / "list.pdf"
+    write_pdf(pdf, text="SYN-LIST-260901 JX820 content long enough")
+
+    with pytest.raises(
+        ValueError, match="LIST QA PDF is missing required text"
+    ) as captured:
+        inspect_list_pdf(
+            pdf,
+            required_text=(
+                "SYN-LIST-260901",
+                "JX820",
+                "JX821",
+                "SERVICE-FEE-TOKEN",
+                "JX821",
+            ),
+        )
+
+    assert captured.value.missing_required_text == (
+        "JX821",
+        "SERVICE-FEE-TOKEN",
+    )
+    assert "SYN-LIST-260901" not in str(captured.value)
+    assert "JX820" not in str(captured.value)
+
+
 def test_pdf_inspection_fails_closed_on_page_text_or_image_drift(tmp_path):
     two_pages = tmp_path / "two-pages.pdf"
     write_pdf(two_pages, pages=2)
