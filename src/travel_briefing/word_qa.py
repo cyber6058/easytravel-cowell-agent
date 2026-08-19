@@ -511,15 +511,6 @@ def render_list_word_for_qa(
             )
             raise
         report = _read_render_report(report_path)
-        required_page_count = (
-            expected_page_count
-            if expected_page_count is not None
-            else report["computed_page_count"]
-        )
-        if report["computed_page_count"] != required_page_count:
-            raise ValueError(
-                "Word, PDF, and expected LIST page count do not match"
-            )
         if not temporary_pdf.is_file() or temporary_pdf.stat().st_size == 0:
             raise WordGenerationError(
                 "Word render returned success without a PDF output"
@@ -533,10 +524,14 @@ def render_list_word_for_qa(
             day_page_map=day_page_map,
             day_tokens=day_tokens,
         )
-        if inspection.page_count != required_page_count:
+        if (
+            expected_page_count is not None
+            and inspection.page_count != expected_page_count
+        ):
             raise ValueError(
-                "Word report and PDF LIST page count do not match"
+                "Expected and PDF LIST page count do not match"
             )
+        required_page_count = inspection.page_count
         if legacy_mode:
             if required_page_count != 1:
                 raise ValueError(

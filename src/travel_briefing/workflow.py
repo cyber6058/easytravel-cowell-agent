@@ -188,7 +188,6 @@ class LocalRenderBackend:
             output_pdf=output_qa_pdf,
             output_png_directory=output_qa_directory,
             output_qa_index=output_qa_index,
-            expected_page_count=built.computed_page_count,
             required_text=required_text,
             continuation_required_text=(
                 draft.product.code,

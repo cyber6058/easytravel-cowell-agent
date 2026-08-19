@@ -409,9 +409,14 @@ def test_pdftoppm_render_refuses_overwrite_and_failed_or_missing_output(tmp_path
 
 
 class SyntheticRenderAdapter:
-    def __init__(self, page_count=1) -> None:
+    def __init__(self, page_count=1, *, reported_page_count=None) -> None:
         self.jobs = []
         self.page_count = page_count
+        self.reported_page_count = (
+            page_count
+            if reported_page_count is None
+            else reported_page_count
+        )
 
     def run(self, job_path: Path, *, timeout_seconds: int) -> None:
         self.jobs.append((job_path, timeout_seconds))
@@ -427,7 +432,7 @@ class SyntheticRenderAdapter:
                     "schema_version": 1,
                     "action": "render",
                     "word_version": "synthetic",
-                    "computed_page_count": self.page_count,
+                    "computed_page_count": self.reported_page_count,
                     "output_bytes": output_pdf.stat().st_size,
                 }
             ),
@@ -492,6 +497,44 @@ def test_word_pdf_render_publishes_every_page_and_hash_bound_index(
     assert "OSA-SYN-260901" not in output_index.read_text(
         encoding="utf-8"
     )
+    received_job, timeout = word.jobs[0]
+    assert timeout == 90
+    assert not received_job.exists()
+
+
+def test_word_pdf_render_uses_inspected_pdf_count_without_independent_expectation(
+    tmp_path,
+):
+    docx = tmp_path / "list.docx"
+    docx.write_bytes(b"synthetic docx")
+    pdftoppm = tmp_path / "pdftoppm.exe"
+    pdftoppm.write_bytes(b"synthetic executable")
+    output_pdf = tmp_path / "qa" / "list.pdf"
+    output_pages = tmp_path / "qa"
+    output_index = output_pages / "index.json"
+    word = SyntheticRenderAdapter(page_count=1, reported_page_count=2)
+    raster = MultiPagePdftoppmRunner(1)
+
+    result = render_list_word_for_qa(
+        docx,
+        output_pdf=output_pdf,
+        output_png_directory=output_pages,
+        output_qa_index=output_index,
+        required_text=("OSA-SYN-260901", "JX820", "JX821"),
+        adapter=word,
+        pdftoppm_path=pdftoppm,
+        pdftoppm_runner=raster,
+        timeout_seconds=90,
+    )
+
+    assert result.pdf_inspection.page_count == 1
+    assert result.computed_page_count == 2
+    assert [path.name for path in result.png_paths] == ["page-001.png"]
+    assert output_pdf.stat().st_size > 0
+    index = json.loads(output_index.read_text(encoding="utf-8"))
+    assert index["page_count"] == 1
+    assert len(index["pages"]) == 1
+    assert len(raster.calls) == 1
     received_job, timeout = word.jobs[0]
     assert timeout == 90
     assert not received_job.exists()

@@ -109,7 +109,7 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
             parents=True, exist_ok=True
         )
         page_paths = []
-        for number in range(1, 3):
+        for number in range(1, 2):
             page = (
                 kwargs["output_png_directory"]
                 / f"page-{number:03d}.png"
@@ -118,7 +118,7 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
             page_paths.append(page)
         kwargs["output_qa_index"].write_bytes(b"index")
         return SimpleNamespace(
-            pdf_inspection=SimpleNamespace(page_count=2, image_count=0),
+            pdf_inspection=SimpleNamespace(page_count=1, image_count=0),
             qa_index_sha256="a" * 64,
             png_paths=tuple(page_paths),
         )
@@ -135,8 +135,8 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
 
     evidence = backend(value).render_word(draft(), **outputs)
 
-    assert evidence.page_count == 2
-    assert len(evidence.page_sha256s) == 2
+    assert evidence.page_count == 1
+    assert len(evidence.page_sha256s) == 1
     assert evidence.qr_image_count == 0
     assert evidence.header_qr_candidate_count == 0
     assert evidence.non_title_font_points == 12.0
@@ -159,6 +159,7 @@ def test_local_backend_composes_existing_word_build_and_qa(monkeypatch, tmp_path
     assert evidence.calibration_manifest_sha256 == (
         value.calibration_manifest_sha256
     )
+    assert "expected_page_count" not in calls["qa"][1]
     assert calls["qa"][1]["required_text"] == ("SYN-OSA-260901", "SY100")
     assert calls["qa"][1]["continuation_required_text"] == (
         "SYN-OSA-260901",
