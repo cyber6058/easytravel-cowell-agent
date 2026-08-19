@@ -2,7 +2,8 @@
 
 日期：2026-08-19
 
-狀態：書面規格已由 OP 核准；本計畫等待 OP review，尚未開始實作。
+狀態：書面規格與本計畫均已由 OP 核准；離線實作已完成並通過完整驗證。
+Word 實機 verification 仍是未授權的獨立關卡。
 
 依據：
 `docs/specs/2026-08-19-list-pdf-required-text-whitespace-design.md`
@@ -10,8 +11,8 @@
 設計基線 commit：
 `ca7ea7571a893954507f2bbc51c76c86c340dfcf`
 
-Implementation baseline：核准本計畫並開始實作後，以乾淨 working tree 的
-`git rev-parse HEAD` 實際值為準，記錄到本計畫與 `STATUS.md`。
+Implementation baseline commit：
+`06131f4e308bc1c723b71680387d1c04296d77d4`
 
 ## 1. 目標與已知證據
 
@@ -100,17 +101,18 @@ tests 使用 PyMuPDF 寫入真實 synthetic A4 PDF，再透過 public function �
 Expected values 來自核准規格中的固定 literals，不得用 production helper 重新計算預期。
 每個改變行為的 slice 必須先看到指定 red，再做最小 production change轉綠。
 
-### 預定 commits
+### Implementation commit map
 
-所有離線驗證通過後建立：
+已建立implementation commit；documentation handoff commit由本文件與STATUS更新完成：
 
-1. `fix(briefing): ignore LIST PDF layout whitespace`
+1. `51324495c13fbaf51cffdd800c29942bf164c00c`
+   `fix(briefing): ignore LIST PDF layout whitespace`
    - 兩個 red→green slices；
    - strict-content與page-local regression controls；
    - 只含兩個核准 implementation files。
 2. `docs: record LIST PDF whitespace implementation handoff`
    - 本計畫實際結果與 `STATUS.md`；
-   - 不含 production／test changes。
+   - 不含 production／test changes；hash以`git log`為準。
 
 不得建立 red-only commit。若任一 slice 無法得到符合預期的 red，先檢查 test setup與
 現行行為，不提前改 production。
@@ -406,30 +408,67 @@ commit只允許兩個implementation files。不得把plan／STATUS混入implemen
 完成後的唯一下一個可建議關卡是新的4天one-shot Word repro authorization。離線綠燈
 本身不能宣稱「給連結即可穩定產生說明會資料」。
 
-## 4. Completion checklist
+## 4. Actual offline verification
 
-- [ ] implementation preflight clean，baseline與WINWORD狀態已記錄；
-- [ ] public-seam layout-wrap primary test先以missing-text紅，再轉綠；
-- [ ] production helper只做Python Unicode whitespace removal；
-- [ ] whitespace-only required token test先紅，再以input validation轉綠；
-- [ ] genuinely missing／punctuation-drift token仍fail並回報原始值；
-- [ ] continuation與day-page checks維持strict；
-- [ ] missing-token order／dedupe與failed-evidence schemas不變；
-- [ ] 完整`test_word_qa.py`與direct unchanged controls全綠；
-- [ ] implementation changed files精確只有兩個核准檔案；
-- [ ] full suite、compile、diff與scope gates全綠；
-- [ ] WINWORD before／after一致且Word opt-in未設定；
-- [ ] implementation與documentation commits分離；
-- [ ] private master、calibration、adapters、workflow與integration selector未修改；
-- [ ] 未push、未跑Word、未使用任何external integration。
+### Preflight與red→green evidence
 
-## 5. Review gate
+- `git pull --ff-only`：`Already up to date.`；working tree原為乾淨的
+  `main...origin/main [ahead 85]`。
+- implementation baseline：`06131f4e308bc1c723b71680387d1c04296d77d4`；
+  WINWORD 0，Word opt-in未設定。
+- layout-wrap primary red：
+  `_ListPdfRequiredTextError: LIST QA PDF is missing required text`；fixture的CJK、A4、
+  readability與readback assertions均先通過。
+- layout-wrap minimal green與existing missing-token control：`2 passed`。
+- whitespace-only primary red：`Failed: DID NOT RAISE ValueError`。
+- validation green與三個core targets：`3 passed`。
+- strict focused set：`10 passed`；少一個non-whitespace Chinese character與punctuation
+  drift仍fail，continuation仍raw strict。
 
-本計畫必須由OP核准後才能修改production或tests。核准本計畫只授權離線實作與離線
-verification，不授權Word、private master、GET、push或其他external integration。
+### Focused、unchanged與完整suite
 
-精確下一授權文字：
+- 完整`test_word_qa.py`：`29 passed in 1.84s`。
+- `test_local_backend.py`、`test_word_list.py`、`test_windows_word.py`：
+  `114 passed in 1.60s`。
+- 完整離線suite：`594 passed, 8 skipped in 22.97s`。
+- full suite exit 0；WINWORD before／after為`0 / 0`；Word opt-in未設定。
+- `compileall` exit 0；`git diff --check` exit 0。
+- implementation changed files精確只有`src/travel_briefing/word_qa.py`與
+  `tests/unit/travel_briefing/test_word_qa.py`。
+- 所有列出的unchanged controls diff為0；external integration scan為0 hits。
+
+### Implemented behavior
+
+- private `_compact_layout_whitespace()`只回傳`"".join(value.split())`；
+- helper只用於aggregate `required_text` input validation與presence comparison；
+- whitespace-only expected value使用既有safe input error fail closed；
+- missing diagnostics保留original token、caller order與original-value dedupe；
+- continuation、day mapping、schemas、failure evidence與publication behavior未修改。
+
+## 5. Completion checklist
+
+- [x] implementation preflight clean，baseline與WINWORD狀態已記錄；
+- [x] public-seam layout-wrap primary test先以missing-text紅，再轉綠；
+- [x] production helper只做Python Unicode whitespace removal；
+- [x] whitespace-only required token test先紅，再以input validation轉綠；
+- [x] genuinely missing／punctuation-drift token仍fail並回報原始值；
+- [x] continuation與day-page checks維持strict；
+- [x] missing-token order／dedupe與failed-evidence schemas不變；
+- [x] 完整`test_word_qa.py`與direct unchanged controls全綠；
+- [x] implementation changed files精確只有兩個核准檔案；
+- [x] full suite、compile、diff與scope gates全綠；
+- [x] WINWORD before／after一致且Word opt-in未設定；
+- [x] implementation與documentation commits分離；
+- [x] private master、calibration、adapters、workflow與integration selector未修改；
+- [x] 未push、未跑Word、未使用任何external integration。
+
+## 6. Next gate
+
+本計畫的離線實作已完成。離線綠燈不授權Word或push，也不能宣稱4天artifact已通過
+same-run DOCX／PDF／PNG visual QA。
+
+若OP要驗證修正，精確下一授權文字為：
 
 ```text
-同意此實作計畫，開始離線實作
+同意只執行一次 4 天 post-fix Word repro；不跑其他天數；若成功，完成同次 DOCX／PDF／PNG QA；成功或失敗都不重試。
 ```

@@ -1,5 +1,18 @@
 # STATUS
 
+## 2026-08-19 LIST PDF required-text whitespace offline implementation handoff
+
+- 一句話現況：LIST PDF QA 已離線修正aggregate `required_text`對Word/PyMuPDF layout whitespace的false negative；兩個TDD slices與完整離線驗證全綠，但尚未重新執行Word實機repro，不能宣稱4天DOCX／PDF／PNG QA已通過。
+- 開工與範圍：`git pull --ff-only`為`Already up to date.`，implementation baseline `06131f4e308bc1c723b71680387d1c04296d77d4`，working tree原為乾淨的`main...origin/main [ahead 85]`，WINWORD 0且Word opt-in未設定。production／test changes精確只有`src/travel_briefing/word_qa.py`與`tests/unit/travel_briefing/test_word_qa.py`。
+- TDD slice 1：新增public-seam CJK A4 PDF regression，fixture先證明`每人每天\n新台幣...` raw不連續、compact可匹配；primary red原文`_ListPdfRequiredTextError: LIST QA PDF is missing required text`。加入private `"".join(value.split())` aggregate comparison後，primary與existing missing-token control為`2 passed`。
+- TDD slice 2：whitespace-only expected token先為`Failed: DID NOT RAISE ValueError`；只擴充既有input validation後，三個core targets為`3 passed`。新增non-whitespace character／punctuation drift與continuation raw-strict controls後，focused set為`10 passed`。
+- 實作契約：helper只進入aggregate required-text validation／presence；PDF／DOCX／JSON不改。whitespace-only token使用既有safe message fail closed；missing diagnostics仍回報original values並保留caller order／original-value dedupe。continuation、day mapping、A4、image、page count、failed evidence、PNG／index schemas與publication未改。
+- 驗證：完整`test_word_qa.py`為`29 passed in 1.84s`；direct unchanged controls為`114 passed in 1.60s`；完整suite為`594 passed, 8 skipped in 22.97s`；WINWORD`0 / 0`且opt-in未設定；compileall exit 0、`git diff --check` exit 0、unchanged controls diff 0、external integration scan 0 hits。
+- Commit：`51324495c13fbaf51cffdd800c29942bf164c00c`（`fix(briefing): ignore LIST PDF layout whitespace`）只含兩個核准implementation files；本段由緊接的本機documentation handoff commit保存，hash以`git log`為準。
+- 誠實與範圍：沒有啟動Word、讀寫private master／calibration、產生實機DOCX／PDF／PNG、GET、JMA、Yating、ffmpeg、dependency download、LINE、Cowell、deploy、publish或push。離線synthetic綠燈不能取代real Word visual QA。
+- 下一步：若OP要實機驗證，回覆「同意只執行一次 4 天 post-fix Word repro；不跑其他天數；若成功，完成同次 DOCX／PDF／PNG QA；成功或失敗都不重試。」新的授權只執行精確`[4]` selector一次，不跑其他天數且不重試。
+- 阻塞點：新的4天same-run artifacts尚未生成；等待新的精確one-shot Word授權。
+
 ## 2026-08-19 LIST PDF required-text whitespace offline implementation plan review
 
 - 一句話現況：OP 已核准 whitespace-normalization 書面規格；離線實作計畫已建立並等待 OP review，尚未修改或執行 production／tests，Word 實機仍是獨立關卡。
