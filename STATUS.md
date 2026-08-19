@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-19 free-first voice pilot Gate D blocked by SmartSub installer APPCRASH
+
+- 一句話現況：使用者已另行精確核准執行 exact-hash 的 `NotSigned` SmartSub 3.7.0 installer；installer 只啟動一次便在任何 SmartScreen／NSIS UI 或安裝檔案出現前，於自身解出的 `System.dll` 發生 `0xc0000005` APPCRASH，因此依 no-automatic-retry 與 fixed per-user UI 契約停止，Gate D 未完成。
+- 這次做了什麼：開工 `git pull --ff-only` 為 `Already up to date.`，基線 `c16ecfd1f56dcc04cb5e6158b7b07a58ae5555c6`；啟動前重新證明 installer 為 `127,844,583` bytes、SHA-256 `65f6c85aa196063f365562c41393d2f98ef0ce31e4ee3e0122d561668d433520`、Authenticode `NotSigned`，內嵌 Product／File Version 均為 `3.7.0`，SmartSub／WINWORD process `0 / 0`，install／data path 均不存在。computer-use native pipe 不可用後，依 screenshot Skill 改以可見 `Start-Process` 啟動一次，未使用 `/S`，只把 NSIS `/D` 指向核准的 per-user path；PID `17356`（event hex `0x43CC`）。Windows Application Error event `1000` 記錄 faulting module `C:\Users\cance\AppData\Local\Temp\nssFBB3.tmp\System.dll`、exception `0xc0000005`、offset `0x00001581`；WER event `1001` 的 Report ID 為 `612b70b2-e2f2-4115-b0a1-73533d65fdad`。
+- 下一步：本次 Gate D 授權已在明確 crash 後停止；不應把同一失敗改成靜默解包、相容模式、admin、不同路徑或不同版本。若要繼續，先另行討論並核准新的 installer 相容性診斷／替代免費方案，不把診斷授權視為影片、音色或合成授權。
+- 阻塞點：postflight SmartSub relevant process `0`、核准 install path 只有 installer 留下的空目錄（files／subdirectories `0 / 0`）、data path 不存在、常見 alternate SmartSub paths與 uninstall registry entry 均不存在；NSIS temp只留下 `System.dll`／`UAC.dll`。沒有安裝 SmartSub、解壓或部署 ZipVoice、讀取本人影片、建立音色、啟動 Yating、合成、下載其他模型、登入、上傳、清理暫存或 push。暫存 GUI 證據在 `C:\Users\cance\AppData\Local\Temp\codex-shot-2026-08-19_22-29-45.png`，未進 Git；WER archive雖存在但其 ACL拒絕讀取，未繞過。
+
 ## 2026-08-19 free-first voice pilot Gate D safe-stopped at unsigned installer
 
 - 一句話現況：使用者已精確核准 Gate D；三個 pinned official GitHub assets 已下載並通過正式檔名的 bytes／SHA-256 重驗，但 SmartSub 3.7.0 installer 的 Authenticode 為 `NotSigned`，因此依 Task 5 在啟動 installer 前安全停止，SmartSub 與 ZipVoice model 均尚未安裝。

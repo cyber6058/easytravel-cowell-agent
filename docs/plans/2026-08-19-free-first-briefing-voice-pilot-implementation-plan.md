@@ -519,6 +519,29 @@ Gate D 到此停止。下載與安裝不授權使用本人影片或任何合成�
   合成、下載 ASR／CUDA／Vulkan／其他模型、登入、上傳或 push。繼續執行此 unsigned
   exact-hash installer 必須取得新的明確確認。
 
+### Gate D unsigned installer 執行結果（2026-08-19）
+
+- 使用者另行明確核准執行上述 exact-hash `NotSigned` installer，並只允許繼續 Task 5。
+  開工 `git pull --ff-only` 為 `Already up to date.`，基線為
+  `c16ecfd1f56dcc04cb5e6158b7b07a58ae5555c6`。
+- 執行前再次驗證 installer：`127,844,583` bytes，SHA-256
+  `65f6c85aa196063f365562c41393d2f98ef0ce31e4ee3e0122d561668d433520`，
+  Authenticode `NotSigned`，內嵌 Product／File Version 均為 `3.7.0`；install／data
+  paths不存在，SmartSub／WINWORD process均為 `0 / 0`。
+- computer-use native pipe 回傳系統找不到指定檔案，因此沒有啟動 Skill禁止的自製 helper；
+  改以 screenshot Skill和可見 `Start-Process` 執行一次。沒有 `/S`，唯一 argument 是
+  核准 per-user path的 NSIS `/D`；啟動 PID為 `17356`。
+- installer沒有出現 SmartScreen或NSIS UI。Windows Application Error event `1000`
+  證明 PID `0x43CC`在 `System.dll`發生 `0xc0000005` access violation，fault offset
+  `0x00001581`；WER event `1001`的 Report ID為
+  `612b70b2-e2f2-4115-b0a1-73533d65fdad`。同次本機 screenshot 保存在 temp，未進 Git。
+- postflight沒有 SmartSub relevant process、安裝檔案或uninstall registry entry；核准install
+  path只留下空目錄，常見 alternate paths與data path不存在。NSIS temp保留
+  `System.dll`／`UAC.dll`；沒有自動清理。
+- 依本計畫禁止 automatic retry／silent fallback，未重跑 installer，也未改用 admin、
+  相容模式、其他路徑／版本或手動解包。因此 SmartSub與ZipVoice model均未安裝，
+  capability proof未完成；Gate D在installer APPCRASH阻塞並停止。
+
 ## Task 6：Gate R reference 選取與人工確認
 
 只有新的 Gate R 授權後，SmartSub clone wizard 才能唯讀開啟：
