@@ -1,5 +1,20 @@
 # STATUS
 
+## 2026-08-19 LIST dynamic service-fee notice offline implementation handoff
+
+- 一句話現況：LIST generator 已離線升為 `list-word/4`，會依正整數 `product.day_count` 產生繁中天數與每人每日 300 元總額，以唯一 main-story exact body patch 寫入副本，並要求匯出 PDF 包含同一完整正文；完整離線驗證全綠，但 Word 實機尚未驗證。
+- 開工證據：implementation baseline `ade857e09670acff3971c703fca62568cf031478`，`git pull --ff-only` 為 `Already up to date.`，working tree 乾淨，`RUN_BRIEFING_WORD_INTEGRATION` 為空，WINWORD baseline 0。
+- Formatter／plan TDD：primary red 是 19 failures，原文核心為 `AttributeError: module 'travel_briefing.word_list' has no attribute 'format_list_service_fee_notice'` 與 `assert 3 == 4`；新增單一 NTD 300 authority、無常見天數白名單的繁中 place-value formatter、唯一 `service_fee_notice` typed patch與 plan schema 4後，19 targets轉綠；完整 `test_word_list.py` 在report slice完成後轉綠。
+- Report TDD：synthetic report升 schema 4並新增 body count後，primary red為7 failures，核心為 `Word patch report does not match schema version 3`；strict reader／result升版後要求exact key set與 `patched_body_paragraph_count=1`，7 targets轉綠，schema 3／missing／bool／0／2／extra key均fail closed。
+- Word adapter TDD：3個primary source-contract tests先因 `$WdMainTextStory`、bounded helpers與schema 4不存在而紅；新增唯一anchor candidate、完整source equality、outside-table、只退一個paragraph mark、bounded range assignment、SaveAs/reopen target與段落數重驗、10個safe codes及schema-4 report後轉綠。第一次子PowerShell parser command因外層變數展開而命令失敗，未改production；改用同程序AST parser後 `PARSER_ERROR_COUNT=0`。
+- PDF authority TDD：backend primary先以actual `('SYN-OSA-260901', 'SY100')` 對預期三項tuple而紅；`workflow.py`改由同一 formatter把完整五天／1,500元正文加入 `required_text` 後，primary `1 passed`、完整 `test_local_backend.py` `3 passed`。
+- Commits與範圍：`d902a1ad2a3b199948275e87068b9051561c713f`（plan／formatter／strict report）、`6103ce6e4ee431e4fd905adc8ea2400eeac71c4b`（bounded Word body patch）、`9552fa398bca0d1ffc34771e50a3a9165ef42ba4`（PDF required text）。對 baseline changed files精確為核准的三個 production與三個 unit test files；unchanged controls diff為零。
+- 完整驗證：focused三檔與直接相關compatibility controls均到 `[100%]`，前後WINWORD 0；完整suite原文 `584 passed, 8 skipped in 41.40s`，另有 `COMPILEALL_OK`、`PARSER_ERROR_COUNT=0`、`GIT_DIFF_CHECK_OK`。forbidden addition scan clean、10個safe codes complete、changed-file scope與non-change audits通過。
+- 版本邊界：generator `list-word/4`、plan schema 4、patch report schema 4；outer Word job schema 1、calibration schema 2／`list-calibration/2`、persisted `WordRenderEvidence` schema 3、QA index schema 2、package／workflow 0.2.1及歷史 `list-word/3` artifact fixtures不變。
+- 誠實與範圍：沒有duration whitelist、date-derived fee、ReplaceAll、private path或OP/web override；沒有讀寫private master／calibration、啟動Word、產生DRAFT／DOCX／PDF／PNG、GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish或push。離線綠燈不能宣稱4天artifact已修好。
+- 下一步：若OP要做實機驗證，回覆「同意只執行一次 4 天 post-fix Word repro；不跑其他天數；若成功，完成同次 DOCX／PDF／PNG QA；成功或失敗都不重試。」
+- 阻塞點：新的4天Word artifact尚未生成與目視QA；本輪在離線handoff停止。
+
 ## 2026-08-19 LIST dynamic service-fee notice offline implementation plan review
 
 - 一句話現況：OP 已核准 LIST 動態服務費正文書面規格；test-first 離線實作計畫已建立並完成自審，等待 OP 核准，尚未修改或執行 production／tests。

@@ -2,10 +2,11 @@
 
 ## Status
 
-The OP approved this written specification in conversation on 2026-08-19.
-The corresponding offline implementation plan is now written and awaits a
-separate OP approval. No production or test implementation has been authorized
-or performed.
+The OP approved this written specification and its implementation plan in
+conversation on 2026-08-19. The bounded offline implementation is complete at
+`list-word/4`; 584 tests passed and 8 tests were skipped. Word COM
+and new DOCX/PDF/PNG artifact verification remain separately gated and have not
+been performed. The private master and calibration remain unchanged.
 
 ## Authorized scope
 

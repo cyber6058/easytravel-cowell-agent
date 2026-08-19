@@ -2,7 +2,7 @@
 
 日期：2026-08-19
 
-狀態：書面規格已由 OP 核准；本計畫等待 OP 核准後才可執行離線實作。
+狀態：OP 已核准且離線實作完成；完整離線驗證通過，等待另一次單次 4 天 Word 實機驗證授權。
 
 依據：
 docs/specs/2026-08-19-list-service-fee-day-count-design.md
@@ -396,7 +396,15 @@ reopen output DOCX後，在寫report前：
 
 ~~~powershell
 .\.venv\Scripts\python.exe -X utf8 -m pytest tests\unit\travel_briefing\test_windows_word.py tests\unit\travel_briefing\test_word_list.py -q
-powershell -NoProfile -Command "$errors=$null;$tokens=$null;[Management.Automation.Language.Parser]::ParseFile('scripts\briefing\patch_list_template.ps1',[ref]$tokens,[ref]$errors)>$null;if($errors.Count){$errors;exit 1};'PARSER_ERROR_COUNT=0'"
+$parseErrors = $null
+$parseTokens = $null
+[Management.Automation.Language.Parser]::ParseFile(
+    (Resolve-Path 'scripts\briefing\patch_list_template.ps1'),
+    [ref]$parseTokens,
+    [ref]$parseErrors
+) | Out-Null
+if ($parseErrors.Count) { $parseErrors; exit 1 }
+'PARSER_ERROR_COUNT=0'
 ~~~
 
 兩檔focused tests與parser全綠後建立第二個implementation commit：
@@ -570,13 +578,34 @@ git log -5 --oneline
 working tree必須乾淨。本計畫不執行push；push與installed runtime同步都是另外的明確
 授權關卡。
 
-## OP implementation review gate
+## Offline implementation outcome
 
-本計畫完成後必須由OP審閱。核准本計畫才可修改六個implementation files並跑純離線
-驗證；仍不授權Word或任何外部integration。
+- implementation baseline：`ade857e09670acff3971c703fca62568cf031478`；pull 為
+  `Already up to date.`，Word opt-in 為空，WINWORD baseline／postflight 都是 0；
+- formatter／typed plan primary red 為 19 failures，因 formatter 不存在與 plan 仍是
+  schema 3；最小實作後 19 tests 轉綠；
+- strict report primary red 為 7 failures，明確顯示 reader 仍要求 schema 3；升版後
+  targets 轉綠，完整 `test_word_list.py` 轉綠；
+- PowerShell contract primary red 為 3 failures，因 main-story helpers／constants 與
+  schema-4 report 不存在；實作後 3 tests、兩個 focused files與 parser 全綠；
+- backend composition primary red 為 1 failure，actual required text 缺少完整服務費正文；
+  接到同一 formatter 後 primary 與完整 `test_local_backend.py` 轉綠；
+- implementation commits：`d902a1a`、`6103ce6`、`9552fa3`，changed files 精確為
+  本計畫核准的三個 production files與三個 unit test files；
+- focused／compatibility controls、10 個safe codes、forbidden-addition scan、baseline
+  non-change與完整驗證通過：`584 passed, 8 skipped in 41.40s`、`COMPILEALL_OK`、
+  `PARSER_ERROR_COUNT=0`、`GIT_DIFF_CHECK_OK`；
+- 第一次子 PowerShell parser command 因外層先展開變數而失敗；沒有改 production，
+  改用上方同程序 parser command後得到 0 errors；
+- generator／plan／report已升 `list-word/4`／schema 4／schema 4；outer job 1、
+  calibration 2、persisted Word evidence 3、QA index 2、package/workflow 0.2.1不變；
+- 未讀寫private master／calibration、未啟動Word或外部integration，也未push。
 
-精確下一句是：
+## OP Word review gate
+
+離線綠燈不能證明實際 Word COM、DOCX、PDF 或 PNG 已正確顯示 4 天／1,200 元。
+若要執行下一步，精確授權句是：
 
 ~~~text
-同意此實作計畫，開始離線實作
+同意只執行一次 4 天 post-fix Word repro；不跑其他天數；若成功，完成同次 DOCX／PDF／PNG QA；成功或失敗都不重試。
 ~~~
