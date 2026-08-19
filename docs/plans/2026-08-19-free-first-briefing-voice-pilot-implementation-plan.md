@@ -499,6 +499,26 @@ Windows路徑只在 app 啟動後以只讀證據確認，不能先猜成已驗�
 
 Gate D 到此停止。下載與安裝不授權使用本人影片或任何合成。
 
+### Gate D 實際證據（2026-08-19）
+
+- Gate D 基線為 `207703be7182f8dce8846cd49016e411764dca65`；`git pull --ff-only`
+  為 `Already up to date.`，SmartSub／WINWORD process 前檢均為 `0 / 0`。
+- 三個 direct GitHub assets 各只下載一次；正式檔名重驗結果為：installer
+  `127,844,583` bytes／SHA-256
+  `65f6c85aa196063f365562c41393d2f98ef0ce31e4ee3e0122d561668d433520`，ZipVoice
+  archive `109,162,785` bytes／SHA-256
+  `77219c8b40f4ee8d73a7f902305ff6c1128ef9b54461c41b4ca6ed890b6c2803`，vocoder
+  `54,157,409` bytes／SHA-256
+  `bcb3b970e384161c4d634f0bb9e999ff1c471b34c9bc0b1049a5014065ed3cc0`。
+- 合計 `291,164,777` bytes，三檔 bytes／hash 全部相符，殘留 `.partial` count 為
+  `0`。檔案保留在 `%LOCALAPPDATA%\EasyTravelVoicePilot\downloads`。
+- installer 的 Authenticode 實測為 `NotSigned`，`SignerCertificate` 與
+  `TimeStamperCertificate` 均不存在。依本 Task 的 fail-closed 規則，在執行 installer
+  前停止，沒有按 SmartScreen bypass。
+- 尚未啟動／安裝 SmartSub、解壓／部署 model、讀取本人影片、建立音色、啟動 Yating、
+  合成、下載 ASR／CUDA／Vulkan／其他模型、登入、上傳或 push。繼續執行此 unsigned
+  exact-hash installer 必須取得新的明確確認。
+
 ## Task 6：Gate R reference 選取與人工確認
 
 只有新的 Gate R 授權後，SmartSub clone wizard 才能唯讀開啟：

@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-19 free-first voice pilot Gate D safe-stopped at unsigned installer
+
+- 一句話現況：使用者已精確核准 Gate D；三個 pinned official GitHub assets 已下載並通過正式檔名的 bytes／SHA-256 重驗，但 SmartSub 3.7.0 installer 的 Authenticode 為 `NotSigned`，因此依 Task 5 在啟動 installer 前安全停止，SmartSub 與 ZipVoice model 均尚未安裝。
+- 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`，Gate D 基線為 `207703be7182f8dce8846cd49016e411764dca65`；前檢 SmartSub／WINWORD process 均為 `0 / 0`，專用 downloads／app／data 目錄原先不存在，C 槽可用 `40,655,564,800` bytes。只從計畫三個 direct GitHub URLs 各下載一次至 `.partial`，驗證後才改正式檔名；installer 為 `127,844,583` bytes／`65f6c85aa196063f365562c41393d2f98ef0ce31e4ee3e0122d561668d433520`，ZipVoice archive 為 `109,162,785` bytes／`77219c8b40f4ee8d73a7f902305ff6c1128ef9b54461c41b4ca6ed890b6c2803`，vocoder 為 `54,157,409` bytes／`bcb3b970e384161c4d634f0bb9e999ff1c471b34c9bc0b1049a5014065ed3cc0`；重驗總計 `291,164,777` bytes、全部 bytes/hash `True`、`.partial` count `0`。
+- 下一步：若使用者仍要繼續，必須另行明確核准執行這個 `NotSigned` 但 exact bytes／SHA-256 相符的 installer，並明示 Windows SmartScreen 若出現時是否允許只對此 exact hash 選擇「仍要執行」；新的確認仍只涵蓋 Task 5 的可見 per-user 安裝、固定 model 部署與 capability proof，完成後再次停止。
+- 阻塞點：installer 沒有 signer 或 timestamp certificate，無法用 Authenticode 證明 publisher identity；尚未啟動／安裝 SmartSub、尚未解壓或部署 model，且未讀取本人影片、未建立音色、未啟動 Yating、未合成、未下載 ASR／CUDA／Vulkan／其他模型、未登入、未上傳、未 push。三個已驗證下載檔保留在 `%LOCALAPPDATA%\EasyTravelVoicePilot\downloads`，未自動刪除。
+
 ## 2026-08-19 free-first voice pilot Gate I completed; stopped before downloads
 
 - 一句話現況：使用者已書面核准5–10秒reference修正及實作計畫；Tasks 1–4的synthetic-only Gate I已完成並建立本機implementation commit `100ede1ae3b5d88f7743f8e779621744d59412ae`，目前安全停止在三個pinned assets的下載／安裝授權前。
