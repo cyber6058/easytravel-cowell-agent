@@ -1,5 +1,17 @@
 # STATUS
 
+## 2026-08-19 LIST exported-page authority offline implementation plan review
+
+- 一句話現況：OP 已核准 4 天 exported-page authority 書面規格；離線實作計畫已建立並等待 OP 核准，尚未修改或執行 production／tests。
+- 開工狀態：`git pull --ff-only` 為 `Already up to date.`，planning baseline 為 `35fa408ff788abd5112b2d23e41044245d7892d7`，working tree 原為乾淨的 `main...origin/main [ahead 66]`。重新核對核准規格、現行 `LocalRenderBackend.render_word()`／`render_list_word_for_qa()`、兩個 unit test seams、既有 implementation-plan 慣例與 repo gates。
+- 計畫文件：新增 `docs/plans/2026-08-19-list-four-day-page-count-mismatch-implementation-plan.md`，拆成 synthetic report 2／PDF 1 primary red、PDF-authority QA green、backend fake-expectation red／workflow green、focused＋unchanged controls、完整離線 suite／implementation commit、handoff 六個 tasks。
+- Test-first 邊界：`test_word_qa.py` 新 regression 不傳 independent expectation，要求 inspected PDF 1 控制 one-page PNG/index，同時保留 `result.computed_page_count=2`；既有 explicit expected 2／PDF 1 mismatch test 必須繼續阻擋。`test_local_backend.py` 既有 composition test 會鎖定 build statistic 2 不得出現在 QA kwargs，final evidence 使用 QA page count 1。
+- Production 範圍：未來獲准後只改 `word_qa.py` 的 page-count authority order／gate，以及從 `workflow.py` 移除 `expected_page_count=built.computed_page_count`。`word_list.py`、兩個 Word PowerShell adapters、Gate V integration、schema、formatting、master 與 calibration 全是 unchanged controls。
+- 驗證與停止點：計畫要求兩個獨立 red→green slices、explicit expectation control、兩個 focused files、Word/LIST/workflow unchanged controls、PowerShell parser、baseline non-change comparison、完整離線 suite、compileall、WINWORD non-use 與 `git diff --check`；全綠才建立本機 implementation／handoff commits並停止。最近完整 suite `556 passed, 8 skipped` 只作趨勢參考，以未來實際輸出為準。
+- 誠實邊界：本輪只有 plan、spec status 與 STATUS 文件；沒有修改或執行 production／tests，沒有啟動 Word、讀寫 private master／calibration、產生 DRAFT／DOCX／PDF／PNG，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。Word 成功仍未驗證。
+- 下一步：OP 回覆「同意此實作計畫，開始離線實作」後才開始 Task 1 test edit。完整離線實作通過後，新的單次 4 天 Word repro 仍需另一個明確授權，不跑其他天數，成功或失敗都不重試。
+- 阻塞點：離線實作計畫核准關卡。
+
 ## 2026-08-19 LIST 4-day exported-page authority diagnosis and design review
 
 - 一句話現況：4 天 repro 的新 blocker 已離線收斂為「把 Word `ComputeStatistics=2` 的匯出前觀察誤當成獨立 `expected_page_count`」，而不是 4 天 patch plan 預先要求兩頁；已完成書面修正規格，等待 OP 審閱，尚未修改 production 或 tests。

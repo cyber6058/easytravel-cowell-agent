@@ -3,8 +3,9 @@
 ## Status
 
 Offline diagnosis and the selected correction design were written on
-2026-08-19. This document is waiting for OP review. Production, tests, Word
-COM, and another reproduction remain unchanged and unauthorized.
+2026-08-19. OP approved this document on 2026-08-19; the separate offline
+implementation plan is waiting for OP approval. Production, tests, Word COM,
+and another reproduction remain unchanged and unauthorized.
 
 ## Authorized scope
 
@@ -324,11 +325,12 @@ The future correction is acceptable only when:
 
 ## Review gate
 
-OP may approve creation of a separate offline implementation plan with:
+OP approved this document on 2026-08-19 with:
 
 ```text
 同意此書面規格，開始建立離線實作計畫
 ```
 
-That approval authorizes only the plan. It does not authorize editing
-production or tests, running Word, or any later integration.
+That approval authorized only creation of the separate offline implementation
+plan. It did not authorize editing production or tests, running Word, or any
+later integration.
