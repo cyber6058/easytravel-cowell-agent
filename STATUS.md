@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-08-19 LIST PDF QA failure-evidence design review
+
+- 一句話現況：OP 已選定 A 方案；當有效 Word-exported PDF 在 deterministic inspection 失敗時，未來將只在 `failed-qa/` 保存 `LIST-qa.failed.pdf` 與 hash-bound schema-1 `failure.json`，正常 PDF／PNG／index 保持不存在，完整書面規格已建立並完成自審，等待 OP review。
+- 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`，baseline `c63cf07`，working tree 原為乾淨的 `main...origin/main [ahead 77]`。離線 synthetic A4 PDF loop 連續三次穩定得到 `LIST QA PDF is missing required text`，並以 `AssertionError: RED: missing token identities are not exposed` 證明現行錯誤無法指出 `JX821` 與 `SERVICE-FEE-TOKEN`；此 loop 沒有啟動 Word，也不假裝重現已被刪除的實機 PDF。
+- 書面規格：新增 `docs/specs/2026-08-19-list-pdf-qa-failure-evidence-design.md`。規格固定 success/failure 路徑分離、`failed-qa` preflight exclusive marker、eligible failure boundary、ordered unique missing tokens、`LIST_PDF_REQUIRED_TEXT_MISSING`／`LIST_PDF_INSPECTION_FAILED` safe inner codes、`WORD_GENERATION_FAILED` outer envelope、schema-1 failure report、exclusive publication／rollback、兩個 production/test file scope及完整離線 acceptance gates。
+- 自審：placeholder scan 0、Markdown fences 18且成對、29個 headings、385 lines，`git diff --check` 通過；成功路徑、失敗路徑、unknown Word result、pdftoppm failure、版本契約、rollback ownership、no-retry與未授權整合邊界沒有矛盾。規格可由單一小型離線 implementation plan 完成。
+- 誠實與範圍：沒有修改或執行 production／tests，沒有啟動 Word、讀寫 private master／calibration、產生新 DOCX／PDF／PNG，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。這份規格不能判定上一份已刪 PDF 究竟缺少哪個 token。
+- 下一步：OP review 後若同意，回覆「同意此書面規格，開始建立離線實作計畫」；該句只授權建立計畫，不授權 production／test edits 或 Word。
+- 阻塞點：書面規格 review gate；failure evidence 與 missing-token diagnostics 尚未實作。
+
 ## 2026-08-19 LIST dynamic service-fee 4-day one-shot Word repro failed at PDF text QA
 
 - 一句話現況：依 OP 精確授權只執行一次 `test_calibrated_master_renders_gate_v_day_counts[4]`；Word 成功產生部分 `LIST.docx`，但同次流程在 PDF required-text 檢查失敗，pytest 原文為 `ValueError: LIST QA PDF is missing required text` 與 `1 failed in 42.37s`，已遵守 no-retry 停止，不能宣稱 DOCX／PDF／PNG QA 通過。
