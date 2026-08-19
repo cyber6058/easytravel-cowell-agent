@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-19 free-first briefing voice pilot design awaiting written review
+
+- 一句話現況：使用者已逐段口頭核准以 SmartSub + ZipVoice 為第一順位的免費本機語音試驗；正式書面規格已建立，現在停在使用者審閱關卡，尚未授權實作。
+- 這次做了什麼：完成本人 2 分 59 秒影片的唯讀技術前檢，確認只有本人聲音後，將固定 60 至 90 秒盲測、A／B 問題處理、一次調整上限、30 至 60 分鐘後續錄音、5 至 7 分鐘長稿驗收、資料隔離及免費／付費 fallback 順序寫入 `docs/specs/2026-08-19-free-first-briefing-voice-pilot-design.md`；`git pull --ff-only` 為 `Already up to date.`。
+- 下一步：使用者先審閱書面規格；只有收到精確核准後才建立實作計畫，計畫中的第一個實際關卡仍是列出版本、license、下載量、路徑及回復方式，再另行取得下載／安裝同意。
+- 阻塞點：這台 i7-8565U／8 GB／無 NVIDIA GPU 機器的 ZipVoice 實際速度與品質尚未驗證；本人相似度、A／B 聽感也必須由使用者試聽。未下載模型、未安裝套件、未抽出或上傳音訊、未付款、未修改正式 Yating 管線。既有 OSA05261025D LIST day-page QA 阻擋保持獨立且未重試。
+
 ## 2026-08-19 OSA05261025D one-DRAFT stopped at LIST day-page QA
 
 - Current state: the user-authorized one-request DRAFT used exactly one NewAmazing GET and one render. Prepare returned `DRAFT_READY`; the final render returned `BLOCKED` because LIST PDF inspection reported `LIST QA day page mapping does not match PDF`. No source or render retry was attempted.
