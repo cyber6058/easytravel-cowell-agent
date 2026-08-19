@@ -1,5 +1,17 @@
 # STATUS
 
+## 2026-08-19 LIST PDF required-text whitespace offline implementation plan review
+
+- 一句話現況：OP 已核准 whitespace-normalization 書面規格；離線實作計畫已建立並等待 OP review，尚未修改或執行 production／tests，Word 實機仍是獨立關卡。
+- 開工狀態：`git pull --ff-only` 為 `Already up to date.`，planning／design baseline `ca7ea7571a893954507f2bbc51c76c86c340dfcf`，working tree 原為乾淨的 `main...origin/main [ahead 84]`，WINWORD 0且Word opt-in未設定。`CONTEXT.md`不存在；重新核對核准規格、`inspect_list_pdf()`、現有PyMuPDF helpers、missing-token／failure-evidence tests與repo planning慣例。
+- TDD seam：只透過public `inspect_list_pdf()`與真實synthetic A4 PDF觀察行為，不直接測private helper、不mock內部。計畫拆成layout-wrap primary red→minimal aggregate green、whitespace-only token red→validation green，再加入non-whitespace與continuation strict regression controls。
+- 計畫文件：新增 `docs/plans/2026-08-19-list-pdf-required-text-whitespace-implementation-plan.md`，包含7個tasks、兩個分離commits、精確focused／full-suite commands、changed-file audit、WINWORD non-use、handoff與one-shot Word獨立授權。
+- 最小實作範圍：未來只允許修改 `src/travel_briefing/word_qa.py` 與 `tests/unit/travel_briefing/test_word_qa.py`；workflow、errors、word_list、兩支PowerShell adapters、local-backend／Word／integration controls、schemas、private master與calibration全部unchanged。若需跨出範圍立即停止review。
+- 自審：plan 435行、7個tasks、46個Markdown fences且成對、14個completion checks、placeholder 0，public seam、兩個red→green slices與精確下一授權皆存在，`git diff --check`通過。臨時無Word PyMuPDF probe以built-in `china-t`穩定readback `每人每天\n新台幣...`，raw contiguous false、compact contiguous true，確認primary fixture可執行；temp已清理。
+- 誠實與範圍：本輪只建立plan與STATUS，沒有修改或執行production／tests，沒有Word、private master／calibration、DOCX／PDF／PNG、GET、JMA、Yating、ffmpeg、dependency download、LINE、Cowell、deploy、publish或push。`writing-plans` Skill不在可用清單，因此沿用repo既有test-first plan格式建立等價計畫。
+- 下一步：OP review後若同意，回覆「同意此實作計畫，開始離線實作」；完整離線驗證通過後停止，新的4天Word repro仍需另一個精確one-shot授權。
+- 阻塞點：離線實作計畫review gate；whitespace-normalization尚未實作，4天successful artifact QA仍未通過。
+
 ## 2026-08-19 LIST PDF required-text whitespace-normalization design review
 
 - 一句話現況：OP 已核准只讓 aggregate `required_text` 忽略 PDF layout whitespace、其餘頁面與結構 QA 維持嚴格的設計；完整書面規格已建立並等待 OP review，尚未修改 production／tests，也未執行 Word。
