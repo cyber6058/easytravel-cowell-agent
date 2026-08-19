@@ -1,5 +1,17 @@
 # STATUS
 
+## 2026-08-19 LIST 4-day whitespace post-fix one-shot Word repro succeeded
+
+- 一句話現況：依 OP 精確授權只執行一次 `test_calibrated_master_renders_gate_v_day_counts[4]`，原文為 `1 passed in 32.97s`；同次 DOCX／PDF／PNG／schema-2 index 的結構、內容、雜湊與逐頁視覺 QA 全部通過，4 天 Word 產出路徑目前已驗證成功。
+- 前檢與 selector：`git pull --ff-only` 為 `Already up to date.`，baseline `08f6b9f9cb5079f55483029626c9af8efc73772f`，working tree 原為乾淨的 `main...origin/main [ahead 87]`。完整離線 suite 原文 `594 passed, 8 skipped in 22.97s`；doctor 確認 Word registry、configured pdftoppm、schema-2 calibration、master hashes 與 normalized structure 均可用，唯一 warning 是本次不使用的 ffmpeg。collect-only 原文 `1 test collected in 0.34s`，唯一 node 是 `[4]`，collect 前後 WINWORD 均為 0且 fresh QA root 保持空白。
+- 唯一實機 run：fresh root 為 `output/word-repro-whitespace-postfix-20260819-120734`；正式 selector 只呼叫一次並使用 `-x -vv`，結果 `WORD_REPRO_EXIT=0`、`1 passed in 32.97s`、WINWORD `0 / 0`。沒有重試，也沒有執行 5／6／7／8／12 天。
+- 同次 artifacts：`day-004/LIST.docx` 32,731 bytes／SHA-256 `9b74e4bad28032f038ee3e96c5506b5b6c0b762ece49aa5f3403347fe10751ce`；`LIST-qa.pdf` 119,882 bytes／SHA-256 `5dcbd3b2d568af60ebeee089fd03ec2cf64975ba45bdc4b036c908941dce5acc`；`pages/page-001.png` 229,924 bytes／SHA-256 `a54333f1301a9c060481908bfe6a08d90d242c3f71663d94be62e16ab6d08f4f`；`pages/index.json` 347 bytes／SHA-256 `4c7353c84cc0c29482ccac87f9f7805523e563f0653d5fafd6b67da119fe0701`。root 精確只有這 4 檔，`failed-qa` 不存在。
+- DOCX／內容 QA：DOCX 保存頁數 1，4 tables、rows `4／3／5／1`、7 body paragraphs、0 inline shapes、0 media、0 drawing parts；`SYN-LIST-260901`、`JX820`、`JX821`、`合成大阪4日`、`日本精緻假期` 與完整服務費正文均存在。「四天共新台幣 1,200 元」存在，「六天共新台幣 1,800 元」不存在；integration evidence 同時證明 QR image/header candidate 均為 0、非標題 12 pt、標題字級未改、額外尾端 paragraph count 為 0。
+- PDF／index／視覺 QA：PDF 是 1 頁 A4 portrait（595.32 × 841.92 pt）、0 images，完整四天服務費與所有 required tokens 都可由 PyMuPDF 讀回；第一行標題約 21.96 pt，其他文字全部 12 pt。schema-2 index 的 `page_count=1`、day map 為 1／2／3／4 且全在 page 1，PNG SHA-256 與實檔完全一致。以原始解析度逐頁檢視 `page-001.png`：右上無 QR 或保留空位、團體資訊使用完整寬度，表格與注意事項沒有截斷、重疊或缺字。
+- Postflight 與範圍：private master SHA-256 仍為 `08b4393b8e7782f9f1425a4a265a4f2737cb1dec7f1813f1b1c2ede88daae468`，manifest SHA-256 仍為 `edf2300b7fecb34662482291bc1de37f2502e6feb4f54aec00895b0354d80593`；WINWORD 0，Word opt-in 已清除。沒有修改 production／tests，沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish、push或其他天數 Word run。
+- 下一步：4 天 synthetic Word blocker 已解除；OP 可提供一個 NewAmazing 連結要求新的本機 DRAFT。實際 DRAFT 仍須以該網址 parser／內容與當次 artifact QA 結果為準；5／6／7／8／12 天未在本次授權中驗證。
+- 阻塞點：4 天 Word 路徑沒有已知 blocker；其他天數與真實網址 DRAFT 尚未由本次 one-shot 驗證。
+
 ## 2026-08-19 LIST PDF required-text whitespace offline implementation handoff
 
 - 一句話現況：LIST PDF QA 已離線修正aggregate `required_text`對Word/PyMuPDF layout whitespace的false negative；兩個TDD slices與完整離線驗證全綠，但尚未重新執行Word實機repro，不能宣稱4天DOCX／PDF／PNG QA已通過。
