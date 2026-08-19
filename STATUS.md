@@ -1,5 +1,18 @@
 # STATUS
 
+## 2026-08-19 LIST exported-page authority 4-day post-fix Word repro and artifact QA
+
+- 一句話現況：唯一一次 4 天 post-fix Word integration selector 已成功且三項版型規格（無 QR、除第一行外 12 pt、非標題 cell 無多餘 paragraph）均通過同次 DOCX／PDF／PNG QA；但人工內容 QA 發現 4 日團頁尾仍固定寫「六天共新台幣 1,800 元」，因此這份 synthetic artifact 不得宣稱可正式使用，且依 no-retry 約束沒有重跑。
+- 前檢：`git pull --ff-only` 為 `Already up to date.`，HEAD `e48fe2a89e3c53076da05b3a3a9605929a6141e1`，working tree 乾淨。doctor 的 Word registry、configured pdftoppm、schema-2 calibration、master SHA-256 與 normalized structure 均 `ok`；ffmpeg 是本案例不使用的唯一 warning。master 為 36,262 bytes／SHA-256 `08b4393b8e7782f9f1425a4a265a4f2737cb1dec7f1813f1b1c2ede88daae468`，manifest 為 3,096 bytes／SHA-256 `edf2300b7fecb34662482291bc1de37f2502e6feb4f54aec00895b0354d80593`，WINWORD baseline 是使用者既有的 1。
+- Selector gate：全新且原為空的 QA root 是 `output/word-repro-page-authority-postfix-85cdddcdf9c24e0ea5e87306fc1fd12d`。collect-only 原文為 `1 test collected in 0.57s`，唯一 node 是 `test_calibrated_master_renders_gate_v_day_counts[4]`；collect 前後 WINWORD 均為 1，5／6／7／8／12 天沒有進入。
+- 唯一正式 run：只呼叫一次上述 `[4]` selector並使用 `-x -vv`；原文為 `1 passed in 33.42s`、`WORD_REPRO_EXIT=0`。執行前後 WINWORD 均為 1，沒有重試。
+- 同次 artifacts：`day-004/LIST.docx` 32,793 bytes／SHA-256 `42b3a0fec843fe4cd04ee670e5be7b9f1988a02ab1faf5b6f74365b3750128ec`；`LIST-qa.pdf` 119,928 bytes／SHA-256 `6e270f9c382b67feec2325347cc4ec48f852c968fa37b46964121b550729bf59`；`pages/page-001.png` 229,972 bytes／SHA-256 `ace08ae55b06f177b308a4a72ceb120738ec29157644c92d9b23eab76c0e567d`；schema-2 `index.json` 347 bytes／SHA-256 `6f68e47366b9a621628f09505e0ce9f45eba12282569fb8952c9b9a552d68b2e`。
+- 結構／版型 QA：PDF 1 頁、A4 portrait `595.32 x 841.92 pt`、466 個 non-whitespace text characters、21 text blocks、image 0；PNG 為 `1241 x 1754`、約 150 DPI，index 的 page count／PNG hash／4 個 day-page mappings 全部一致。PDF span 只有標題 `日本精緻假期` 為 21.96 pt，其餘所有文字均為 12 pt。DOCX 是 4 tables、rows `4／3／5／1`、media／body drawing／header drawing 均 0、saved Pages 1；62 個非標題 cells 各只有 1 paragraph，唯一 4-paragraph cell 是原有 title block。逐頁原尺寸目視確認無 QR、首區自然使用完整寬度、無裁切／重疊／破表／缺字或可見多餘換行，4 天 row 都在第一頁。
+- 新內容 blocker：PDF 明確包含固定字串「六天共新台幣 1,800 元」，沒有「四天共新台幣 1,200 元」。以程式計算 `4 * 300 = 1,200`；因此產品 `合成大阪4日` 與頁尾服務費說明矛盾。這個 blocker 不否定 exported-page authority fix 或三項版型修正，但會阻擋把 4 天 artifact 當成正式說明會資料。
+- Postflight／範圍：doctor 再次確認 master hash、normalized structure、Word registry 與 pdftoppm 正常；master／manifest size、mtime、SHA-256 均未變，WINWORD 回到 1，process-scope opt-in 已清空。沒有修改 production／tests／私人 master／calibration，沒有第二次 Word、GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。
+- 下一步：若 OP 要修正內容 blocker，先建立「依 `day_count` 動態產生服務費天數與總額，且保留未知費率 fail-closed」的離線書面規格；本輪授權已消耗，不再執行 Word。
+- 阻塞點：4 日產品與固定 6 日／1,800 元頁尾文字矛盾；5／6／7／8／12 天實機仍未驗證。
+
 ## 2026-08-19 LIST exported-page authority offline implementation handoff
 
 - 一句話現況：LIST QA 已離線改為以 PyMuPDF inspected PDF page count 控制 PNG set、QA index 與 final evidence；Word `computed_page_count` 只保留為正整數診斷，explicit independent expectation 仍 strict，完整離線驗證全綠，但 Word 實機尚未驗證。
