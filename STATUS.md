@@ -1,5 +1,17 @@
 # STATUS
 
+## 2026-08-19 LIST dynamic service-fee notice design review
+
+- 一句話現況：OP 已選定固定每人每天新台幣 300 元、由 `product.day_count` 計算總額並以中文天數顯示；完整離線書面規格已寫成並自審通過，等待 OP 審閱，尚未建立實作計畫或修改 production／tests。
+- 開工與根因：`git pull --ff-only` 為 `Already up to date.`，baseline HEAD `a67e945`，working tree 原為乾淨的 `main...origin/main [ahead 70]`。唯讀 source 盤點確認固定「六天／1,800 元」不在 Python／PowerShell，而是 canonical master 保留的 main-story 正文；現行 schema-3 plan 只有 header paragraphs 與 table cells，沒有安全正文 locator。
+- 方案與決策：比較受保護 body-paragraph patch、重校準 placeholder master、全文件取代三案；選定第一案。未來 schema 4／`list-word/4` plan 只允許一個 `service_fee_notice`，以唯一 anchor prefix、完整 source equality、outside-table 與 paragraph-mark boundary fail closed，SaveAs/reopen 後再驗證一次；不改 master、不使用 ReplaceAll。
+- 資料規則：每日費率唯一常數為 300，天數唯一來源為正整數 `product.day_count`，總額只由乘法計算；中文數字 formatter 不設 4／5／6／7／8／12 白名單，也不新增最大旅遊天數。核准格式例如「四天共新台幣 1,200 元」與「十二天共新台幣 3,600 元」。
+- 規格文件：新增 `docs/specs/2026-08-19-list-service-fee-day-count-design.md`，包含 observed defect、三方案、pure formatter、typed plan、main-story locator、bounded replace、post-reopen evidence、PDF required-text authority、安全錯誤碼、相容邊界、offline test matrix、future implementation files 與 acceptance criteria。
+- 自審：placeholder scan 為 clean；schema 4／`list-word/4`／report schema 4 一致；1、4、10、12、21 天金額經 PowerShell 重算為 300／1,200／3,000／3,600／6,300；規格明確要求 1..366 deterministic loop 與更大正整數的 algorithm path，不使用 duration lookup table。`git diff --check` 通過。
+- 範圍界線：只有 spec 與本 STATUS；沒有修改或執行 production／tests，沒有讀寫 private master／calibration、啟動 Word、產生 DOCX／PDF／PNG，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。
+- 下一步：OP 審閱後若同意，回覆「同意此書面規格，開始建立離線實作計畫」；該句只授權建立計畫，不授權改 production／tests 或執行 Word。
+- 阻塞點：書面規格 review gate；4 天 artifact 的固定 6 天服務費內容仍未修正。
+
 ## 2026-08-19 LIST exported-page authority 4-day post-fix Word repro and artifact QA
 
 - 一句話現況：唯一一次 4 天 post-fix Word integration selector 已成功且三項版型規格（無 QR、除第一行外 12 pt、非標題 cell 無多餘 paragraph）均通過同次 DOCX／PDF／PNG QA；但人工內容 QA 發現 4 日團頁尾仍固定寫「六天共新台幣 1,800 元」，因此這份 synthetic artifact 不得宣稱可正式使用，且依 no-retry 約束沒有重跑。
