@@ -1,5 +1,18 @@
 # STATUS
 
+## 2026-08-19 LIST 4-day exported-page authority diagnosis and design review
+
+- 一句話現況：4 天 repro 的新 blocker 已離線收斂為「把 Word `ComputeStatistics=2` 的匯出前觀察誤當成獨立 `expected_page_count`」，而不是 4 天 patch plan 預先要求兩頁；已完成書面修正規格，等待 OP 審閱，尚未修改 production 或 tests。
+- 開工與既有證據：`git pull --ff-only` 為 `Already up to date.`，基線 HEAD 為 `514da17aef3bd87f15e9945b7498752415d3e8f7`，working tree 原為乾淨。唯一既有 Word run 仍是 `1 failed in 35.45s`／`WORD_REPRO_EXIT=1`，`expected_page_count=2` 通過兩個 Word report check 後，PyMuPDF inspection 回傳非 2 頁並觸發 `Word report and PDF LIST page count do not match`；本輪沒有重跑 Word。
+- 資料流根因：`patch_list_template.ps1` 的 `computed_page_count` 經 `ListWordBuildResult` 被 `LocalRenderBackend` 原封不動改名傳成 `expected_page_count`；`render_list_template.ps1` 又在 PDF 匯出前呼叫同一個 `ComputeStatistics`。兩個同源 Word 統計相等，不能證明匯出 PDF 頁數相等。
+- Retained DOCX 唯讀證據：`docProps/app.xml Pages=1`，body paragraph 7、table 4、rows `4／3／5／1`、manual page break 0、last-rendered break 0、`pageBreakBefore` 0、section 1；daily table 是 1 header＋4 day rows，沒有結構性第二頁指令。由於暫存 PDF 已依失敗清理，實際 PDF=1 是由「PDF 非 2＋Word-authored saved metadata 1」支持的強推論，不冒充直接觀察。
+- 離線 feedback loop：保留 DOCX 對 recorded expected 的 deterministic check 原文為 `RECORDED_EXPECTED_PAGE_COUNT=2`、`SAVED_DOCX_METADATA_PAGES=1`、`OFFLINE_PAGE_CONTRACT_MISMATCH=1` 並 exit 1；三個現有 focused contracts 為 `..... [100%]`，證明現有 tests 尚未涵蓋「Word statistic 2／有效 PDF 1／沒有獨立 expectation」的 seam。WINWORD 全程維持 baseline 1。
+- 選定方案：以 PyMuPDF inspection 的匯出 PDF 頁數作 artifact authority；PDF=PNG set=QA index=`WordRenderEvidence.page_count`。Word patch／render `computed_page_count` 只保留為正整數診斷。`day_page_map` 與唯一 date token 仍必須在 PDF 指定頁精確匹配，所以不會用此修正掩蓋漏頁、錯頁或內容遺失；明示的真正 independent `expected_page_count` 仍維持 strict mismatch block。
+- 書面規格：新增 `docs/specs/2026-08-19-list-four-day-page-count-mismatch-design.md`，記錄 observed／inferred 邊界、四個方案比較、被取代的單一 page-count clause、選定資料流、錯誤契約、red-then-green QA／backend regressions、unchanged controls 與四個 implementation files 的嚴格範圍。
+- 誠實與範圍：本輪只讀 repo source、既有失敗 DOCX 的 OOXML、跑 5 個無 COM focused tests並寫文件；沒有修改或執行 production／tests，沒有啟動 Word、讀寫 private master／calibration、產生 DRAFT／PDF／PNG，也沒有 GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish 或 push。修正尚未實作，Word 成功仍未驗證。
+- 下一步：OP 審閱後若同意，回覆「同意此書面規格，開始建立離線實作計畫」；該句只授權建立計畫，不授權改 production／tests 或執行 Word。
+- 阻塞點：書面規格審閱關卡；唯一 Word run 授權已消耗，PDF inspection 的精確頁數沒有 retained artifact，未來實機驗證仍需另一個明確的一次性 4 天授權。
+
 ## 2026-08-18 LIST direct-range post-fix 4-day repro crosses highlight and fails page-count QA
 
 - 一句話現況：唯一一次獲准的 4 天 post-fix Word repro 已越過 T4/R1/C2 full-cell highlight blocker並產生 `LIST.docx`，但在 Word report 與 PDF inspection 的頁數一致性檢查失敗；因此沒有完成 DOCX／PDF／PNG QA，也不得重試。
