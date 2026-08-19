@@ -1,5 +1,14 @@
 # STATUS
 
+## 2026-08-19 UKB05270314A DRAFT preflight blocked by stale installed runtime
+
+- 一句話現況：OP 已提供 NewAmazing `UKB05270314A` 網址要求新的本機 DRAFT；one-request DRAFT 授權有效，但在任何來源 GET／Word／Yating 前，離線 preflight 發現 `%LOCALAPPDATA%` installed runtime 仍為 `briefing 0.2.0`，不含目前 repo `0.2.1` 已驗證的 LIST 輸出修正，因此安全停止，尚未消耗此網址的唯一 GET 或 DRAFT render。
+- 前檢：`git pull --ff-only` 為 `Already up to date.`，baseline `a3d979171ee03304edbec8a3993ef878f2ef63fa`，working tree 原為乾淨的 `main...origin/main [ahead 88]`。installed `doctor` exit 0；Word registry、Yating、pdftoppm、schema-2 calibration、master hash與 normalized structure均 `ok`，WINWORD 0；ffmpeg 未設定而為 warning，故未來即使 DRAFT 成功也不會有 MP3。
+- 版本證據：repo briefing package／`src/travel_briefing.__version__` 為 `0.2.1`，installed runtime 為 `0.2.0`。`word_list.py`、`word_qa.py`、`workflow.py` 的 repo／installed SHA-256 全不相符；installed `word_list.py` 仍保留 output QR candidate 與 source candidate 相等的舊契約，不能滿足已核准的 QR-free、full-width、12 pt、no-extra-paragraph、動態服務費及新版 PDF QA 路徑。只有 `adapters/windows_word.py` hash相符不足以宣稱 runtime已同步。
+- 安全邊界：依既有 0.2.1 計畫與 canonical Skill，installed runtime 同步是 DRAFT 以外的獨立授權；不得以 current URL request 私自安裝、覆蓋 `%LOCALAPPDATA%` 或改用 repo `.venv` 作未核准 fallback。沒有執行 NewAmazing GET、JMA、Word、Yating、ffmpeg、CONFIRMED、LINE、Cowell、deploy、publish、push或任何 artifact 產生。
+- 下一步：等待 OP 明確回覆「同意同步 installed runtime 至目前已驗證的 0.2.1；同步與 doctor 通過後，繼續執行 UKB05270314A 的原 one-DRAFT，不重抓、不改來源。」同步完成後先證明 runtime版本／關鍵hash／doctor，再用原網址執行一次 prepare；來源或 render若失敗則依 one-request規則停止，不做隱性 fallback。
+- 阻塞點：installed runtime 0.2.0 與已驗證 repo 0.2.1 漂移；同步尚未獲得當次明確授權。ffmpeg 未設定只會缺 MP3，不阻擋 reviewable Word／WAV／TXT／SRT DRAFT。
+
 ## 2026-08-19 LIST 4-day whitespace post-fix one-shot Word repro succeeded
 
 - 一句話現況：依 OP 精確授權只執行一次 `test_calibrated_master_renders_gate_v_day_counts[4]`，原文為 `1 passed in 32.97s`；同次 DOCX／PDF／PNG／schema-2 index 的結構、內容、雜湊與逐頁視覺 QA 全部通過，4 天 Word 產出路徑目前已驗證成功。
