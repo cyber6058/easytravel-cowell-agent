@@ -21,6 +21,9 @@ from .word_list import DayPagePlacement
 
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 _PAGE_SIZE_TOLERANCE_POINTS = 2.0
+_FAILED_QA_DIRECTORY_NAME = "failed-qa"
+_FAILED_QA_PDF_NAME = "LIST-qa.failed.pdf"
+_FAILED_QA_REPORT_NAME = "failure.json"
 
 
 class _ListPdfRequiredTextError(ValueError):
@@ -486,6 +489,11 @@ def render_list_word_for_qa(
         raise ValueError("LIST Word QA outputs must not already exist")
     if timeout_seconds <= 0:
         raise ValueError("LIST Word QA timeout must be positive")
+    failed_directory, failed_pdf, failure_report = _failed_qa_paths(pdf)
+    if failed_directory.exists():
+        raise ValueError(
+            "LIST failed QA evidence directory must not already exist"
+        )
     pdf.parent.mkdir(parents=True, exist_ok=True)
     if legacy_png is not None:
         legacy_png.parent.mkdir(parents=True, exist_ok=True)
@@ -530,13 +538,50 @@ def render_list_word_for_qa(
             )
         if report["output_bytes"] != temporary_pdf.stat().st_size:
             raise WordGenerationError("Word PDF size does not match its report")
-        inspection = inspect_list_pdf(
-            temporary_pdf,
-            required_text=required_text,
-            continuation_required_text=continuation_required_text,
-            day_page_map=day_page_map,
-            day_tokens=day_tokens,
-        )
+        try:
+            inspection = inspect_list_pdf(
+                temporary_pdf,
+                required_text=required_text,
+                continuation_required_text=continuation_required_text,
+                day_page_map=day_page_map,
+                day_tokens=day_tokens,
+            )
+        except ValueError as error:
+            missing_required_text = (
+                list(error.missing_required_text)
+                if isinstance(error, _ListPdfRequiredTextError)
+                else []
+            )
+            error_code = (
+                "LIST_PDF_REQUIRED_TEXT_MISSING"
+                if missing_required_text
+                else "LIST_PDF_INSPECTION_FAILED"
+            )
+            _publish_failed_pdf_inspection(
+                source_pdf=temporary_pdf,
+                output_directory=failed_directory,
+                output_pdf=failed_pdf,
+                output_report=failure_report,
+                error_code=error_code,
+                message=str(error),
+                missing_required_text=missing_required_text,
+            )
+            raise WordGenerationError(
+                "LIST PDF QA inspection failed",
+                {
+                    "stage": "pdf-inspection",
+                    "error_code": error_code,
+                    "missing_required_text": missing_required_text,
+                    "failed_pdf": (
+                        f"{_FAILED_QA_DIRECTORY_NAME}/"
+                        f"{_FAILED_QA_PDF_NAME}"
+                    ),
+                    "failure_report": (
+                        f"{_FAILED_QA_DIRECTORY_NAME}/"
+                        f"{_FAILED_QA_REPORT_NAME}"
+                    ),
+                },
+            ) from error
         if (
             expected_page_count is not None
             and inspection.page_count != expected_page_count
@@ -725,6 +770,81 @@ def _copy_exclusive(source: Path, destination: Path) -> None:
     except BaseException:
         if created:
             destination.unlink(missing_ok=True)
+        raise
+
+
+def _failed_qa_paths(output_pdf: Path) -> tuple[Path, Path, Path]:
+    directory = output_pdf.parent / _FAILED_QA_DIRECTORY_NAME
+    return (
+        directory,
+        directory / _FAILED_QA_PDF_NAME,
+        directory / _FAILED_QA_REPORT_NAME,
+    )
+
+
+def _publish_failed_pdf_inspection(
+    *,
+    source_pdf: Path,
+    output_directory: Path,
+    output_pdf: Path,
+    output_report: Path,
+    error_code: str,
+    message: str,
+    missing_required_text: list[str],
+) -> None:
+    source_bytes = source_pdf.stat().st_size
+    source_sha256 = _sha256_file(source_pdf)
+    created: list[Path] = []
+    directory_created = False
+    try:
+        output_directory.mkdir()
+        directory_created = True
+        _copy_exclusive(source_pdf, output_pdf)
+        created.append(output_pdf)
+        if (
+            output_pdf.stat().st_size != source_bytes
+            or _sha256_file(output_pdf) != source_sha256
+        ):
+            raise ValueError("LIST failed QA PDF verification failed")
+        payload = {
+            "schema_version": 1,
+            "status": "failed",
+            "stage": "pdf-inspection",
+            "error_code": error_code,
+            "message": message,
+            "missing_required_text": missing_required_text,
+            "pdf": {
+                "relative_path": _FAILED_QA_PDF_NAME,
+                "bytes": source_bytes,
+                "sha256": source_sha256,
+            },
+        }
+        _write_json_exclusive(output_report, payload)
+        created.append(output_report)
+    except BaseException:
+        for path in reversed(created):
+            path.unlink(missing_ok=True)
+        if directory_created:
+            output_directory.rmdir()
+        raise
+
+
+def _write_json_exclusive(path: Path, payload: dict[str, Any]) -> None:
+    created = False
+    try:
+        with path.open("x", encoding="utf-8", newline="\n") as stream:
+            created = True
+            json.dump(
+                payload,
+                stream,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            stream.write("\n")
+    except BaseException:
+        if created:
+            path.unlink(missing_ok=True)
         raise
 
 
