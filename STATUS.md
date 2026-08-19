@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-19 free-first voice pilot implementation plan awaiting review
+
+- 一句話現況：使用者已核准免費優先語音試驗的書面設計並要求實作計畫；計畫已完成，但唯讀上游查證發現 SmartSub v3.7.0 會阻擋有效語音少於 3 秒且建議 5–10 秒，因此 reference 時長修正及整份計畫正等待使用者書面審閱，尚未授權實作。
+- 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`；鎖定 SmartSub v3.7.0／commit `27459b3fd0652bc5447ccf4ab30cb398014c35f7`、Windows installer與ZipVoice model／vocoder三個官方GitHub assets的bytes及SHA-256，合計 `291,164,777` bytes／`277.68 MiB`；確認本機i7-8565U、8 GB、Intel UHD 620、C槽可用38.17 GiB且未安裝／執行SmartSub；把synthetic-only安全骨架、獨立下載安裝關卡、single-cue 60–90秒試驗、Yating／ZipVoice各一次、盲測及唯一一次調整寫入 `docs/plans/2026-08-19-free-first-briefing-voice-pilot-implementation-plan.md`。
+- 下一步：使用者先確認5–10秒reference修正、Emilia訓練資料的非商用license紅旗及本計畫；精確核准後只執行Tasks 1–4的離線程式與synthetic tests，完成後再次停在三個pinned assets的下載／安裝授權前。
+- 阻塞點：ZipVoice model card標示Apache-2.0，但模型訓練資料Emilia官方條款是CC BY-NC-4.0且原始音訊權利保留，故本試驗最多只能作私人內部評估，正式商用仍受license釐清阻擋；CPU實際速度、本人相似度及A／B聽感也均未驗證。未下載、未安裝、未抽音、未啟動Yating／SmartSub、未合成、未上傳、未付款、未修改正式管線、未push；既有OSA LIST QA阻擋保持獨立。
+
 ## 2026-08-19 free-first briefing voice pilot design awaiting written review
 
 - 一句話現況：使用者已逐段口頭核准以 SmartSub + ZipVoice 為第一順位的免費本機語音試驗；正式書面規格已建立，現在停在使用者審閱關卡，尚未授權實作。
