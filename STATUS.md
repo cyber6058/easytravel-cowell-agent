@@ -1,5 +1,16 @@
 # STATUS
 
+## 2026-08-19 LIST PDF QA failure-evidence offline implementation plan review
+
+- 一句話現況：OP 已核准 failed-PDF evidence 書面規格；test-first 離線實作計畫已建立並完成自審，等待 OP review，尚未修改或執行 production／tests，Word 實機仍是獨立關卡。
+- 這次做了什麼：`git pull --ff-only` 為 `Already up to date.`，planning baseline／design commit 為 `b0a68cbc24e7677793c1f0848f9eab1a4f57b530`，working tree 原為乾淨的 `main...origin/main [ahead 78]`。重新核對核准規格、`word_qa.py` inspection／temporary publication seam、既有 synthetic adapters、exclusive-copy rollback pattern、direct tests與approval gates。
+- 計畫文件：新增 `docs/plans/2026-08-19-list-pdf-qa-failure-evidence-implementation-plan.md`，拆成 missing-token primary red→green、failed-evidence publication red→green、generic／collision／success／rollback controls、focused unchanged controls、完整離線 suite與handoff七個 tasks，規劃兩個implementation commits與一個docs handoff commit。
+- 最小實作範圍：未來只允許修改 `src/travel_briefing/word_qa.py` 與 `tests/unit/travel_briefing/test_word_qa.py`；`workflow.py`、`errors.py`、`word_list.py`、兩支PowerShell adapters、local-backend與integration tests、private master／calibration及所有success schemas皆為 unchanged controls。若需跨出範圍立即停止 review。
+- 自審：placeholder scan 0、Markdown fences 46且成對、7個tasks、16個completion checks、496 lines，`git diff --check` 通過。自審抓到並修正初稿的完整baseline SHA錯誤，並補上primary case的matched `JX820` token，確保test同時證明matched token不外洩；commands、test names、rollback seam、三個commit boundaries、no-retry與Word／push gates一致。
+- 誠實與範圍：本輪只建立計畫與本STATUS；沒有修改或執行production／tests，沒有啟動Word、讀寫private master／calibration、產生DOCX／PDF／PNG，也沒有GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish或push。`writing-plans` Skill不在可用清單，因此沿用repo既有`docs/plans` test-first格式建立等價計畫。
+- 下一步：OP review後若同意，回覆「同意此實作計畫，開始離線實作」；完整離線驗證通過後停止，新的4天Word repro仍需另一個精確一次性授權。
+- 阻塞點：離線實作計畫review gate；missing-token diagnostics與`failed-qa` artifacts尚未實作。
+
 ## 2026-08-19 LIST PDF QA failure-evidence design review
 
 - 一句話現況：OP 已選定 A 方案；當有效 Word-exported PDF 在 deterministic inspection 失敗時，未來將只在 `failed-qa/` 保存 `LIST-qa.failed.pdf` 與 hash-bound schema-1 `failure.json`，正常 PDF／PNG／index 保持不存在，完整書面規格已建立並完成自審，等待 OP review。
