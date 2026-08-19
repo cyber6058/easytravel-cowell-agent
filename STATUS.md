@@ -1,5 +1,16 @@
 # STATUS
 
+## 2026-08-19 LIST PDF required-text whitespace-normalization design review
+
+- 一句話現況：OP 已核准只讓 aggregate `required_text` 忽略 PDF layout whitespace、其餘頁面與結構 QA 維持嚴格的設計；完整書面規格已建立並等待 OP review，尚未修改 production／tests，也未執行 Word。
+- 開工與證據：`git pull --ff-only` 為 `Already up to date.`，baseline `0ccb3841622b916774df1d480ccfa9655931a449`，working tree 原為乾淨的 `main...origin/main [ahead 83]`，WINWORD 0且Word opt-in未設定。重新核對同次 failed PDF／failure report、`inspect_list_pdf()` raw substring seam、missing-token ordered-unique evidence與既有 strict continuation／day-page checks。
+- 選定方案：只在 aggregate presence comparison 的副本上用 Python Unicode whitespace semantics 移除 whitespace；PDF／DOCX／error／JSON內容不改。whitespace-only expected token 必須在開啟PDF前 fail closed；真正缺字時仍回報原始token，保留caller order與original-value dedupe。大小寫、標點、Unicode寬度、字元內容與順序都不正規化。
+- 書面規格：新增 `docs/specs/2026-08-19-list-pdf-required-text-whitespace-design.md`，固定helper語意、input validation、matching data flow、diagnostics、strict unchanged checks、兩檔implementation boundary、TDD regressions、完整離線驗證與one-shot Word獨立授權。
+- 自審：規格342行、24個headings、16個Markdown fences且成對、placeholder 0；selected design、strict-unchanged section、review gate與精確下一授權文字皆存在，`git diff --check`通過。範圍可由單一小型離線implementation plan完成，沒有schema／adapter／workflow／master變更或模糊fallback。
+- 範圍界線：本輪只允許spec、STATUS與本機documentation commit；沒有修改或執行production／tests，沒有Word、private master／calibration、DOCX／PDF／PNG、GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish或push。
+- 下一步：OP review後若同意，回覆「同意此書面規格，開始建立離線實作計畫」；該句只授權建立計畫，不授權production／test edits或Word。
+- 阻塞點：書面規格review gate；whitespace-normalization尚未實作，4天successful artifact QA仍未通過。
+
 ## 2026-08-19 LIST 4-day failure-evidence post-fix one-shot repro
 
 - 一句話現況：依 OP 精確授權只執行一次 `test_calibrated_master_renders_gate_v_day_counts[4]`；Word 成功匯出一頁 A4 PDF，但流程以 `LIST_PDF_REQUIRED_TEXT_MISSING`／`1 failed in 32.29s` fail closed。保留證據證明正文並未遺失，而是 Word 在「每人每天」與「新台幣」之間自動換行，現行 raw substring QA 因而誤判；已遵守 no-retry 停止。
