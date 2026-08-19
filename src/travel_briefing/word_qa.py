@@ -34,6 +34,10 @@ class _ListPdfRequiredTextError(ValueError):
         super().__init__("LIST QA PDF is missing required text")
 
 
+def _compact_layout_whitespace(value: str) -> str:
+    return "".join(value.split())
+
+
 @dataclass(frozen=True, slots=True)
 class ListPdfPageInspection:
     page_number: int
@@ -119,7 +123,10 @@ def inspect_list_pdf(
     if not path.is_file() or path.suffix.lower() != ".pdf":
         raise ValueError("LIST QA input must be an existing PDF")
     if not required_text or any(
-        not isinstance(value, str) or not value for value in required_text
+        not isinstance(value, str)
+        or not value
+        or not _compact_layout_whitespace(value)
+        for value in required_text
     ):
         raise ValueError("LIST PDF QA requires non-empty expected text")
     try:
@@ -167,9 +174,13 @@ def inspect_list_pdf(
                 )
             )
         whole_text = "\n".join(page_texts)
+        compact_whole_text = _compact_layout_whitespace(whole_text)
         missing_required_text = tuple(
             dict.fromkeys(
-                value for value in required_text if value not in whole_text
+                value
+                for value in required_text
+                if _compact_layout_whitespace(value)
+                not in compact_whole_text
             )
         )
         if missing_required_text:

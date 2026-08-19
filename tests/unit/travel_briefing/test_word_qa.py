@@ -223,6 +223,104 @@ def test_pdf_inspection_requires_a4_text_and_no_images(tmp_path):
     assert inspection.page_height_points == pytest.approx(841.89, abs=0.1)
 
 
+def test_pdf_inspection_matches_required_text_across_layout_whitespace(
+    tmp_path,
+):
+    pdf = tmp_path / "list.pdf"
+    required_text = (
+        "每人每天新台幣 300 元，四天共新台幣 1,200 元"
+    )
+    document = fitz.open()
+    page = document.new_page(width=595.28, height=841.89)
+    page.insert_text((72, 72), "每人每天", fontname="china-t")
+    page.insert_text(
+        (72, 90),
+        "新台幣 300 元，四天共新台幣 1,200 元",
+        fontname="china-t",
+    )
+    document.save(pdf)
+    document.close()
+
+    with fitz.open(pdf) as rendered:
+        extracted_text = rendered[0].get_text("text")
+    assert "每人每天\n新台幣 300 元" in extracted_text
+    assert required_text not in extracted_text
+    assert (
+        "每人每天新台幣300元，四天共新台幣1,200元"
+        in "".join(extracted_text.split())
+    )
+
+    inspection = inspect_list_pdf(pdf, required_text=(required_text,))
+
+    assert inspection.page_count == 1
+
+
+def test_pdf_inspection_rejects_whitespace_only_required_text(tmp_path):
+    pdf = tmp_path / "list.pdf"
+    write_pdf(pdf)
+
+    with pytest.raises(
+        ValueError, match="LIST PDF QA requires non-empty expected text"
+    ):
+        inspect_list_pdf(pdf, required_text=(" \t\n",))
+
+
+@pytest.mark.parametrize(
+    "pdf_line",
+    (
+        "新台幣 300 元，四天共新台幣 1,200",
+        "新台幣 300 元,四天共新台幣 1,200 元",
+    ),
+)
+def test_pdf_inspection_layout_whitespace_tolerance_preserves_content_strictness(
+    tmp_path,
+    pdf_line,
+):
+    pdf = tmp_path / "list.pdf"
+    required_text = (
+        "每人每天新台幣 300 元，四天共新台幣 1,200 元"
+    )
+    document = fitz.open()
+    page = document.new_page(width=595.28, height=841.89)
+    page.insert_text((72, 72), "每人每天", fontname="china-t")
+    page.insert_text((72, 90), pdf_line, fontname="china-t")
+    document.save(pdf)
+    document.close()
+
+    with pytest.raises(
+        ValueError, match="LIST QA PDF is missing required text"
+    ) as captured:
+        inspect_list_pdf(pdf, required_text=(required_text,))
+
+    assert captured.value.missing_required_text == (required_text,)
+
+
+def test_pdf_inspection_does_not_apply_aggregate_whitespace_tolerance_to_continuation(
+    tmp_path,
+):
+    pdf = tmp_path / "list.pdf"
+    document = fitz.open()
+    first_page = document.new_page(width=595.28, height=841.89)
+    first_page.insert_text(
+        (72, 72),
+        "GROUPID DATE ROUTE HOTEL BREAKFAST LUNCH DINNER",
+    )
+    second_page = document.new_page(width=595.28, height=841.89)
+    second_page.insert_text(
+        (72, 72),
+        "GROUP ID DATE ROUTE HOTEL BREAKFAST LUNCH DINNER",
+    )
+    document.save(pdf)
+    document.close()
+
+    with pytest.raises(ValueError, match="continuation"):
+        inspect_list_pdf(
+            pdf,
+            required_text=("GROUPID",),
+            continuation_required_text=("GROUPID", "DATE"),
+        )
+
+
 def test_pdf_inspection_reports_missing_required_text_once_in_input_order(
     tmp_path,
 ):
