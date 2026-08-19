@@ -2,13 +2,16 @@
 
 日期：2026-08-19
 
-狀態：書面規格已由 OP 核准；本計畫等待 OP review，尚未開始 production／test
-實作。Word 實機 repro 仍是獨立關卡。
+狀態：書面規格與本計畫均已由 OP 核准；離線實作已完成並通過完整驗證。
+Word 實機 repro 仍是未授權的獨立關卡。
 
 依據：
 `docs/specs/2026-08-19-list-pdf-qa-failure-evidence-design.md`
 
 設計基線 commit：`b0a68cbc24e7677793c1f0848f9eab1a4f57b530`
+
+Implementation baseline commit：
+`3ead9bab2236abcd76f6298dad2d145a2537d154`
 
 ## 1. 目標與已知證據
 
@@ -85,12 +88,15 @@ schema 或 workflow signature，立即停止並回到書面設計 review；不�
 
 ## 3. Implementation commit map
 
-預計建立三個小 commit：
+已建立兩個 implementation commits；第三個 handoff commit 由本文件與 STATUS
+更新完成：
 
-1. `feat(briefing): report missing LIST PDF tokens`
+1. `a632c9607e43911d17080cb5e0d38a073ac4fe86`
+   `feat(briefing): report missing LIST PDF tokens`
    - missing-token primary test；
    - private typed `ValueError` 與 ordered-unique token calculation。
-2. `feat(briefing): preserve failed LIST PDF QA evidence`
+2. `09897a8b4bbcb65e80296682b9649e278fcbc669`
+   `feat(briefing): preserve failed LIST PDF QA evidence`
    - failure publication、generic failure、collision、success 與 rollback tests；
    - preflight、schema-1 report、exclusive publication與 outer error envelope。
 3. `docs: record LIST PDF failure evidence handoff`
@@ -465,32 +471,59 @@ outputs與changed-file list。所有數字由命令輸出取得，不心算。
 下一步只可建議一個新的精確 4 天 one-shot Word repro authorization。未獲新授權前，
 不得因離線 tests全綠而執行 Word、讀 private master或產生新的 QA artifacts。
 
-## 4. Completion checklist
+## 4. Actual offline verification
 
-- [ ] primary missing-token test先紅後綠；
-- [ ] missing tokens ordered、unique且不包含 matched/full PDF text；
-- [ ] primary failed-evidence publication test先紅後綠；
-- [ ] schema-1 JSON exact且bytes／SHA-256綁定failed PDF；
-- [ ] token／generic inspection failures使用正確 safe inner codes；
-- [ ] outer error維持 `WORD_GENERATION_FAILED` 與relative paths；
-- [ ] normal outputs在failure path保持不存在；
-- [ ] existing `failed-qa` 在adapter前fail closed且sentinel不變；
-- [ ] rollback只清理同次fresh paths；
-- [ ] success path不建立failed directory且既有schema/hash不變；
-- [ ] `test_word_qa.py`與direct unchanged controls全綠；
-- [ ] complete offline suite、compile、diff與scope gates全綠；
-- [ ] WINWORD before／after一致且Word opt-in未設定；
-- [ ] private master、calibration、workflow、errors、PowerShell與integration test未修改；
-- [ ] 本機 commits與STATUS handoff完成；
-- [ ] 未 push、未跑Word、未使用任何external integration。
+### Primary red-to-green evidence
 
-## 5. Review gate
+- Missing-token primary red：
+  `AttributeError: 'ValueError' object has no attribute 'missing_required_text'`。
+- Typed missing-token green：primary `1 passed`；existing inspection controls
+  `5 passed`。
+- Failed-evidence publication primary red：
+  `_ListPdfRequiredTextError: LIST QA PDF is missing required text`，證明 current
+  code 仍直接拋 inspection error且沒有 retained evidence。
+- Failed-evidence primary green：`1 passed`。
+- Token／generic／collision／rollback focused controls：`5 passed`。
+- 完整 `test_word_qa.py`：`24 passed in 1.58s`。
 
-本計畫必須由 OP review 後才能開始修改 production／tests。核准本計畫只授權上述
-離線實作與本機 commits，不授權 Word 或 push。
+### Unchanged controls and complete suite
 
-精確下一個授權句為：
+- `test_local_backend.py`、`test_word_list.py`、`test_windows_word.py`：
+  `114 passed in 1.72s`。
+- 完整離線 suite：`589 passed, 8 skipped in 19.81s`。
+- WINWORD before／after：`0 / 0`；Word opt-in未設定。
+- `compileall` exit 0；`git diff --check` exit 0。
+- Implementation baseline至兩個production commits的changed files只有：
+  `src/travel_briefing/word_qa.py`與
+  `tests/unit/travel_briefing/test_word_qa.py`。
+- 所有列出的unchanged controls diff為零；external integration scan clean。
+
+## 5. Completion checklist
+
+- [x] primary missing-token test先紅後綠；
+- [x] missing tokens ordered、unique且不包含 matched/full PDF text；
+- [x] primary failed-evidence publication test先紅後綠；
+- [x] schema-1 JSON exact且bytes／SHA-256綁定failed PDF；
+- [x] token／generic inspection failures使用正確 safe inner codes；
+- [x] outer error維持 `WORD_GENERATION_FAILED` 與relative paths；
+- [x] normal outputs在failure path保持不存在；
+- [x] existing `failed-qa` 在adapter前fail closed且sentinel不變；
+- [x] rollback只清理同次fresh paths；
+- [x] success path不建立failed directory且既有schema/hash不變；
+- [x] `test_word_qa.py`與direct unchanged controls全綠；
+- [x] complete offline suite、compile、diff與scope gates全綠；
+- [x] WINWORD before／after一致且Word opt-in未設定；
+- [x] private master、calibration、workflow、errors、PowerShell與integration test未修改；
+- [x] 本機 commits與STATUS handoff完成；
+- [x] 未 push、未跑Word、未使用任何external integration。
+
+## 6. Next gate
+
+本計畫的離線實作已完成。離線綠燈不授權 Word 或 push，也不能判定上一個已刪除的
+實機 PDF 缺少哪個 token。
+
+若 OP 要進行新的實機驗證，精確下一個授權句為：
 
 ```text
-同意此實作計畫，開始離線實作
+同意只執行一次 4 天 post-fix Word repro；不跑其他天數；若成功，完成同次 DOCX／PDF／PNG QA；成功或失敗都不重試。
 ```

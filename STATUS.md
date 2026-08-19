@@ -1,5 +1,18 @@
 # STATUS
 
+## 2026-08-19 LIST PDF QA failure-evidence offline implementation handoff
+
+- 一句話現況：LIST PDF QA 已能以ordered-unique list指出缺少的required tokens；有效Word-exported PDF若在deterministic inspection失敗，會exclusive保存為`failed-qa/LIST-qa.failed.pdf`與hash-bound schema-1 `failure.json`，正常PDF／PNG／index保持不存在。離線實作與完整驗證已完成，但尚未重新執行Word實機repro。
+- 開工與範圍：`git pull --ff-only`為`Already up to date.`，implementation baseline `3ead9bab2236abcd76f6298dad2d145a2537d154`，working tree乾淨，WINWORD 0，`RUN_BRIEFING_WORD_INTEGRATION`未設定。實際production／test changes精確只有`src/travel_briefing/word_qa.py`與`tests/unit/travel_briefing/test_word_qa.py`。
+- Missing-token TDD：primary red原文為`AttributeError: 'ValueError' object has no attribute 'missing_required_text'`；加入private typed `ValueError`與caller-order dedupe後，primary `1 passed`、existing inspection controls `5 passed`。matched tokens與完整PDF text不進入錯誤內容。
+- Failure-evidence TDD：primary red原文為`_ListPdfRequiredTextError: LIST QA PDF is missing required text`，證明temporary PDF仍會消失；加入preflight exclusive marker、token／generic safe inner codes、schema-1 report、copied PDF bytes／SHA-256驗證、exclusive JSON completion marker、fresh-path rollback與existing `WORD_GENERATION_FAILED` envelope後，primary `1 passed`。五個token／generic／collision／rollback focused controls全綠，完整`test_word_qa.py`為`24 passed in 1.58s`。
+- Safety contracts：existing `failed-qa`會在adapter job前阻擋且不改sentinel；failure publication失敗只移除同次fresh PDF／report／directory，不使用recursive delete；success path不建立failed directory。Unknown Word result、invalid report、missing／empty PDF、byte mismatch、pdftoppm與successful publication paths不進入新catch。
+- Commits：`a632c9607e43911d17080cb5e0d38a073ac4fe86`（missing tokens）與`09897a8b4bbcb65e80296682b9649e278fcbc669`（failed evidence）。`workflow.py`、`errors.py`、`word_list.py`、PowerShell adapters、local-backend與integration tests、private master／calibration及successful schemas全部diff為零。
+- 完整驗證：direct unchanged controls原文`114 passed in 1.72s`；完整suite原文`589 passed, 8 skipped in 19.81s`；WINWORD `0 / 0`且opt-in未設定；`compileall` exit 0、`git diff --check` exit 0、external integration scan clean。
+- 誠實與範圍：沒有啟動Word、讀寫private master／calibration、產生實機DOCX／PDF／PNG、GET、JMA、Yating、ffmpeg、LINE、Cowell、deploy、publish或push。離線synthetic綠燈不能判定上一份已刪PDF缺少哪個token，也不能宣稱4天實機路徑已修好。
+- 下一步：若OP要實機驗證，回覆「同意只執行一次 4 天 post-fix Word repro；不跑其他天數；若成功，完成同次 DOCX／PDF／PNG QA；成功或失敗都不重試。」新的failed run會保留PDF與failure.json供唯讀診斷，但同一授權仍不重試。
+- 阻塞點：新的4天Word artifact與實際missing-token evidence尚未生成；等待另一個精確one-shot Word授權。
+
 ## 2026-08-19 LIST PDF QA failure-evidence offline implementation plan review
 
 - 一句話現況：OP 已核准 failed-PDF evidence 書面規格；test-first 離線實作計畫已建立並完成自審，等待 OP review，尚未修改或執行 production／tests，Word 實機仍是獨立關卡。
