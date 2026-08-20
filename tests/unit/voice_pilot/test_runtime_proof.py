@@ -16,11 +16,14 @@ import pytest
 import scripts.voice_pilot.runtime_proof as runtime_proof_module
 from scripts.voice_pilot.runtime_proof import (
     PINNED_RUNTIME,
+    PINNED_RUNTIME_RECOVERY,
     RuntimeAssetSpec,
     RuntimeAdapters,
     RuntimePreparation,
     RuntimeProof,
     RuntimeProofError,
+    RuntimeRecoveryProof,
+    RuntimeRecoverySpec,
     SignatureRecord,
     build_authenticode_probe_command,
     build_archive_plan,
@@ -28,10 +31,14 @@ from scripts.voice_pilot.runtime_proof import (
     main as runtime_main,
     prepare_runtime,
     parse_authenticode_probe_json,
+    prepare_runtime_recovery,
+    resume_runtime_proof,
     run_runtime_proof,
     safe_extract_runtime,
+    validate_runtime_recovery_paths,
     validate_runtime_paths,
     verify_archive_identity,
+    verify_runtime_recovery,
     verify_runtime_proof,
 )
 
@@ -209,6 +216,256 @@ def _prepare_runtime_for_proof(tmp_path, *, include_version=False, status="Valid
     )
 
 
+def _prepare_failed_promoted_unsigned_parent(tmp_path):
+    repo_root = tmp_path / "repo"
+    per_user_root = tmp_path / "private"
+    repo_root.mkdir(parents=True)
+    archive = per_user_root / "downloads" / "runtime.tar.bz2"
+    archive.parent.mkdir(parents=True)
+    members = [
+        (_directory_member("runtime"), None),
+        (_directory_member("runtime/bin"), None),
+        (_directory_member("runtime/lib"), None),
+        _file_member("runtime/bin/sherpa-onnx-offline-tts.exe", b"mandatory"),
+        _file_member("runtime/bin/sherpa-onnx-version.exe", b"version"),
+        *[
+            _file_member(f"runtime/lib/runtime-{index}.dll", f"dll-{index}".encode())
+            for index in range(6)
+        ],
+    ]
+    _write_synthetic_archive(archive, members)
+    staging = per_user_root / "runtime-staging" / "run"
+    runtime = per_user_root / "runtime" / "sherpa-onnx" / "1.13.6"
+    parent = (
+        per_user_root
+        / "proofs"
+        / "runtime-v1.13.6-20260820T014555Z-b6b2c9b9"
+    )
+    staging.parent.mkdir()
+    runtime.parent.mkdir(parents=True)
+    parent.parent.mkdir()
+    preparation = prepare_runtime(
+        archive,
+        spec=_spec_for_archive(archive),
+        staging_dir=staging,
+        runtime_dir=runtime,
+        proof_dir=parent,
+        signature_probe=lambda path: _signature(
+            "NotSigned", message="synthetic NotSigned"
+        ),
+    )
+    assert preparation.state == "BLOCKED_UNSIGNED"
+
+    proof = run_runtime_proof(
+        parent,
+        runner=lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("runner must not execute")
+        ),
+        process_probe=lambda: (_ for _ in ()).throw(
+            OSError("synthetic preflight failure")
+        ),
+        listener_probe=lambda: (_ for _ in ()).throw(
+            AssertionError("listener must not execute after process failure")
+        ),
+        event_probe=lambda *args: (_ for _ in ()).throw(
+            AssertionError("event probe must not execute")
+        ),
+        runtime_dir=runtime,
+        ack_not_signed_runtime_once=True,
+        ack_outer_sha256=preparation.verified_archive.sha256,
+        ack_load_inventory_sha256=preparation.inventory.sha256,
+        ack_executable_sha256=preparation.inventory.mandatory_executable_sha256,
+    )
+    document = json.loads((parent / "runtime-proof.json").read_text("utf-8"))
+    assert proof.state == "FAILED"
+    assert proof.safe_code == "RUNTIME_POSTFLIGHT_DIRTY"
+    assert document["preparation"] == {
+        "exit_code": 0,
+        "initial_state": "BLOCKED_UNSIGNED",
+        "promoted": True,
+        "safe_code": None,
+        "state": "READY_TO_EXECUTE",
+    }
+    assert document["execution"]["authorization"] == "unsigned-exact-hash"
+    assert document["execution"]["commands"] == []
+    spec = RuntimeRecoverySpec(
+        parent_directory_name=parent.name,
+        parent_evidence_id=document["evidence_id"],
+        parent_manifest_sha256=document["manifest_sha256"],
+        parent_proof_file_sha256=hashlib.sha256(
+            (parent / "runtime-proof.json").read_bytes()
+        ).hexdigest(),
+        outer_sha256=document["asset"]["sha256"],
+        load_inventory_sha256=document["inventory"]["sha256"],
+        expected_load_candidate_count=8,
+        required_signature_status="NotSigned",
+        version_executable_sha256=next(
+            row["sha256"]
+            for row in document["inventory"]["rows"]
+            if row["relative_path"].endswith("sherpa-onnx-version.exe")
+        ),
+        mandatory_executable_sha256=document["inventory"][
+            "mandatory_executable_sha256"
+        ],
+    )
+    return SimpleNamespace(
+        archive=archive,
+        parent=parent,
+        per_user_root=per_user_root,
+        preparation=preparation,
+        repo_root=repo_root,
+        runtime=runtime,
+        spec=spec,
+    )
+
+
+def _prepare_recovery_child(fixture, *, child=None):
+    recovery = child or (
+        fixture.parent.parent / "runtime-recovery-v1.13.6-synthetic"
+    )
+    proof = prepare_runtime_recovery(
+        fixture.parent,
+        recovery,
+        spec=fixture.spec,
+        ack_parent_evidence_id=fixture.spec.parent_evidence_id,
+        ack_parent_manifest_sha256=fixture.spec.parent_manifest_sha256,
+        ack_parent_proof_file_sha256=fixture.spec.parent_proof_file_sha256,
+        ack_outer_sha256=fixture.spec.outer_sha256,
+        ack_load_inventory_sha256=fixture.spec.load_inventory_sha256,
+        ack_executable_sha256=fixture.spec.mandatory_executable_sha256,
+    )
+    return recovery, proof
+
+
+def _synthetically_consume_recovery(fixture, *, state="RECOVERY_EXECUTING", commands=None):
+    child, ready = _prepare_recovery_child(fixture)
+    path = child / "runtime-recovery-proof.json"
+    document = json.loads(path.read_text("utf-8"))
+    consumption = {
+        "schema": "easytravel.sherpa-runtime-recovery-consumption.v1",
+        "consumption_id": "00000000-0000-4000-8000-000000000001",
+        "created_utc": "2026-08-20T00:00:00+00:00",
+        "preconsume": {
+            "evidence_id": ready.evidence_id,
+            "manifest_sha256": ready.manifest_sha256,
+            "proof_file_sha256": ready.proof_file_sha256,
+        },
+    }
+    runtime_proof_module._write_new_recovery_consumption(child, consumption)
+    consumption_sha256 = hashlib.sha256(
+        (child / "runtime-recovery-consumption.json").read_bytes()
+    ).hexdigest()
+    document.pop("manifest_sha256")
+    document["state"] = state
+    document["safe_code"] = (
+        None
+        if state == "PASSED"
+        else "RUNTIME_RECOVERY_ALREADY_USED"
+        if state == "RECOVERY_EXECUTING"
+        else "RUNTIME_HELP_NONZERO"
+    )
+    document["execution"] = {
+        "authorization": {
+            "mode": "runtime-recovery-exact-hash-once",
+            "consumption_proof_file_sha256": consumption_sha256,
+            "acks": {
+                "runtime_recovery_once": True,
+                "parent_evidence_id": fixture.spec.parent_evidence_id,
+                "parent_manifest_sha256": fixture.spec.parent_manifest_sha256,
+                "parent_proof_file_sha256": fixture.spec.parent_proof_file_sha256,
+                "recovery_evidence_id": ready.evidence_id,
+                "recovery_manifest_sha256": ready.manifest_sha256,
+                "recovery_proof_file_sha256": ready.proof_file_sha256,
+                "outer_sha256": fixture.spec.outer_sha256,
+                "load_inventory_sha256": fixture.spec.load_inventory_sha256,
+                "version_executable_sha256": fixture.spec.version_executable_sha256,
+                "executable_sha256": fixture.spec.mandatory_executable_sha256,
+            },
+        },
+        "commands": commands or [],
+        "environment_delta": {
+            "path_prepend": [
+                str(fixture.runtime / "bin"),
+                str(fixture.runtime / "lib"),
+            ]
+        },
+    }
+    runtime_proof_module._replace_recovery_evidence(child, document)
+    return child
+
+
+def _resume_kwargs(fixture, child, ready, *, runner=None, process_probe=None,
+                   listener_probe=None, event_probe=None):
+    process_values = iter([(), ()])
+    listener_values = iter([(), ()])
+
+    def default_runner(argv, **kwargs):
+        if len(argv) == 1:
+            return SimpleNamespace(returncode=0, stdout=b"v1.13.6", stderr=b"")
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(
+                b"provider num-threads zipvoice-encoder zipvoice-decoder "
+                b"reference-audio reference-text output-filename"
+            ),
+            stderr=b"",
+        )
+
+    return {
+        "parent_proof_dir": fixture.parent,
+        "recovery_proof_dir": child,
+        "runtime_dir": fixture.runtime,
+        "spec": fixture.spec,
+        "runner": runner or default_runner,
+        "process_probe": process_probe or (lambda: next(process_values)),
+        "listener_probe": listener_probe or (lambda: next(listener_values)),
+        "event_probe": event_probe or (lambda start, end: ()),
+        "ack_runtime_recovery_once": True,
+        "ack_parent_evidence_id": fixture.spec.parent_evidence_id,
+        "ack_parent_manifest_sha256": fixture.spec.parent_manifest_sha256,
+        "ack_parent_proof_file_sha256": fixture.spec.parent_proof_file_sha256,
+        "ack_recovery_evidence_id": ready.evidence_id,
+        "ack_recovery_manifest_sha256": ready.manifest_sha256,
+        "ack_recovery_proof_file_sha256": ready.proof_file_sha256,
+        "ack_outer_sha256": fixture.spec.outer_sha256,
+        "ack_load_inventory_sha256": fixture.spec.load_inventory_sha256,
+        "ack_version_executable_sha256": fixture.spec.version_executable_sha256,
+        "ack_executable_sha256": fixture.spec.mandatory_executable_sha256,
+    }
+
+
+def _recovery_adapters(fixture, *, runner=None, process_probe=None,
+                       listener_probe=None, event_probe=None):
+    process_values = iter([(), ()])
+    listener_values = iter([(), ()])
+
+    def default_runner(argv, **kwargs):
+        if len(argv) == 1:
+            return SimpleNamespace(returncode=0, stdout=b"v1.13.6", stderr=b"")
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(
+                b"provider num-threads zipvoice-encoder zipvoice-decoder "
+                b"reference-audio reference-text output-filename"
+            ),
+            stderr=b"",
+        )
+
+    return RuntimeAdapters(
+        asset_spec=_spec_for_archive(fixture.archive),
+        recovery_spec=fixture.spec,
+        repo_root=fixture.repo_root,
+        per_user_root=fixture.per_user_root,
+        signature_probe=lambda path: (_ for _ in ()).throw(
+            AssertionError("recovery CLI must not run signature probe")
+        ),
+        runner=runner or default_runner,
+        process_probe=process_probe or (lambda: next(process_values)),
+        listener_probe=listener_probe or (lambda: next(listener_values)),
+        event_probe=event_probe or (lambda start, end: ()),
+    )
+
+
 class _SyntheticTarView:
     def __init__(self, members):
         self._members = members
@@ -238,6 +495,1137 @@ def test_pinned_runtime_asset_matches_approved_contract():
         PINNED_RUNTIME.expected_root
         == "sherpa-onnx-v1.13.6-win-x64-shared-MT-Release"
     )
+
+
+def test_pinned_runtime_recovery_matches_frozen_parent_contract():
+    assert PINNED_RUNTIME_RECOVERY == RuntimeRecoverySpec(
+        parent_directory_name="runtime-v1.13.6-20260820T014555Z-b6b2c9b9",
+        parent_evidence_id="a3ba6b11-5b57-46db-b5e7-113c36e9d964",
+        parent_manifest_sha256=(
+            "e841a4f6ee1aa24bb7bd78c8b57ac88336f84512b175bbd44066f099829d2123"
+        ),
+        parent_proof_file_sha256=(
+            "3e4e1fdec33d11e60096a58e8b35f12766ffeeab620582961634af27c49f06e9"
+        ),
+        outer_sha256=(
+            "4a296ee44c0997ab9fd4d30d7196446ab77e0ef34f0ce66b5e01b3339fce4613"
+        ),
+        load_inventory_sha256=(
+            "d3d440c0345eee6e6dae680c07036c830896b5bbfc98f4774f83b243cc05786f"
+        ),
+        expected_load_candidate_count=8,
+        required_signature_status="NotSigned",
+        version_executable_sha256=(
+            "7cb2de6405de878417635845278b1be01413650b36e64c30df5314128f109869"
+        ),
+        mandatory_executable_sha256=(
+            "a62495554c6953d523626cfba0944be353857c9840b0e513170d45ba0e76a9f0"
+        ),
+    )
+
+
+def test_recovery_paths_require_fixed_per_user_parent_runtime_and_new_child(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child = fixture.parent.parent / "runtime-recovery-v1.13.6-synthetic"
+
+    validate_runtime_recovery_paths(
+        fixture.repo_root,
+        fixture.per_user_root,
+        fixture.parent,
+        child,
+        fixture.runtime,
+        recovery_must_exist=False,
+    )
+    child.mkdir()
+    validate_runtime_recovery_paths(
+        fixture.repo_root,
+        fixture.per_user_root,
+        fixture.parent,
+        child,
+        fixture.runtime,
+        recovery_must_exist=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["relative", "inside-repo", "outside-root", "existing-new", "missing-existing"],
+)
+def test_recovery_paths_reject_relative_repo_outside_root_existing_or_reparse_paths(
+    tmp_path, case
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path / case)
+    child = fixture.parent.parent / "runtime-recovery-v1.13.6-synthetic"
+    must_exist = False
+    if case == "relative":
+        child = Path("relative-child")
+    elif case == "inside-repo":
+        child = fixture.repo_root / "child"
+    elif case == "outside-root":
+        child = tmp_path / "outside-child"
+    elif case == "existing-new":
+        child.mkdir()
+    else:
+        must_exist = True
+
+    with pytest.raises(RuntimeProofError) as failure:
+        validate_runtime_recovery_paths(
+            fixture.repo_root,
+            fixture.per_user_root,
+            fixture.parent,
+            child,
+            fixture.runtime,
+            recovery_must_exist=must_exist,
+        )
+
+    assert failure.value.code in {
+        "RUNTIME_PATH_INSIDE_REPOSITORY",
+        "RUNTIME_PATH_OUTSIDE_PER_USER_ROOT",
+        "RUNTIME_OUTPUT_EXISTS",
+    }
+
+
+def test_parent_eligibility_accepts_only_failed_promoted_unsigned_empty_command_parent(
+    tmp_path,
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+
+    document = runtime_proof_module._read_parent_for_recovery(
+        fixture.parent, fixture.runtime, spec=fixture.spec
+    )
+
+    assert document["state"] == "FAILED"
+    assert document["safe_code"] == "RUNTIME_POSTFLIGHT_DIRTY"
+    assert document["execution"]["commands"] == []
+    assert len(document["inventory"]["rows"]) == 8
+
+
+@pytest.mark.parametrize(
+    ("field_path", "replacement"),
+    [
+        (("evidence_id",), "wrong"),
+        (("state",), "PASSED"),
+        (("safe_code",), "RUNTIME_HELP_NONZERO"),
+        (("preparation", "promoted"), False),
+        (("execution", "authorization"), "valid-signature"),
+        (("execution", "commands"), [{}]),
+        (("asset", "sha256"), "0" * 64),
+        (("inventory", "sha256"), "0" * 64),
+        (("inventory", "mandatory_executable_sha256"), "0" * 64),
+    ],
+)
+def test_parent_eligibility_rejects_identity_state_auth_command_or_hash_mismatch(
+    tmp_path, field_path, replacement
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    path = fixture.parent / "runtime-proof.json"
+    document = json.loads(path.read_text("utf-8"))
+    target = document
+    for field in field_path[:-1]:
+        target = target[field]
+    target[field_path[-1]] = replacement
+    document.pop("manifest_sha256", None)
+    document["manifest_sha256"] = hashlib.sha256(
+        json.dumps(
+            document, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()
+    path.write_text(
+        json.dumps(document, sort_keys=True, separators=(",", ":")), "utf-8"
+    )
+    changed_spec = RuntimeRecoverySpec(
+        **{
+            **fixture.spec.__dict__,
+            "parent_manifest_sha256": document["manifest_sha256"],
+            "parent_proof_file_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+    )
+
+    with pytest.raises(RuntimeProofError) as failure:
+        runtime_proof_module._read_parent_for_recovery(
+            fixture.parent, fixture.runtime, spec=changed_spec
+        )
+
+    assert failure.value.code == "RUNTIME_RECOVERY_PARENT_INELIGIBLE"
+
+
+@pytest.mark.parametrize("tamper_kind", ["archive", "runtime", "inventory"])
+def test_parent_eligibility_rejects_archive_runtime_inventory_or_load_set_tampering(
+    tmp_path, tamper_kind
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    if tamper_kind == "archive":
+        fixture.archive.write_bytes(b"tampered archive")
+    elif tamper_kind == "runtime":
+        (fixture.runtime / "lib" / "runtime-0.dll").write_bytes(b"tampered runtime")
+    else:
+        (fixture.runtime / "lib" / "extra.dll").write_bytes(b"extra")
+
+    with pytest.raises(RuntimeProofError) as failure:
+        runtime_proof_module._read_parent_for_recovery(
+            fixture.parent, fixture.runtime, spec=fixture.spec
+        )
+
+    assert failure.value.code == "RUNTIME_EVIDENCE_TAMPERED"
+
+
+@pytest.mark.parametrize("tamper_kind", ["count", "signature", "version", "mandatory"])
+def test_parent_eligibility_requires_exact_eight_notsigned_rows_and_fixed_executables(
+    tmp_path, tamper_kind
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    values = fixture.spec.__dict__.copy()
+    if tamper_kind == "count":
+        values["expected_load_candidate_count"] = 7
+    elif tamper_kind == "signature":
+        values["required_signature_status"] = "Valid"
+    elif tamper_kind == "version":
+        values["version_executable_sha256"] = "0" * 64
+    else:
+        values["mandatory_executable_sha256"] = "0" * 64
+
+    with pytest.raises(RuntimeProofError) as failure:
+        runtime_proof_module._read_parent_for_recovery(
+            fixture.parent,
+            fixture.runtime,
+            spec=RuntimeRecoverySpec(**values),
+        )
+
+    assert failure.value.code == "RUNTIME_RECOVERY_PARENT_INELIGIBLE"
+
+
+def test_prepare_recovery_creates_exclusive_ready_child_after_all_checks(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+
+    child, proof = _prepare_recovery_child(fixture)
+
+    assert isinstance(proof, RuntimeRecoveryProof)
+    assert proof.state == "RECOVERY_READY"
+    assert proof.safe_code is None
+    assert proof.exit_code == 0
+    assert proof.proof_dir == child.resolve(strict=True)
+    assert proof.proof_file_sha256 == hashlib.sha256(
+        (child / "runtime-recovery-proof.json").read_bytes()
+    ).hexdigest()
+
+
+def test_prepare_recovery_binds_parent_archive_inventory_version_and_mandatory_hashes(
+    tmp_path,
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, proof = _prepare_recovery_child(fixture)
+    document = json.loads((child / "runtime-recovery-proof.json").read_text("utf-8"))
+
+    assert document["parent"]["directory_name"] == fixture.parent.name
+    assert document["parent"]["evidence_id"] == fixture.spec.parent_evidence_id
+    assert document["parent"]["manifest_sha256"] == fixture.spec.parent_manifest_sha256
+    assert document["parent"]["proof_file_sha256"] == fixture.spec.parent_proof_file_sha256
+    assert document["asset"]["sha256"] == fixture.spec.outer_sha256
+    assert document["inventory"]["sha256"] == fixture.spec.load_inventory_sha256
+    assert document["inventory"]["version_executable_sha256"] == (
+        fixture.spec.version_executable_sha256
+    )
+    assert document["inventory"]["mandatory_executable_sha256"] == (
+        fixture.spec.mandatory_executable_sha256
+    )
+    assert document["manifest_sha256"] == proof.manifest_sha256
+
+
+def test_prepare_recovery_records_full_inventory_and_zero_execution(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, _ = _prepare_recovery_child(fixture)
+    document = json.loads((child / "runtime-recovery-proof.json").read_text("utf-8"))
+
+    assert document["schema"] == "easytravel.sherpa-runtime-recovery-proof.v1"
+    assert document["reason"] == "ZERO_RESULT_PROBE_SERIALIZATION_FIXED"
+    assert document["execution"] is None
+    assert document["state"] == "RECOVERY_READY"
+    assert document["safe_code"] is None
+    assert len(document["inventory"]["rows"]) == 8
+    assert document["parent"]["eligibility"] == {
+        "authorization": "unsigned-exact-hash",
+        "commands": 0,
+        "preparation_initial_state": "BLOCKED_UNSIGNED",
+        "preparation_state": "READY_TO_EXECUTE",
+        "promoted": True,
+        "safe_code": "RUNTIME_POSTFLIGHT_DIRTY",
+        "signature_status": "NotSigned",
+        "state": "FAILED",
+    }
+
+
+def test_prepare_recovery_never_creates_consumption_record(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, _ = _prepare_recovery_child(fixture)
+
+    assert not (child / "runtime-recovery-consumption.json").exists()
+
+
+def test_prepare_recovery_preserves_parent_and_runtime_byte_for_byte(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    parent_before = (fixture.parent / "runtime-proof.json").read_bytes()
+    runtime_before = {
+        path.relative_to(fixture.runtime): path.read_bytes()
+        for path in fixture.runtime.rglob("*")
+        if path.is_file()
+    }
+
+    _prepare_recovery_child(fixture)
+
+    assert (fixture.parent / "runtime-proof.json").read_bytes() == parent_before
+    assert {
+        path.relative_to(fixture.runtime): path.read_bytes()
+        for path in fixture.runtime.rglob("*")
+        if path.is_file()
+    } == runtime_before
+
+
+@pytest.mark.parametrize(
+    "ack_name",
+    [
+        "ack_parent_evidence_id",
+        "ack_parent_manifest_sha256",
+        "ack_parent_proof_file_sha256",
+        "ack_outer_sha256",
+        "ack_load_inventory_sha256",
+        "ack_executable_sha256",
+    ],
+)
+def test_prepare_recovery_rejects_each_ack_mismatch_before_child_creation(
+    tmp_path, ack_name
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child = fixture.parent.parent / "runtime-recovery-v1.13.6-synthetic"
+    acks = {
+        "ack_parent_evidence_id": fixture.spec.parent_evidence_id,
+        "ack_parent_manifest_sha256": fixture.spec.parent_manifest_sha256,
+        "ack_parent_proof_file_sha256": fixture.spec.parent_proof_file_sha256,
+        "ack_outer_sha256": fixture.spec.outer_sha256,
+        "ack_load_inventory_sha256": fixture.spec.load_inventory_sha256,
+        "ack_executable_sha256": fixture.spec.mandatory_executable_sha256,
+    }
+    acks[ack_name] = "wrong"
+
+    with pytest.raises(RuntimeProofError) as failure:
+        prepare_runtime_recovery(
+            fixture.parent, child, spec=fixture.spec, **acks
+        )
+
+    assert failure.value.code == "RUNTIME_ACK_MISMATCH"
+    assert not child.exists()
+
+
+def test_prepare_recovery_refuses_existing_child_or_temporary_evidence_collision(
+    tmp_path,
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child = fixture.parent.parent / "runtime-recovery-v1.13.6-synthetic"
+    child.mkdir()
+    (child / "runtime-recovery-proof.json.tmp").write_text("partial", "utf-8")
+
+    with pytest.raises(RuntimeProofError) as failure:
+        _prepare_recovery_child(fixture, child=child)
+
+    assert failure.value.code == "RUNTIME_OUTPUT_EXISTS"
+    assert (child / "runtime-recovery-proof.json.tmp").read_text("utf-8") == "partial"
+
+
+def test_prepare_recovery_write_failure_never_reuses_partial_child(
+    tmp_path, monkeypatch
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child = fixture.parent.parent / "runtime-recovery-v1.13.6-synthetic"
+    real_writer = runtime_proof_module._write_new_recovery_evidence
+    monkeypatch.setattr(
+        runtime_proof_module,
+        "_write_new_recovery_evidence",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("synthetic write")),
+    )
+
+    with pytest.raises(RuntimeProofError):
+        _prepare_recovery_child(fixture, child=child)
+    assert child.is_dir()
+    monkeypatch.setattr(runtime_proof_module, "_write_new_recovery_evidence", real_writer)
+
+    with pytest.raises(RuntimeProofError) as failure:
+        _prepare_recovery_child(fixture, child=child)
+
+    assert failure.value.code == "RUNTIME_OUTPUT_EXISTS"
+
+
+def test_verify_ready_recovery_is_read_only_and_recomputes_complete_binding(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    before = {
+        path: path.read_bytes()
+        for root in (fixture.parent, fixture.runtime, child)
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+
+    verified = verify_runtime_recovery(child, spec=fixture.spec)
+
+    after = {path: path.read_bytes() for path in before}
+    assert verified == ready
+    assert after == before
+
+
+@pytest.mark.parametrize("tamper_kind", ["manifest", "file"])
+def test_verify_recovery_rejects_child_manifest_or_file_tampering(
+    tmp_path, tamper_kind
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, _ = _prepare_recovery_child(fixture)
+    path = child / "runtime-recovery-proof.json"
+    if tamper_kind == "manifest":
+        document = json.loads(path.read_text("utf-8"))
+        document["reason"] = "tampered"
+        path.write_text(json.dumps(document), "utf-8")
+    else:
+        path.write_bytes(path.read_bytes() + b" ")
+
+    with pytest.raises(RuntimeProofError) as failure:
+        verify_runtime_recovery(child, spec=fixture.spec)
+
+    assert failure.value.code == "RUNTIME_EVIDENCE_TAMPERED"
+
+
+def test_verify_recovery_rejects_parent_after_child_tampering(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, _ = _prepare_recovery_child(fixture)
+    path = fixture.parent / "runtime-proof.json"
+    path.write_bytes(path.read_bytes() + b" ")
+
+    with pytest.raises(RuntimeProofError) as failure:
+        verify_runtime_recovery(child, spec=fixture.spec)
+
+    assert failure.value.code in {
+        "RUNTIME_EVIDENCE_TAMPERED",
+        "RUNTIME_RECOVERY_PARENT_INELIGIBLE",
+    }
+
+
+@pytest.mark.parametrize("tamper_kind", ["archive", "runtime"])
+def test_verify_recovery_rejects_archive_or_runtime_after_child_tampering(
+    tmp_path, tamper_kind
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, _ = _prepare_recovery_child(fixture)
+    if tamper_kind == "archive":
+        fixture.archive.write_bytes(b"tampered archive")
+    else:
+        (fixture.runtime / "lib" / "runtime-0.dll").write_bytes(b"tampered runtime")
+
+    with pytest.raises(RuntimeProofError) as failure:
+        verify_runtime_recovery(child, spec=fixture.spec)
+
+    assert failure.value.code == "RUNTIME_EVIDENCE_TAMPERED"
+
+
+def test_verify_ready_recovery_rejects_unexpected_consumption_record(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, _ = _prepare_recovery_child(fixture)
+    (child / "runtime-recovery-consumption.json").write_text("{}", "utf-8")
+
+    with pytest.raises(RuntimeProofError) as failure:
+        verify_runtime_recovery(child, spec=fixture.spec)
+
+    assert failure.value.code == "RUNTIME_EVIDENCE_TAMPERED"
+
+
+def test_verify_consumed_recovery_requires_valid_consumption_manifest_and_file_hash(
+    tmp_path,
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child = _synthetically_consume_recovery(fixture)
+    verified = verify_runtime_recovery(child, spec=fixture.spec)
+    assert verified.state == "RECOVERY_EXECUTING"
+    assert verified.exit_code == 30
+
+    consumption = child / "runtime-recovery-consumption.json"
+    consumption.write_bytes(consumption.read_bytes() + b" ")
+    with pytest.raises(RuntimeProofError) as failure:
+        verify_runtime_recovery(child, spec=fixture.spec)
+    assert failure.value.code == "RUNTIME_EVIDENCE_TAMPERED"
+
+
+@pytest.mark.parametrize(
+    ("state", "safe_code", "remove_consumption"),
+    [
+        ("RECOVERY_READY", None, True),
+        ("PASSED", "RUNTIME_HELP_NONZERO", False),
+        ("FAILED", None, False),
+        ("UNKNOWN", None, False),
+    ],
+)
+def test_verify_recovery_rejects_state_consumption_or_command_contract_mismatch(
+    tmp_path, state, safe_code, remove_consumption
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child = _synthetically_consume_recovery(fixture)
+    path = child / "runtime-recovery-proof.json"
+    document = json.loads(path.read_text("utf-8"))
+    document.pop("manifest_sha256")
+    document["state"] = state
+    document["safe_code"] = safe_code
+    runtime_proof_module._replace_recovery_evidence(child, document)
+    if remove_consumption:
+        (child / "runtime-recovery-consumption.json").unlink()
+
+    with pytest.raises(RuntimeProofError) as failure:
+        verify_runtime_recovery(child, spec=fixture.spec)
+
+    assert failure.value.code == "RUNTIME_EVIDENCE_TAMPERED"
+
+
+def test_verify_recovery_validates_bounded_command_output_and_fixed_order(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    version = fixture.runtime / "bin" / "sherpa-onnx-version.exe"
+    mandatory = fixture.runtime / "bin" / "sherpa-onnx-offline-tts.exe"
+    commands = [
+        runtime_proof_module._command_evidence(
+            (str(version),), version.parent, "version", 0, b"v1.13.6", b"", 0.1
+        ),
+        runtime_proof_module._command_evidence(
+            (str(mandatory), "--help"),
+            mandatory.parent,
+            "help",
+            0,
+            (
+                b"provider num-threads zipvoice-encoder zipvoice-decoder "
+                b"reference-audio reference-text output-filename"
+            ),
+            b"",
+            0.1,
+        ),
+    ]
+    child = _synthetically_consume_recovery(
+        fixture, state="PASSED", commands=commands
+    )
+    assert verify_runtime_recovery(child, spec=fixture.spec).state == "PASSED"
+
+    path = child / "runtime-recovery-proof.json"
+    document = json.loads(path.read_text("utf-8"))
+    document.pop("manifest_sha256")
+    document["execution"]["commands"].reverse()
+    runtime_proof_module._replace_recovery_evidence(child, document)
+    with pytest.raises(RuntimeProofError) as failure:
+        verify_runtime_recovery(child, spec=fixture.spec)
+    assert failure.value.code == "RUNTIME_EVIDENCE_TAMPERED"
+
+
+def test_resume_authenticates_child_before_any_write_probe_or_runner(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    calls = []
+    kwargs = _resume_kwargs(
+        fixture,
+        child,
+        ready,
+        runner=lambda *args, **kw: calls.append("runner"),
+        process_probe=lambda: calls.append("process"),
+        listener_probe=lambda: calls.append("listener"),
+        event_probe=lambda *args: calls.append("event"),
+    )
+    kwargs["ack_recovery_evidence_id"] = "wrong"
+
+    with pytest.raises(RuntimeProofError) as failure:
+        resume_runtime_proof(**kwargs)
+
+    assert failure.value.code == "RUNTIME_ACK_MISMATCH"
+    assert calls == []
+    assert not (child / "runtime-recovery-consumption.json").exists()
+
+
+def test_resume_refuses_nonready_or_consumed_child_without_replay(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    runtime_proof_module._write_new_recovery_consumption(
+        child,
+        {
+            "schema": "easytravel.sherpa-runtime-recovery-consumption.v1",
+            "consumption_id": "used",
+            "created_utc": "2026-08-20T00:00:00+00:00",
+            "preconsume": {
+                "evidence_id": ready.evidence_id,
+                "manifest_sha256": ready.manifest_sha256,
+                "proof_file_sha256": ready.proof_file_sha256,
+            },
+        },
+    )
+    calls = []
+    kwargs = _resume_kwargs(fixture, child, ready, runner=lambda *a, **k: calls.append(1))
+
+    with pytest.raises(RuntimeProofError) as failure:
+        resume_runtime_proof(**kwargs)
+
+    assert failure.value.code == "RUNTIME_RECOVERY_ALREADY_USED"
+    assert calls == []
+
+
+def test_resume_exclusive_consumption_record_binds_preconsume_child_hashes(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+
+    proof = resume_runtime_proof(**_resume_kwargs(fixture, child, ready))
+
+    consumption = json.loads(
+        (child / "runtime-recovery-consumption.json").read_text("utf-8")
+    )
+    assert proof.state == "PASSED"
+    assert consumption["preconsume"] == {
+        "evidence_id": ready.evidence_id,
+        "manifest_sha256": ready.manifest_sha256,
+        "proof_file_sha256": ready.proof_file_sha256,
+    }
+    assert consumption["manifest_sha256"]
+
+
+def test_resume_consumes_child_before_parent_runtime_or_process_preflight(
+    tmp_path, monkeypatch
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    real_reader = runtime_proof_module._read_parent_for_recovery
+    reader_calls = 0
+
+    def checked_reader(*args, **kwargs):
+        nonlocal reader_calls
+        reader_calls += 1
+        assert (child / "runtime-recovery-consumption.json").is_file()
+        if reader_calls == 1:
+            current = json.loads(
+                (child / "runtime-recovery-proof.json").read_text("utf-8")
+            )
+            assert current["state"] == "RECOVERY_EXECUTING"
+        return real_reader(*args, **kwargs)
+
+    monkeypatch.setattr(runtime_proof_module, "_read_parent_for_recovery", checked_reader)
+    proof = resume_runtime_proof(**_resume_kwargs(fixture, child, ready))
+    assert proof.state == "PASSED"
+
+
+def test_resume_ack_or_parent_mismatch_after_consume_fails_with_empty_commands(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    kwargs = _resume_kwargs(fixture, child, ready)
+    kwargs["ack_parent_manifest_sha256"] = "wrong"
+
+    proof = resume_runtime_proof(**kwargs)
+
+    document = json.loads((child / "runtime-recovery-proof.json").read_text("utf-8"))
+    assert proof.state == "FAILED"
+    assert proof.safe_code == "RUNTIME_ACK_MISMATCH"
+    assert document["execution"]["commands"] == []
+    assert (child / "runtime-recovery-consumption.json").is_file()
+
+
+@pytest.mark.parametrize("failure_kind", ["consumption", "state"])
+def test_resume_consumption_or_state_write_failure_never_executes_binary(
+    tmp_path, monkeypatch, failure_kind
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    calls = []
+    if failure_kind == "consumption":
+        monkeypatch.setattr(
+            runtime_proof_module,
+            "_write_new_recovery_consumption",
+            lambda *a, **k: (_ for _ in ()).throw(OSError("consume failed")),
+        )
+    else:
+        monkeypatch.setattr(
+            runtime_proof_module,
+            "_replace_recovery_evidence",
+            lambda *a, **k: (_ for _ in ()).throw(OSError("state failed")),
+        )
+
+    with pytest.raises((OSError, RuntimeProofError)):
+        resume_runtime_proof(
+            **_resume_kwargs(
+                fixture, child, ready, runner=lambda *a, **k: calls.append(1)
+            )
+        )
+
+    assert calls == []
+
+
+def test_resume_preserves_parent_and_never_moves_copies_extracts_or_promotes_runtime(
+    tmp_path,
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    parent_before = (fixture.parent / "runtime-proof.json").read_bytes()
+    runtime_before = {
+        path.relative_to(fixture.runtime): path.read_bytes()
+        for path in fixture.runtime.rglob("*")
+        if path.is_file()
+    }
+
+    resume_runtime_proof(**_resume_kwargs(fixture, child, ready))
+
+    assert (fixture.parent / "runtime-proof.json").read_bytes() == parent_before
+    assert {
+        path.relative_to(fixture.runtime): path.read_bytes()
+        for path in fixture.runtime.rglob("*")
+        if path.is_file()
+    } == runtime_before
+
+
+def test_resume_runs_fixed_version_then_help_once_with_closed_process_contract(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append((tuple(argv), kwargs))
+        if len(argv) == 1:
+            return SimpleNamespace(returncode=0, stdout=b"v1.13.6", stderr=b"")
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(
+                b"provider num-threads zipvoice-encoder zipvoice-decoder "
+                b"reference-audio reference-text output-filename"
+            ),
+            stderr=b"",
+        )
+
+    proof = resume_runtime_proof(
+        **_resume_kwargs(fixture, child, ready, runner=runner)
+    )
+
+    assert proof.state == "PASSED"
+    version = fixture.runtime / "bin" / "sherpa-onnx-version.exe"
+    mandatory = fixture.runtime / "bin" / "sherpa-onnx-offline-tts.exe"
+    assert [call[0] for call in calls] == [
+        (str(version),),
+        (str(mandatory), "--help"),
+    ]
+    for argv, kwargs in calls:
+        assert kwargs["shell"] is False
+        assert kwargs["stdin"] is subprocess.DEVNULL
+        assert kwargs["cwd"] == Path(argv[0]).parent
+        assert kwargs["timeout"] == 30
+        assert kwargs["capture_output"] is True
+
+
+def test_resume_persists_version_evidence_before_starting_help(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+
+    def runner(argv, **kwargs):
+        if len(argv) == 2:
+            document = json.loads((child / "runtime-recovery-proof.json").read_text("utf-8"))
+            assert [row["purpose"] for row in document["execution"]["commands"]] == [
+                "version"
+            ]
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    b"provider num-threads zipvoice-encoder zipvoice-decoder "
+                    b"reference-audio reference-text output-filename"
+                ),
+                stderr=b"",
+            )
+        return SimpleNamespace(returncode=0, stdout=b"v1.13.6", stderr=b"")
+
+    assert resume_runtime_proof(
+        **_resume_kwargs(fixture, child, ready, runner=runner)
+    ).state == "PASSED"
+
+
+def test_resume_persists_help_evidence_before_postflight(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    process_calls = 0
+
+    def process_probe():
+        nonlocal process_calls
+        process_calls += 1
+        if process_calls == 2:
+            document = json.loads((child / "runtime-recovery-proof.json").read_text("utf-8"))
+            assert [row["purpose"] for row in document["execution"]["commands"]] == [
+                "version",
+                "help",
+            ]
+        return ()
+
+    assert resume_runtime_proof(
+        **_resume_kwargs(fixture, child, ready, process_probe=process_probe)
+    ).state == "PASSED"
+
+
+def test_resume_uses_child_only_path_delta_and_preserves_parent_environment(
+    tmp_path, monkeypatch
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    monkeypatch.setenv("PATH", "SYNTHETIC-INHERITED-PATH")
+    seen = []
+
+    def runner(argv, **kwargs):
+        seen.append(kwargs["env"]["PATH"])
+        if len(argv) == 1:
+            return SimpleNamespace(returncode=0, stdout=b"v1.13.6", stderr=b"")
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(
+                b"provider num-threads zipvoice-encoder zipvoice-decoder "
+                b"reference-audio reference-text output-filename"
+            ),
+            stderr=b"",
+        )
+
+    resume_runtime_proof(**_resume_kwargs(fixture, child, ready, runner=runner))
+    expected_prefix = os.pathsep.join(
+        [str(fixture.runtime / "bin"), str(fixture.runtime / "lib")]
+    )
+    assert all(value == f"{expected_prefix}{os.pathsep}SYNTHETIC-INHERITED-PATH" for value in seen)
+    assert os.environ["PATH"] == "SYNTHETIC-INHERITED-PATH"
+
+
+def test_resume_rejects_model_text_reference_output_server_port_or_unknown_args():
+    forbidden = {"model", "text", "reference", "output", "server", "port", "argv"}
+    assert forbidden.isdisjoint(inspect.signature(resume_runtime_proof).parameters)
+
+
+@pytest.mark.parametrize(
+    ("failure_kind", "expected_code", "expected_calls"),
+    [
+        ("timeout", "RUNTIME_HELP_TIMEOUT", 1),
+        ("launch", "RUNTIME_HELP_NONZERO", 1),
+        ("nonzero", "RUNTIME_HELP_NONZERO", 1),
+        ("help-contract", "RUNTIME_HELP_CONTRACT_MISMATCH", 2),
+    ],
+)
+def test_resume_fails_timeout_launch_nonzero_or_help_contract_without_retry(
+    tmp_path, failure_kind, expected_code, expected_calls
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append(tuple(argv))
+        if failure_kind == "timeout":
+            raise subprocess.TimeoutExpired(argv, 30)
+        if failure_kind == "launch":
+            raise OSError("synthetic launch")
+        if failure_kind == "nonzero":
+            return SimpleNamespace(returncode=7, stdout=b"", stderr=b"failed")
+        if len(argv) == 1:
+            return SimpleNamespace(returncode=0, stdout=b"v1.13.6", stderr=b"")
+        return SimpleNamespace(returncode=0, stdout=b"missing tokens", stderr=b"")
+
+    proof = resume_runtime_proof(
+        **_resume_kwargs(fixture, child, ready, runner=runner)
+    )
+    assert proof.state == "FAILED"
+    assert proof.safe_code == expected_code
+    assert len(calls) == expected_calls
+
+
+@pytest.mark.parametrize("dirty_kind", ["process", "listener", "event", "unknown"])
+def test_resume_fails_new_process_listener_event_or_unknown_postflight(
+    tmp_path, dirty_kind
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    process_values = iter([(), ({"pid": 1},) if dirty_kind == "process" else ()])
+    listener_values = iter([(), ({"port": 1},) if dirty_kind == "listener" else ()])
+    process_calls = 0
+
+    def process_probe():
+        nonlocal process_calls
+        process_calls += 1
+        if dirty_kind == "unknown" and process_calls == 2:
+            raise OSError("unknown")
+        return next(process_values)
+
+    proof = resume_runtime_proof(
+        **_resume_kwargs(
+            fixture,
+            child,
+            ready,
+            process_probe=process_probe,
+            listener_probe=lambda: next(listener_values),
+            event_probe=lambda start, end: ({"id": 1000},) if dirty_kind == "event" else (),
+        )
+    )
+    assert proof.state == "FAILED"
+    assert proof.safe_code == "RUNTIME_POSTFLIGHT_DIRTY"
+
+
+def test_resume_fails_runtime_inventory_change_after_commands(tmp_path):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+
+    def runner(argv, **kwargs):
+        if len(argv) == 1:
+            return SimpleNamespace(returncode=0, stdout=b"v1.13.6", stderr=b"")
+        result = SimpleNamespace(
+            returncode=0,
+            stdout=(
+                b"provider num-threads zipvoice-encoder zipvoice-decoder "
+                b"reference-audio reference-text output-filename"
+            ),
+            stderr=b"",
+        )
+        (fixture.runtime / "lib" / "runtime-0.dll").write_bytes(b"changed")
+        return result
+
+    with pytest.raises(RuntimeProofError) as failure:
+        resume_runtime_proof(
+            **_resume_kwargs(fixture, child, ready, runner=runner)
+        )
+    assert failure.value.code == "RUNTIME_EVIDENCE_TAMPERED"
+    document = json.loads((child / "runtime-recovery-proof.json").read_text("utf-8"))
+    assert document["state"] == "FAILED"
+
+
+def test_resume_passes_only_after_two_commands_clean_postflight_and_final_verify(
+    tmp_path,
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+
+    proof = resume_runtime_proof(**_resume_kwargs(fixture, child, ready))
+
+    assert proof.state == "PASSED"
+    assert proof.safe_code is None
+    assert proof.exit_code == 0
+    assert verify_runtime_recovery(child, spec=fixture.spec) == proof
+
+
+def test_prepare_recovery_cli_requires_all_paths_and_literal_acks(tmp_path, capsys):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child = fixture.parent.parent / "runtime-recovery-v1.13.6-synthetic"
+    base = [
+        "prepare-runtime-recovery",
+        "--parent-proof-dir",
+        str(fixture.parent),
+        "--recovery-proof-dir",
+        str(child),
+    ]
+    with pytest.raises(SystemExit) as failure:
+        runtime_main(base, adapters=_recovery_adapters(fixture))
+    assert failure.value.code == 2
+    capsys.readouterr()
+
+    exit_code = runtime_main(
+        [
+            *base,
+            "--ack-parent-evidence-id",
+            fixture.spec.parent_evidence_id,
+            "--ack-parent-manifest-sha256",
+            fixture.spec.parent_manifest_sha256,
+            "--ack-parent-proof-file-sha256",
+            fixture.spec.parent_proof_file_sha256,
+            "--ack-outer-sha256",
+            fixture.spec.outer_sha256,
+            "--ack-load-inventory-sha256",
+            fixture.spec.load_inventory_sha256,
+            "--ack-executable-sha256",
+            fixture.spec.mandatory_executable_sha256,
+        ],
+        adapters=_recovery_adapters(fixture),
+    )
+    summary = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert summary["state"] == "RECOVERY_READY"
+
+
+def test_verify_recovery_cli_is_read_only_and_bounded(tmp_path, capsys):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, _ = _prepare_recovery_child(fixture)
+    before = (child / "runtime-recovery-proof.json").read_bytes()
+
+    exit_code = runtime_main(
+        ["verify-runtime-recovery", str(child)],
+        adapters=_recovery_adapters(fixture),
+    )
+    captured = capsys.readouterr()
+    summary = json.loads(captured.out)
+    assert exit_code == 0
+    assert captured.err == ""
+    assert len(captured.out.encode("utf-8")) < 2_048
+    assert summary["state"] == "RECOVERY_READY"
+    assert (child / "runtime-recovery-proof.json").read_bytes() == before
+
+
+def test_resume_recovery_cli_requires_one_time_ack_and_all_exact_hashes(
+    tmp_path, capsys
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, ready = _prepare_recovery_child(fixture)
+    base = [
+        "resume-runtime-proof",
+        "--parent-proof-dir",
+        str(fixture.parent),
+        "--recovery-proof-dir",
+        str(child),
+        "--runtime-dir",
+        str(fixture.runtime),
+    ]
+    with pytest.raises(SystemExit) as failure:
+        runtime_main(base, adapters=_recovery_adapters(fixture))
+    assert failure.value.code == 2
+    capsys.readouterr()
+
+    args = [
+        *base,
+        "--ack-runtime-recovery-once",
+        "--ack-parent-evidence-id",
+        fixture.spec.parent_evidence_id,
+        "--ack-parent-manifest-sha256",
+        fixture.spec.parent_manifest_sha256,
+        "--ack-parent-proof-file-sha256",
+        fixture.spec.parent_proof_file_sha256,
+        "--ack-recovery-evidence-id",
+        ready.evidence_id,
+        "--ack-recovery-manifest-sha256",
+        ready.manifest_sha256,
+        "--ack-recovery-proof-file-sha256",
+        ready.proof_file_sha256,
+        "--ack-outer-sha256",
+        fixture.spec.outer_sha256,
+        "--ack-load-inventory-sha256",
+        fixture.spec.load_inventory_sha256,
+        "--ack-version-executable-sha256",
+        fixture.spec.version_executable_sha256,
+        "--ack-executable-sha256",
+        fixture.spec.mandatory_executable_sha256,
+    ]
+    assert runtime_main(args, adapters=_recovery_adapters(fixture)) == 0
+    assert json.loads(capsys.readouterr().out)["state"] == "PASSED"
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--model",
+        "--reference-audio",
+        "--reference-text",
+        "--text",
+        "--output-filename",
+        "--server",
+        "--port",
+        "--download",
+        "--extract",
+        "--cleanup",
+        "--unknown",
+    ],
+)
+def test_recovery_cli_rejects_model_reference_text_output_and_unknown_options(
+    tmp_path, capsys, option
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    with pytest.raises(SystemExit) as failure:
+        runtime_main(
+            ["verify-runtime-recovery", str(fixture.parent), option, "synthetic"],
+            adapters=_recovery_adapters(fixture),
+        )
+    assert failure.value.code == 2
+    capsys.readouterr()
+
+
+def test_main_dispatch_never_routes_recovery_commands_to_parent_verifier(
+    tmp_path, capsys, monkeypatch
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, _ = _prepare_recovery_child(fixture)
+    monkeypatch.setattr(
+        runtime_proof_module,
+        "verify_runtime_proof",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("wrong parent verifier dispatch")
+        ),
+    )
+
+    assert runtime_main(
+        ["verify-runtime-recovery", str(child)],
+        adapters=_recovery_adapters(fixture),
+    ) == 0
+    assert json.loads(capsys.readouterr().out)["state"] == "RECOVERY_READY"
+
+
+def test_recovery_cli_stdout_is_bounded_and_omits_private_paths_and_command_output(
+    tmp_path, capsys
+):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child, _ = _prepare_recovery_child(fixture)
+    private_output = "PRIVATE RECOVERY COMMAND OUTPUT"
+
+    assert runtime_main(
+        ["verify-runtime-recovery", str(child)],
+        adapters=_recovery_adapters(fixture),
+    ) == 0
+    captured = capsys.readouterr()
+    summary = json.loads(captured.out)
+    assert len(captured.out.encode("utf-8")) < 2_048
+    assert str(fixture.parent) not in captured.out
+    assert str(fixture.runtime) not in captured.out
+    assert private_output not in captured.out
+    assert set(summary) == {
+        "evidence_id",
+        "executable_sha256",
+        "load_inventory_sha256",
+        "manifest_sha256",
+        "next_step",
+        "outer_sha256",
+        "parent_evidence_id",
+        "proof_file_sha256",
+        "safe_code",
+        "state",
+        "version_executable_sha256",
+    }
+
+
+def test_recovery_cli_failure_uses_same_bounded_field_contract(tmp_path, capsys):
+    fixture = _prepare_failed_promoted_unsigned_parent(tmp_path)
+    child = fixture.parent.parent / "runtime-recovery-v1.13.6-synthetic"
+
+    exit_code = runtime_main(
+        [
+            "prepare-runtime-recovery",
+            "--parent-proof-dir",
+            str(fixture.parent),
+            "--recovery-proof-dir",
+            str(child),
+            "--ack-parent-evidence-id",
+            fixture.spec.parent_evidence_id,
+            "--ack-parent-manifest-sha256",
+            fixture.spec.parent_manifest_sha256,
+            "--ack-parent-proof-file-sha256",
+            fixture.spec.parent_proof_file_sha256,
+            "--ack-outer-sha256",
+            "wrong",
+            "--ack-load-inventory-sha256",
+            fixture.spec.load_inventory_sha256,
+            "--ack-executable-sha256",
+            fixture.spec.mandatory_executable_sha256,
+        ],
+        adapters=_recovery_adapters(fixture),
+    )
+    captured = capsys.readouterr()
+    summary = json.loads(captured.out)
+    assert exit_code == 30
+    assert len(captured.out.encode("utf-8")) < 2_048
+    assert summary["safe_code"] == "RUNTIME_ACK_MISMATCH"
+    assert set(summary) == {
+        "evidence_id",
+        "executable_sha256",
+        "load_inventory_sha256",
+        "manifest_sha256",
+        "next_step",
+        "outer_sha256",
+        "parent_evidence_id",
+        "proof_file_sha256",
+        "safe_code",
+        "state",
+        "version_executable_sha256",
+    }
+    assert not child.exists()
 
 
 def test_verify_archive_identity_accepts_exact_synthetic_spec(tmp_path):
@@ -1629,6 +3017,7 @@ def test_cli_stdout_is_bounded_json_and_never_contains_third_party_output(
     listener_snapshots = iter([(), ()])
     adapters = RuntimeAdapters(
         asset_spec=_spec_for_archive(archive),
+        recovery_spec=PINNED_RUNTIME_RECOVERY,
         repo_root=repo_root,
         per_user_root=per_user_root,
         signature_probe=lambda path: (_ for _ in ()).throw(

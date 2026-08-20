@@ -124,6 +124,31 @@ class RuntimeProof:
     manifest_sha256: str
 
 
+@dataclass(frozen=True)
+class RuntimeRecoverySpec:
+    parent_directory_name: str
+    parent_evidence_id: str
+    parent_manifest_sha256: str
+    parent_proof_file_sha256: str
+    outer_sha256: str
+    load_inventory_sha256: str
+    expected_load_candidate_count: int
+    required_signature_status: str
+    version_executable_sha256: str
+    mandatory_executable_sha256: str
+
+
+@dataclass(frozen=True)
+class RuntimeRecoveryProof:
+    state: str
+    safe_code: str | None
+    exit_code: int
+    evidence_id: str
+    proof_dir: Path
+    manifest_sha256: str
+    proof_file_sha256: str
+
+
 class RuntimeProofError(ValueError):
     def __init__(self, code: str):
         super().__init__(code)
@@ -145,6 +170,12 @@ _MAX_ARCHIVE_TOTAL_BYTES = 2 * 1024**3
 _MAX_CAPTURED_OUTPUT_BYTES = 64 * 1024
 _EVIDENCE_SCHEMA = "easytravel.sherpa-runtime-proof.v1"
 _EVIDENCE_FILENAME = "runtime-proof.json"
+_RECOVERY_EVIDENCE_SCHEMA = "easytravel.sherpa-runtime-recovery-proof.v1"
+_RECOVERY_EVIDENCE_FILENAME = "runtime-recovery-proof.json"
+_RECOVERY_CONSUMPTION_SCHEMA = (
+    "easytravel.sherpa-runtime-recovery-consumption.v1"
+)
+_RECOVERY_CONSUMPTION_FILENAME = "runtime-recovery-consumption.json"
 _REQUIRED_HELP_TOKENS = (
     "provider",
     "num-threads",
@@ -185,9 +216,36 @@ PINNED_RUNTIME = RuntimeAssetSpec(
 )
 
 
+PINNED_RUNTIME_RECOVERY = RuntimeRecoverySpec(
+    parent_directory_name="runtime-v1.13.6-20260820T014555Z-b6b2c9b9",
+    parent_evidence_id="a3ba6b11-5b57-46db-b5e7-113c36e9d964",
+    parent_manifest_sha256=(
+        "e841a4f6ee1aa24bb7bd78c8b57ac88336f84512b175bbd44066f099829d2123"
+    ),
+    parent_proof_file_sha256=(
+        "3e4e1fdec33d11e60096a58e8b35f12766ffeeab620582961634af27c49f06e9"
+    ),
+    outer_sha256=(
+        "4a296ee44c0997ab9fd4d30d7196446ab77e0ef34f0ce66b5e01b3339fce4613"
+    ),
+    load_inventory_sha256=(
+        "d3d440c0345eee6e6dae680c07036c830896b5bbfc98f4774f83b243cc05786f"
+    ),
+    expected_load_candidate_count=8,
+    required_signature_status="NotSigned",
+    version_executable_sha256=(
+        "7cb2de6405de878417635845278b1be01413650b36e64c30df5314128f109869"
+    ),
+    mandatory_executable_sha256=(
+        "a62495554c6953d523626cfba0944be353857c9840b0e513170d45ba0e76a9f0"
+    ),
+)
+
+
 @dataclass(frozen=True)
 class RuntimeAdapters:
     asset_spec: RuntimeAssetSpec
+    recovery_spec: RuntimeRecoverySpec
     repo_root: Path
     per_user_root: Path
     signature_probe: object
@@ -1155,6 +1213,14 @@ def _evidence_path(proof_dir: Path) -> Path:
     return proof_dir.resolve(strict=True) / _EVIDENCE_FILENAME
 
 
+def _recovery_evidence_path(proof_dir: Path) -> Path:
+    return proof_dir.resolve(strict=True) / _RECOVERY_EVIDENCE_FILENAME
+
+
+def _recovery_consumption_path(proof_dir: Path) -> Path:
+    return proof_dir.resolve(strict=True) / _RECOVERY_CONSUMPTION_FILENAME
+
+
 def _with_manifest_hash(document: dict[str, object]) -> dict[str, object]:
     unsigned = dict(document)
     unsigned.pop("manifest_sha256", None)
@@ -1163,6 +1229,12 @@ def _with_manifest_hash(document: dict[str, object]) -> dict[str, object]:
         _canonical_json_bytes(unsigned)
     ).hexdigest()
     return signed
+
+
+def _with_recovery_manifest_hash(
+    document: dict[str, object],
+) -> dict[str, object]:
+    return _with_manifest_hash(document)
 
 
 def _write_new_evidence(proof_dir: Path, document: dict[str, object]) -> None:
@@ -1176,6 +1248,65 @@ def _write_new_evidence(proof_dir: Path, document: dict[str, object]) -> None:
             separators=(",", ":"),
             ensure_ascii=False,
         )
+
+
+def _write_new_recovery_evidence(
+    proof_dir: Path, document: dict[str, object]
+) -> dict[str, object]:
+    destination = _recovery_evidence_path(proof_dir)
+    signed = _with_recovery_manifest_hash(document)
+    try:
+        with destination.open("xb") as output:
+            output.write(_canonical_json_bytes(signed))
+            output.flush()
+            os.fsync(output.fileno())
+        return signed
+    except OSError as error:
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED") from error
+
+
+def _replace_recovery_evidence(
+    proof_dir: Path, document: dict[str, object]
+) -> dict[str, object]:
+    destination = _recovery_evidence_path(proof_dir)
+    temporary = destination.with_suffix(".json.tmp")
+    if temporary.exists() or temporary.is_symlink():
+        raise RuntimeProofError("RUNTIME_OUTPUT_EXISTS")
+    signed = _with_recovery_manifest_hash(document)
+    try:
+        with temporary.open("xb") as output:
+            output.write(_canonical_json_bytes(signed))
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.replace(destination)
+        verified = _read_recovery_evidence(proof_dir)
+        if verified != signed:
+            raise ValueError("recovery evidence read-back mismatch")
+        return signed
+    except RuntimeProofError:
+        raise
+    except (OSError, ValueError) as error:
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED") from error
+
+
+def _write_new_recovery_consumption(
+    proof_dir: Path, document: dict[str, object]
+) -> dict[str, object]:
+    destination = _recovery_consumption_path(proof_dir)
+    signed = _with_recovery_manifest_hash(document)
+    try:
+        with destination.open("xb") as output:
+            output.write(_canonical_json_bytes(signed))
+            output.flush()
+            os.fsync(output.fileno())
+        verified = _read_recovery_consumption(proof_dir)
+        if verified != signed:
+            raise ValueError("consumption evidence read-back mismatch")
+        return signed
+    except RuntimeProofError:
+        raise
+    except (OSError, ValueError) as error:
+        raise RuntimeProofError("RUNTIME_RECOVERY_ALREADY_USED") from error
 
 
 def _replace_evidence(proof_dir: Path, document: dict[str, object]) -> dict[str, object]:
@@ -1217,6 +1348,58 @@ def _read_evidence(proof_dir: Path) -> dict[str, object]:
             raise ValueError("invalid inventory evidence")
         if not isinstance(document.get("paths"), dict):
             raise ValueError("invalid path evidence")
+        return document
+    except (OSError, UnicodeError, ValueError, TypeError, json.JSONDecodeError) as error:
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED") from error
+
+
+def _read_recovery_evidence(proof_dir: Path) -> dict[str, object]:
+    source = _recovery_evidence_path(proof_dir)
+    try:
+        raw = source.read_bytes()
+        if len(raw) > 8 * 1024 * 1024:
+            raise ValueError("oversized recovery evidence")
+        document = json.loads(raw.decode("utf-8"))
+        if (
+            not isinstance(document, dict)
+            or document.get("schema") != _RECOVERY_EVIDENCE_SCHEMA
+        ):
+            raise ValueError("invalid recovery evidence schema")
+        expected_hash = document.get("manifest_sha256")
+        unsigned = dict(document)
+        unsigned.pop("manifest_sha256", None)
+        actual_hash = hashlib.sha256(_canonical_json_bytes(unsigned)).hexdigest()
+        if not isinstance(expected_hash, str) or expected_hash != actual_hash:
+            raise ValueError("invalid recovery evidence hash")
+        if raw != _canonical_json_bytes(document):
+            raise ValueError("noncanonical recovery evidence")
+        return document
+    except (OSError, UnicodeError, ValueError, TypeError, json.JSONDecodeError) as error:
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED") from error
+
+
+def _read_recovery_consumption(proof_dir: Path) -> dict[str, object]:
+    source = _recovery_consumption_path(proof_dir)
+    try:
+        raw = source.read_bytes()
+        if len(raw) > 1024 * 1024:
+            raise ValueError("oversized consumption evidence")
+        document = json.loads(raw.decode("utf-8"))
+        if (
+            not isinstance(document, dict)
+            or document.get("schema") != _RECOVERY_CONSUMPTION_SCHEMA
+        ):
+            raise ValueError("invalid consumption evidence schema")
+        expected_hash = document.get("manifest_sha256")
+        unsigned = dict(document)
+        unsigned.pop("manifest_sha256", None)
+        actual_hash = hashlib.sha256(_canonical_json_bytes(unsigned)).hexdigest()
+        if (
+            not isinstance(expected_hash, str)
+            or expected_hash != actual_hash
+            or raw != _canonical_json_bytes(document)
+        ):
+            raise ValueError("invalid consumption evidence hash")
         return document
     except (OSError, UnicodeError, ValueError, TypeError, json.JSONDecodeError) as error:
         raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED") from error
@@ -1551,6 +1734,32 @@ def _build_parser() -> argparse.ArgumentParser:
     prove.add_argument("--ack-executable-sha256")
     verify = commands.add_parser("verify-runtime-proof")
     verify.add_argument("proof_dir", type=Path)
+    prepare_recovery = commands.add_parser("prepare-runtime-recovery")
+    prepare_recovery.add_argument("--parent-proof-dir", required=True, type=Path)
+    prepare_recovery.add_argument("--recovery-proof-dir", required=True, type=Path)
+    prepare_recovery.add_argument("--ack-parent-evidence-id", required=True)
+    prepare_recovery.add_argument("--ack-parent-manifest-sha256", required=True)
+    prepare_recovery.add_argument("--ack-parent-proof-file-sha256", required=True)
+    prepare_recovery.add_argument("--ack-outer-sha256", required=True)
+    prepare_recovery.add_argument("--ack-load-inventory-sha256", required=True)
+    prepare_recovery.add_argument("--ack-executable-sha256", required=True)
+    verify_recovery = commands.add_parser("verify-runtime-recovery")
+    verify_recovery.add_argument("recovery_proof_dir", type=Path)
+    resume_recovery = commands.add_parser("resume-runtime-proof")
+    resume_recovery.add_argument("--parent-proof-dir", required=True, type=Path)
+    resume_recovery.add_argument("--recovery-proof-dir", required=True, type=Path)
+    resume_recovery.add_argument("--runtime-dir", required=True, type=Path)
+    resume_recovery.add_argument("--ack-runtime-recovery-once", action="store_true")
+    resume_recovery.add_argument("--ack-parent-evidence-id", required=True)
+    resume_recovery.add_argument("--ack-parent-manifest-sha256", required=True)
+    resume_recovery.add_argument("--ack-parent-proof-file-sha256", required=True)
+    resume_recovery.add_argument("--ack-recovery-evidence-id", required=True)
+    resume_recovery.add_argument("--ack-recovery-manifest-sha256", required=True)
+    resume_recovery.add_argument("--ack-recovery-proof-file-sha256", required=True)
+    resume_recovery.add_argument("--ack-outer-sha256", required=True)
+    resume_recovery.add_argument("--ack-load-inventory-sha256", required=True)
+    resume_recovery.add_argument("--ack-version-executable-sha256", required=True)
+    resume_recovery.add_argument("--ack-executable-sha256", required=True)
     return parser
 
 
@@ -1560,6 +1769,7 @@ def _default_adapters() -> RuntimeAdapters:
         raise RuntimeProofError("RUNTIME_PATH_OUTSIDE_PER_USER_ROOT")
     return RuntimeAdapters(
         asset_spec=PINNED_RUNTIME,
+        recovery_spec=PINNED_RUNTIME_RECOVERY,
         repo_root=Path(__file__).resolve().parents[2],
         per_user_root=Path(local_app_data) / "EasyTravelVoicePilot",
         signature_probe=_default_signature_probe,
@@ -1674,6 +1884,859 @@ def _default_event_probe(start_utc: str, end_utc: str) -> list[object]:
     )
 
 
+def validate_runtime_recovery_paths(
+    repo_root: Path,
+    per_user_root: Path,
+    parent_proof_dir: Path,
+    recovery_proof_dir: Path,
+    runtime_dir: Path | None = None,
+    *,
+    recovery_must_exist: bool,
+) -> None:
+    candidates = [parent_proof_dir, recovery_proof_dir]
+    if runtime_dir is not None:
+        candidates.append(runtime_dir)
+    if any(not candidate.is_absolute() for candidate in candidates):
+        raise RuntimeProofError("RUNTIME_PATH_OUTSIDE_PER_USER_ROOT")
+
+    resolved_repo = repo_root.resolve(strict=True)
+    resolved_private = per_user_root.resolve(strict=True)
+    if _is_reparse_point(per_user_root):
+        raise RuntimeProofError("RUNTIME_PATH_OUTSIDE_PER_USER_ROOT")
+    for candidate in candidates:
+        lexical = candidate.absolute()
+        if lexical.is_relative_to(resolved_repo):
+            raise RuntimeProofError("RUNTIME_PATH_INSIDE_REPOSITORY")
+        if not lexical.is_relative_to(resolved_private):
+            raise RuntimeProofError("RUNTIME_PATH_OUTSIDE_PER_USER_ROOT")
+        _require_no_reparse_chain(resolved_private, lexical)
+
+    proofs_root = (resolved_private / "proofs").resolve(strict=True)
+    expected_parent = (
+        proofs_root / PINNED_RUNTIME_RECOVERY.parent_directory_name
+    ).resolve(strict=True)
+    resolved_parent = parent_proof_dir.resolve(strict=True)
+    if resolved_parent != expected_parent or not resolved_parent.is_dir():
+        raise RuntimeProofError("RUNTIME_PATH_OUTSIDE_PER_USER_ROOT")
+
+    lexical_recovery = recovery_proof_dir.absolute()
+    resolved_recovery = recovery_proof_dir.resolve(strict=False)
+    if (
+        resolved_recovery == proofs_root
+        or not resolved_recovery.is_relative_to(proofs_root)
+        or resolved_recovery == resolved_parent
+        or resolved_recovery.is_relative_to(resolved_repo)
+    ):
+        raise RuntimeProofError("RUNTIME_PATH_OUTSIDE_PER_USER_ROOT")
+    if recovery_must_exist:
+        if (
+            not recovery_proof_dir.exists()
+            or recovery_proof_dir.is_symlink()
+            or not recovery_proof_dir.resolve(strict=True).is_dir()
+        ):
+            raise RuntimeProofError("RUNTIME_PATH_OUTSIDE_PER_USER_ROOT")
+    elif recovery_proof_dir.exists() or recovery_proof_dir.is_symlink():
+        raise RuntimeProofError("RUNTIME_OUTPUT_EXISTS")
+    if lexical_recovery.parent.resolve(strict=True) != proofs_root:
+        raise RuntimeProofError("RUNTIME_PATH_OUTSIDE_PER_USER_ROOT")
+
+    if runtime_dir is not None:
+        expected_runtime = (
+            resolved_private / "runtime" / "sherpa-onnx" / "1.13.6"
+        ).resolve(strict=True)
+        resolved_runtime = runtime_dir.resolve(strict=True)
+        if (
+            resolved_runtime != expected_runtime
+            or not resolved_runtime.is_dir()
+            or resolved_runtime.is_relative_to(resolved_repo)
+        ):
+            raise RuntimeProofError("RUNTIME_PATH_OUTSIDE_PER_USER_ROOT")
+
+
+def _read_parent_for_recovery(
+    parent_proof_dir: Path,
+    runtime_dir: Path,
+    *,
+    spec: RuntimeRecoverySpec,
+) -> dict[str, object]:
+    proof_path = _evidence_path(parent_proof_dir)
+    try:
+        first_file_sha256 = _sha256_file(proof_path)
+        document = _read_evidence(parent_proof_dir)
+        if (
+            first_file_sha256 != spec.parent_proof_file_sha256
+            or document.get("evidence_id") != spec.parent_evidence_id
+            or document.get("manifest_sha256") != spec.parent_manifest_sha256
+        ):
+            raise RuntimeProofError("RUNTIME_RECOVERY_PARENT_INELIGIBLE")
+
+        preparation = document.get("preparation")
+        execution = document.get("execution")
+        asset = document.get("asset")
+        inventory = document.get("inventory")
+        paths = document.get("paths")
+        if not all(
+            isinstance(section, dict)
+            for section in (preparation, execution, asset, inventory, paths)
+        ):
+            raise RuntimeProofError("RUNTIME_RECOVERY_PARENT_INELIGIBLE")
+        assert isinstance(preparation, dict)
+        assert isinstance(execution, dict)
+        assert isinstance(asset, dict)
+        assert isinstance(inventory, dict)
+        assert isinstance(paths, dict)
+
+        expected_preparation = {
+            "exit_code": 0,
+            "initial_state": "BLOCKED_UNSIGNED",
+            "promoted": True,
+            "safe_code": None,
+            "state": "READY_TO_EXECUTE",
+        }
+        rows = inventory.get("rows")
+        if (
+            document.get("state") != "FAILED"
+            or document.get("safe_code") != "RUNTIME_POSTFLIGHT_DIRTY"
+            or preparation != expected_preparation
+            or execution.get("authorization") != "unsigned-exact-hash"
+            or execution.get("commands") != []
+            or asset.get("sha256") != spec.outer_sha256
+            or inventory.get("sha256") != spec.load_inventory_sha256
+            or inventory.get("mandatory_executable_sha256")
+            != spec.mandatory_executable_sha256
+            or not isinstance(rows, list)
+            or len(rows) != spec.expected_load_candidate_count
+        ):
+            raise RuntimeProofError("RUNTIME_RECOVERY_PARENT_INELIGIBLE")
+
+        version_relative = inventory.get("version_executable_relative_path")
+        version_rows = [
+            row
+            for row in rows
+            if isinstance(row, dict)
+            and row.get("relative_path") == version_relative
+        ]
+        if (
+            not isinstance(version_relative, str)
+            or len(version_rows) != 1
+            or version_rows[0].get("sha256")
+            != spec.version_executable_sha256
+            or any(
+                not isinstance(row, dict)
+                or not isinstance(row.get("signature"), dict)
+                or row["signature"].get("status")
+                != spec.required_signature_status
+                for row in rows
+            )
+        ):
+            raise RuntimeProofError("RUNTIME_RECOVERY_PARENT_INELIGIBLE")
+
+        runtime_value = paths.get("runtime_root")
+        if (
+            not isinstance(runtime_value, str)
+            or Path(runtime_value).resolve(strict=True)
+            != runtime_dir.resolve(strict=True)
+        ):
+            raise RuntimeProofError("RUNTIME_RECOVERY_PARENT_INELIGIBLE")
+
+        _verify_archive_binding(document)
+        _verify_inventory_tree(runtime_dir, inventory)
+        if _sha256_file(proof_path) != first_file_sha256:
+            raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED")
+        return document
+    except RuntimeProofError:
+        raise
+    except (KeyError, OSError, TypeError, ValueError) as error:
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED") from error
+
+
+def prepare_runtime_recovery(
+    parent_proof_dir: Path,
+    recovery_proof_dir: Path,
+    *,
+    spec: RuntimeRecoverySpec,
+    ack_parent_evidence_id: str,
+    ack_parent_manifest_sha256: str,
+    ack_parent_proof_file_sha256: str,
+    ack_outer_sha256: str,
+    ack_load_inventory_sha256: str,
+    ack_executable_sha256: str,
+) -> RuntimeRecoveryProof:
+    per_user_root = parent_proof_dir.parent.parent
+    runtime_dir = per_user_root / "runtime" / "sherpa-onnx" / "1.13.6"
+    validate_runtime_recovery_paths(
+        Path(__file__).resolve().parents[2],
+        per_user_root,
+        parent_proof_dir,
+        recovery_proof_dir,
+        runtime_dir,
+        recovery_must_exist=False,
+    )
+    if (
+        ack_parent_evidence_id != spec.parent_evidence_id
+        or ack_parent_manifest_sha256 != spec.parent_manifest_sha256
+        or ack_parent_proof_file_sha256 != spec.parent_proof_file_sha256
+        or ack_outer_sha256 != spec.outer_sha256
+        or ack_load_inventory_sha256 != spec.load_inventory_sha256
+        or ack_executable_sha256 != spec.mandatory_executable_sha256
+    ):
+        raise RuntimeProofError("RUNTIME_ACK_MISMATCH")
+
+    parent = _read_parent_for_recovery(
+        parent_proof_dir, runtime_dir, spec=spec
+    )
+    inventory = parent["inventory"]
+    assert isinstance(inventory, dict)
+    now = _utc_now()
+    document: dict[str, object] = {
+        "schema": _RECOVERY_EVIDENCE_SCHEMA,
+        "evidence_id": str(uuid.uuid4()),
+        "created_utc": now.isoformat(),
+        "created_taipei": now.astimezone(
+            timezone(timedelta(hours=8), name="Asia/Taipei")
+        ).isoformat(),
+        "state": "RECOVERY_READY",
+        "safe_code": None,
+        "reason": "ZERO_RESULT_PROBE_SERIALIZATION_FIXED",
+        "parent": {
+            "directory_name": spec.parent_directory_name,
+            "evidence_id": spec.parent_evidence_id,
+            "manifest_sha256": spec.parent_manifest_sha256,
+            "proof_file_sha256": spec.parent_proof_file_sha256,
+            "eligibility": {
+                "authorization": "unsigned-exact-hash",
+                "commands": 0,
+                "preparation_initial_state": "BLOCKED_UNSIGNED",
+                "preparation_state": "READY_TO_EXECUTE",
+                "promoted": True,
+                "safe_code": "RUNTIME_POSTFLIGHT_DIRTY",
+                "signature_status": spec.required_signature_status,
+                "state": "FAILED",
+            },
+        },
+        "asset": {"sha256": spec.outer_sha256},
+        "inventory": {
+            "mandatory_executable_relative_path": inventory[
+                "mandatory_executable_relative_path"
+            ],
+            "mandatory_executable_sha256": spec.mandatory_executable_sha256,
+            "rows": inventory["rows"],
+            "sha256": spec.load_inventory_sha256,
+            "version_executable_relative_path": inventory[
+                "version_executable_relative_path"
+            ],
+            "version_executable_sha256": spec.version_executable_sha256,
+        },
+        "paths": {"runtime_root": str(runtime_dir.resolve(strict=True))},
+        "execution": None,
+    }
+    resolved_child = _create_new_directory(recovery_proof_dir)
+    try:
+        _write_new_recovery_evidence(resolved_child, document)
+        verified = _read_recovery_evidence(resolved_child)
+        proof_file_sha256 = _sha256_file(_recovery_evidence_path(resolved_child))
+    except RuntimeProofError:
+        raise
+    except OSError as error:
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED") from error
+    return RuntimeRecoveryProof(
+        state="RECOVERY_READY",
+        safe_code=None,
+        exit_code=0,
+        evidence_id=str(verified["evidence_id"]),
+        proof_dir=resolved_child,
+        manifest_sha256=str(verified["manifest_sha256"]),
+        proof_file_sha256=proof_file_sha256,
+    )
+
+
+def verify_runtime_recovery(
+    recovery_proof_dir: Path, *, spec: RuntimeRecoverySpec
+) -> RuntimeRecoveryProof:
+    try:
+        per_user_root = recovery_proof_dir.parent.parent
+        parent_proof_dir = (
+            per_user_root / "proofs" / spec.parent_directory_name
+        )
+        runtime_dir = per_user_root / "runtime" / "sherpa-onnx" / "1.13.6"
+        validate_runtime_recovery_paths(
+            Path(__file__).resolve().parents[2],
+            per_user_root,
+            parent_proof_dir,
+            recovery_proof_dir,
+            runtime_dir,
+            recovery_must_exist=True,
+        )
+        document = _read_recovery_evidence(recovery_proof_dir)
+        proof_file_sha256 = _sha256_file(
+            _recovery_evidence_path(recovery_proof_dir)
+        )
+        parent_binding = document.get("parent")
+        asset = document.get("asset")
+        inventory = document.get("inventory")
+        paths = document.get("paths")
+        if not all(
+            isinstance(section, dict)
+            for section in (parent_binding, asset, inventory, paths)
+        ):
+            raise ValueError("invalid recovery binding")
+        assert isinstance(parent_binding, dict)
+        assert isinstance(asset, dict)
+        assert isinstance(inventory, dict)
+        assert isinstance(paths, dict)
+        expected_eligibility = {
+            "authorization": "unsigned-exact-hash",
+            "commands": 0,
+            "preparation_initial_state": "BLOCKED_UNSIGNED",
+            "preparation_state": "READY_TO_EXECUTE",
+            "promoted": True,
+            "safe_code": "RUNTIME_POSTFLIGHT_DIRTY",
+            "signature_status": spec.required_signature_status,
+            "state": "FAILED",
+        }
+        rows = inventory.get("rows")
+        if (
+            not isinstance(document.get("evidence_id"), str)
+            or document.get("reason") != "ZERO_RESULT_PROBE_SERIALIZATION_FIXED"
+            or parent_binding.get("directory_name") != spec.parent_directory_name
+            or parent_binding.get("evidence_id") != spec.parent_evidence_id
+            or parent_binding.get("manifest_sha256")
+            != spec.parent_manifest_sha256
+            or parent_binding.get("proof_file_sha256")
+            != spec.parent_proof_file_sha256
+            or parent_binding.get("eligibility") != expected_eligibility
+            or asset != {"sha256": spec.outer_sha256}
+            or inventory.get("sha256") != spec.load_inventory_sha256
+            or inventory.get("mandatory_executable_sha256")
+            != spec.mandatory_executable_sha256
+            or inventory.get("version_executable_sha256")
+            != spec.version_executable_sha256
+            or not isinstance(rows, list)
+            or len(rows) != spec.expected_load_candidate_count
+            or paths.get("runtime_root") != str(runtime_dir.resolve(strict=True))
+        ):
+            raise ValueError("recovery identity mismatch")
+        if any(
+            not isinstance(row, dict)
+            or not isinstance(row.get("signature"), dict)
+            or row["signature"].get("status") != spec.required_signature_status
+            for row in rows
+        ):
+            raise ValueError("recovery signature mismatch")
+
+        parent = _read_parent_for_recovery(
+            parent_proof_dir, runtime_dir, spec=spec
+        )
+        parent_inventory = parent.get("inventory")
+        if not isinstance(parent_inventory, dict) or any(
+            inventory.get(field) != parent_inventory.get(field)
+            for field in (
+                "mandatory_executable_relative_path",
+                "mandatory_executable_sha256",
+                "rows",
+                "sha256",
+                "version_executable_relative_path",
+            )
+        ):
+            raise ValueError("parent child inventory mismatch")
+        _verify_inventory_tree(runtime_dir, inventory)
+
+        state = document.get("state")
+        safe_code = document.get("safe_code")
+        execution = document.get("execution")
+        consumption_path = _recovery_consumption_path(recovery_proof_dir)
+        if state == "RECOVERY_READY":
+            if (
+                safe_code is not None
+                or execution is not None
+                or consumption_path.exists()
+                or consumption_path.is_symlink()
+            ):
+                raise ValueError("invalid ready recovery")
+            exit_code = 0
+        elif state in {"RECOVERY_EXECUTING", "PASSED", "FAILED"}:
+            if not isinstance(execution, dict):
+                raise ValueError("missing consumed execution")
+            consumption = _read_recovery_consumption(recovery_proof_dir)
+            _validate_consumed_recovery(
+                document,
+                execution,
+                consumption,
+                recovery_proof_dir,
+                runtime_dir,
+                spec=spec,
+            )
+            if state == "RECOVERY_EXECUTING":
+                if safe_code != "RUNTIME_RECOVERY_ALREADY_USED":
+                    raise ValueError("invalid executing state")
+                exit_code = 30
+            elif state == "PASSED":
+                if safe_code is not None or len(execution["commands"]) != 2:
+                    raise ValueError("invalid passed state")
+                if any(command.get("returncode") != 0 for command in execution["commands"]):
+                    raise ValueError("invalid passed command")
+                exit_code = 0
+            else:
+                if not isinstance(safe_code, str):
+                    raise ValueError("invalid failed state")
+                exit_code = 30
+        else:
+            raise ValueError("invalid recovery state")
+
+        return RuntimeRecoveryProof(
+            state=str(state),
+            safe_code=safe_code if isinstance(safe_code, str) else None,
+            exit_code=exit_code,
+            evidence_id=str(document["evidence_id"]),
+            proof_dir=recovery_proof_dir.resolve(strict=True),
+            manifest_sha256=str(document["manifest_sha256"]),
+            proof_file_sha256=proof_file_sha256,
+        )
+    except RuntimeProofError as error:
+        if error.code == "RUNTIME_EVIDENCE_TAMPERED":
+            raise
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED") from error
+    except (KeyError, OSError, TypeError, ValueError) as error:
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED") from error
+
+
+def _validate_consumed_recovery(
+    document: dict[str, object],
+    execution: dict[str, object],
+    consumption: dict[str, object],
+    recovery_proof_dir: Path,
+    runtime_dir: Path,
+    *,
+    spec: RuntimeRecoverySpec,
+) -> None:
+    preconsume = consumption.get("preconsume")
+    authorization = execution.get("authorization")
+    if not isinstance(preconsume, dict) or not isinstance(authorization, dict):
+        raise ValueError("invalid consumption binding")
+    consumption_sha256 = _sha256_file(
+        _recovery_consumption_path(recovery_proof_dir)
+    )
+    expected_acks = {
+        "runtime_recovery_once": True,
+        "parent_evidence_id": spec.parent_evidence_id,
+        "parent_manifest_sha256": spec.parent_manifest_sha256,
+        "parent_proof_file_sha256": spec.parent_proof_file_sha256,
+        "recovery_evidence_id": document.get("evidence_id"),
+        "recovery_manifest_sha256": preconsume.get("manifest_sha256"),
+        "recovery_proof_file_sha256": preconsume.get("proof_file_sha256"),
+        "outer_sha256": spec.outer_sha256,
+        "load_inventory_sha256": spec.load_inventory_sha256,
+        "version_executable_sha256": spec.version_executable_sha256,
+        "executable_sha256": spec.mandatory_executable_sha256,
+    }
+    actual_acks = authorization.get("acks")
+    ack_mismatch_failure = (
+        document.get("state") == "FAILED"
+        and document.get("safe_code") == "RUNTIME_ACK_MISMATCH"
+    )
+    if (
+        not isinstance(consumption.get("consumption_id"), str)
+        or not isinstance(consumption.get("created_utc"), str)
+        or preconsume.get("evidence_id") != document.get("evidence_id")
+        or not isinstance(preconsume.get("manifest_sha256"), str)
+        or not isinstance(preconsume.get("proof_file_sha256"), str)
+        or authorization.get("mode") != "runtime-recovery-exact-hash-once"
+        or authorization.get("consumption_proof_file_sha256")
+        != consumption_sha256
+        or not isinstance(actual_acks, dict)
+        or set(actual_acks) != set(expected_acks)
+        or actual_acks.get("runtime_recovery_once") is not True
+        or actual_acks.get("recovery_evidence_id")
+        != preconsume.get("evidence_id")
+        or actual_acks.get("recovery_manifest_sha256")
+        != preconsume.get("manifest_sha256")
+        or actual_acks.get("recovery_proof_file_sha256")
+        != preconsume.get("proof_file_sha256")
+        or (not ack_mismatch_failure and actual_acks != expected_acks)
+    ):
+        raise ValueError("consumption identity mismatch")
+
+    expected_path_prepend = [
+        str(runtime_dir / "bin"),
+        str(runtime_dir / "lib"),
+    ]
+    if execution.get("environment_delta") != {
+        "path_prepend": expected_path_prepend
+    }:
+        raise ValueError("invalid recovery environment")
+    commands = execution.get("commands")
+    if not isinstance(commands, list) or len(commands) > 2:
+        raise ValueError("invalid recovery commands")
+    if ack_mismatch_failure and commands:
+        raise ValueError("ack mismatch executed commands")
+    expected_commands = [
+        (
+            "version",
+            [str(runtime_dir / "bin" / "sherpa-onnx-version.exe")],
+        ),
+        (
+            "help",
+            [
+                str(runtime_dir / "bin" / "sherpa-onnx-offline-tts.exe"),
+                "--help",
+            ],
+        ),
+    ]
+    for index, command in enumerate(commands):
+        if not isinstance(command, dict):
+            raise ValueError("invalid recovery command")
+        purpose, argv = expected_commands[index]
+        _validate_captured_output(command.get("stdout"))
+        _validate_captured_output(command.get("stderr"))
+        duration = command.get("duration_seconds")
+        if (
+            command.get("purpose") != purpose
+            or command.get("argv") != argv
+            or command.get("cwd") != str(Path(argv[0]).parent)
+            or command.get("shell") is not False
+            or command.get("stdin") != "DEVNULL"
+            or command.get("timeout_seconds") != 30
+            or command.get("capture_output") is not True
+            or not isinstance(duration, (int, float))
+            or isinstance(duration, bool)
+            or duration < 0
+        ):
+            raise ValueError("recovery command contract mismatch")
+        if (
+            purpose == "help"
+            and command.get("returncode") == 0
+            and document.get("state") == "PASSED"
+        ):
+            stdout = command["stdout"].get("bounded_text", "")
+            stderr = command["stderr"].get("bounded_text", "")
+            normalized = f"{stdout}\n{stderr}".casefold()
+            if any(token not in normalized for token in _REQUIRED_HELP_TOKENS):
+                raise ValueError("help contract mismatch")
+
+
+def resume_runtime_proof(
+    parent_proof_dir: Path,
+    recovery_proof_dir: Path,
+    runtime_dir: Path,
+    *,
+    spec: RuntimeRecoverySpec,
+    runner,
+    process_probe,
+    listener_probe,
+    event_probe,
+    ack_runtime_recovery_once: bool,
+    ack_parent_evidence_id: str,
+    ack_parent_manifest_sha256: str,
+    ack_parent_proof_file_sha256: str,
+    ack_recovery_evidence_id: str,
+    ack_recovery_manifest_sha256: str,
+    ack_recovery_proof_file_sha256: str,
+    ack_outer_sha256: str,
+    ack_load_inventory_sha256: str,
+    ack_version_executable_sha256: str,
+    ack_executable_sha256: str,
+) -> RuntimeRecoveryProof:
+    per_user_root = recovery_proof_dir.parent.parent
+    validate_runtime_recovery_paths(
+        Path(__file__).resolve().parents[2],
+        per_user_root,
+        parent_proof_dir,
+        recovery_proof_dir,
+        runtime_dir,
+        recovery_must_exist=True,
+    )
+    document = _read_recovery_evidence(recovery_proof_dir)
+    preconsume_file_sha256 = _sha256_file(
+        _recovery_evidence_path(recovery_proof_dir)
+    )
+    consumption_path = _recovery_consumption_path(recovery_proof_dir)
+    if (
+        document.get("state") != "RECOVERY_READY"
+        or document.get("safe_code") is not None
+        or document.get("execution") is not None
+        or consumption_path.exists()
+        or consumption_path.is_symlink()
+    ):
+        raise RuntimeProofError("RUNTIME_RECOVERY_ALREADY_USED")
+    if (
+        ack_runtime_recovery_once is not True
+        or ack_recovery_evidence_id != document.get("evidence_id")
+        or ack_recovery_manifest_sha256 != document.get("manifest_sha256")
+        or ack_recovery_proof_file_sha256 != preconsume_file_sha256
+    ):
+        raise RuntimeProofError("RUNTIME_ACK_MISMATCH")
+    _validate_preconsume_recovery_binding(
+        document, runtime_dir, spec=spec
+    )
+
+    consumption = {
+        "schema": _RECOVERY_CONSUMPTION_SCHEMA,
+        "consumption_id": str(uuid.uuid4()),
+        "created_utc": _utc_now().isoformat(),
+        "preconsume": {
+            "evidence_id": ack_recovery_evidence_id,
+            "manifest_sha256": ack_recovery_manifest_sha256,
+            "proof_file_sha256": ack_recovery_proof_file_sha256,
+        },
+    }
+    _write_new_recovery_consumption(recovery_proof_dir, consumption)
+    consumption_file_sha256 = _sha256_file(consumption_path)
+    acks = {
+        "runtime_recovery_once": ack_runtime_recovery_once,
+        "parent_evidence_id": ack_parent_evidence_id,
+        "parent_manifest_sha256": ack_parent_manifest_sha256,
+        "parent_proof_file_sha256": ack_parent_proof_file_sha256,
+        "recovery_evidence_id": ack_recovery_evidence_id,
+        "recovery_manifest_sha256": ack_recovery_manifest_sha256,
+        "recovery_proof_file_sha256": ack_recovery_proof_file_sha256,
+        "outer_sha256": ack_outer_sha256,
+        "load_inventory_sha256": ack_load_inventory_sha256,
+        "version_executable_sha256": ack_version_executable_sha256,
+        "executable_sha256": ack_executable_sha256,
+    }
+    path_prefix = [runtime_dir / "bin", runtime_dir / "lib"]
+    execution: dict[str, object] = {
+        "authorization": {
+            "mode": "runtime-recovery-exact-hash-once",
+            "consumption_proof_file_sha256": consumption_file_sha256,
+            "acks": acks,
+        },
+        "commands": [],
+        "environment_delta": {
+            "path_prepend": [str(path) for path in path_prefix]
+        },
+    }
+    document = dict(document)
+    document.pop("manifest_sha256", None)
+    document["state"] = "RECOVERY_EXECUTING"
+    document["safe_code"] = "RUNTIME_RECOVERY_ALREADY_USED"
+    document["execution"] = execution
+    document = _replace_recovery_evidence(recovery_proof_dir, document)
+    _read_recovery_consumption(recovery_proof_dir)
+    _read_recovery_evidence(recovery_proof_dir)
+
+    expected_postconsume_acks = {
+        "parent_evidence_id": spec.parent_evidence_id,
+        "parent_manifest_sha256": spec.parent_manifest_sha256,
+        "parent_proof_file_sha256": spec.parent_proof_file_sha256,
+        "outer_sha256": spec.outer_sha256,
+        "load_inventory_sha256": spec.load_inventory_sha256,
+        "version_executable_sha256": spec.version_executable_sha256,
+        "executable_sha256": spec.mandatory_executable_sha256,
+    }
+    if any(acks[name] != value for name, value in expected_postconsume_acks.items()):
+        return _finish_runtime_recovery(
+            recovery_proof_dir,
+            document,
+            state="FAILED",
+            safe_code="RUNTIME_ACK_MISMATCH",
+            execution=execution,
+            spec=spec,
+        )
+
+    verify_runtime_recovery(recovery_proof_dir, spec=spec)
+    environment = dict(os.environ)
+    inherited_path = environment.get("PATH")
+    environment["PATH"] = os.pathsep.join(
+        [
+            *(str(path) for path in path_prefix),
+            *([inherited_path] if inherited_path else []),
+        ]
+    )
+    commands: list[dict[str, object]] = []
+    safe_code: str | None = None
+    start_utc = _utc_now().isoformat()
+    started = time.monotonic()
+    try:
+        processes_before = _snapshot(process_probe())
+        listeners_before = _snapshot(listener_probe())
+    except Exception:
+        return _finish_runtime_recovery(
+            recovery_proof_dir,
+            document,
+            state="FAILED",
+            safe_code="RUNTIME_POSTFLIGHT_DIRTY",
+            execution=execution,
+            spec=spec,
+        )
+
+    command_specs = [
+        (runtime_dir / "bin" / "sherpa-onnx-version.exe", (), "version"),
+        (
+            runtime_dir / "bin" / "sherpa-onnx-offline-tts.exe",
+            ("--help",),
+            "help",
+        ),
+    ]
+    for executable, arguments, purpose in command_specs:
+        argv = (str(executable), *arguments)
+        command_started = time.monotonic()
+        try:
+            result = runner(
+                argv,
+                shell=False,
+                stdin=subprocess.DEVNULL,
+                cwd=executable.parent,
+                timeout=30,
+                capture_output=True,
+                env=environment,
+            )
+            stdout = _output_bytes(getattr(result, "stdout", b""))
+            stderr = _output_bytes(getattr(result, "stderr", b""))
+            returncode = getattr(result, "returncode", None)
+        except subprocess.TimeoutExpired:
+            stdout = b""
+            stderr = b""
+            returncode = None
+            safe_code = "RUNTIME_HELP_TIMEOUT"
+        except Exception:
+            stdout = b""
+            stderr = b""
+            returncode = None
+            safe_code = "RUNTIME_HELP_NONZERO"
+        commands.append(
+            _command_evidence(
+                argv,
+                executable.parent,
+                purpose,
+                returncode,
+                stdout,
+                stderr,
+                time.monotonic() - command_started,
+            )
+        )
+        execution["commands"] = commands
+        document = _journal_runtime_recovery(
+            recovery_proof_dir, document, execution
+        )
+        if safe_code is not None:
+            break
+        if not isinstance(returncode, int) or returncode != 0:
+            safe_code = "RUNTIME_HELP_NONZERO"
+            break
+        if purpose == "help":
+            normalized = (stdout + b"\n" + stderr).decode(
+                "utf-8", errors="replace"
+            ).casefold()
+            if any(token not in normalized for token in _REQUIRED_HELP_TOKENS):
+                safe_code = "RUNTIME_HELP_CONTRACT_MISMATCH"
+                break
+
+    end_utc = _utc_now().isoformat()
+    try:
+        processes_after = _snapshot(process_probe())
+        listeners_after = _snapshot(listener_probe())
+        event_1000 = _snapshot(event_probe(start_utc, end_utc))
+    except Exception:
+        processes_after = []
+        listeners_after = []
+        event_1000 = ["probe-unknown"]
+    if (
+        _new_snapshot_items(processes_before, processes_after)
+        or _new_snapshot_items(listeners_before, listeners_after)
+        or event_1000
+    ):
+        safe_code = safe_code or "RUNTIME_POSTFLIGHT_DIRTY"
+    try:
+        recovery_inventory = document.get("inventory")
+        if not isinstance(recovery_inventory, dict):
+            raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED")
+        _verify_inventory_tree(runtime_dir, recovery_inventory)
+    except RuntimeProofError:
+        safe_code = "RUNTIME_EVIDENCE_TAMPERED"
+
+    execution.update(
+        {
+            "commands": commands,
+            "event_1000": event_1000,
+            "listeners_after": listeners_after,
+            "listeners_before": listeners_before,
+            "processes_after": processes_after,
+            "processes_before": processes_before,
+            "start_utc": start_utc,
+            "end_utc": end_utc,
+            "version_utility": "executed" if commands else "not_executed",
+            "wall_seconds": round(time.monotonic() - started, 6),
+        }
+    )
+    state = "PASSED" if safe_code is None else "FAILED"
+    return _finish_runtime_recovery(
+        recovery_proof_dir,
+        document,
+        state=state,
+        safe_code=safe_code,
+        execution=execution,
+        spec=spec,
+    )
+
+
+def _validate_preconsume_recovery_binding(
+    document: dict[str, object],
+    runtime_dir: Path,
+    *,
+    spec: RuntimeRecoverySpec,
+) -> None:
+    parent = document.get("parent")
+    asset = document.get("asset")
+    inventory = document.get("inventory")
+    paths = document.get("paths")
+    if not all(isinstance(value, dict) for value in (parent, asset, inventory, paths)):
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED")
+    assert isinstance(parent, dict)
+    assert isinstance(asset, dict)
+    assert isinstance(inventory, dict)
+    assert isinstance(paths, dict)
+    if (
+        parent.get("directory_name") != spec.parent_directory_name
+        or parent.get("evidence_id") != spec.parent_evidence_id
+        or parent.get("manifest_sha256") != spec.parent_manifest_sha256
+        or parent.get("proof_file_sha256") != spec.parent_proof_file_sha256
+        or asset.get("sha256") != spec.outer_sha256
+        or inventory.get("sha256") != spec.load_inventory_sha256
+        or inventory.get("version_executable_sha256")
+        != spec.version_executable_sha256
+        or inventory.get("mandatory_executable_sha256")
+        != spec.mandatory_executable_sha256
+        or paths.get("runtime_root") != str(runtime_dir.resolve(strict=True))
+    ):
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED")
+
+
+def _journal_runtime_recovery(
+    recovery_proof_dir: Path,
+    document: dict[str, object],
+    execution: dict[str, object],
+) -> dict[str, object]:
+    current = dict(document)
+    current.pop("manifest_sha256", None)
+    current["state"] = "RECOVERY_EXECUTING"
+    current["safe_code"] = "RUNTIME_RECOVERY_ALREADY_USED"
+    current["execution"] = execution
+    signed = _replace_recovery_evidence(recovery_proof_dir, current)
+    if _read_recovery_evidence(recovery_proof_dir) != signed:
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED")
+    return signed
+
+
+def _finish_runtime_recovery(
+    recovery_proof_dir: Path,
+    document: dict[str, object],
+    *,
+    state: str,
+    safe_code: str | None,
+    execution: dict[str, object],
+    spec: RuntimeRecoverySpec,
+) -> RuntimeRecoveryProof:
+    terminal = dict(document)
+    terminal.pop("manifest_sha256", None)
+    terminal["state"] = state
+    terminal["safe_code"] = safe_code
+    terminal["execution"] = execution
+    terminal["completed_utc"] = _utc_now().isoformat()
+    _replace_recovery_evidence(recovery_proof_dir, terminal)
+    return verify_runtime_recovery(recovery_proof_dir, spec=spec)
+
+
 def _validate_existing_proof_paths(
     repo_root: Path,
     per_user_root: Path,
@@ -1754,6 +2817,44 @@ def _cli_summary(document: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _recovery_cli_summary(
+    document: dict[str, object], *, proof_file_sha256: str
+) -> dict[str, object]:
+    inventory = document.get("inventory")
+    asset = document.get("asset")
+    parent = document.get("parent")
+    state = document.get("state")
+    return {
+        "evidence_id": document.get("evidence_id"),
+        "executable_sha256": (
+            inventory.get("mandatory_executable_sha256")
+            if isinstance(inventory, dict)
+            else None
+        ),
+        "load_inventory_sha256": (
+            inventory.get("sha256") if isinstance(inventory, dict) else None
+        ),
+        "manifest_sha256": document.get("manifest_sha256"),
+        "next_step": (
+            "stop-and-request-d2-ur-x" if state == "RECOVERY_READY" else "stop"
+        ),
+        "outer_sha256": (
+            asset.get("sha256") if isinstance(asset, dict) else None
+        ),
+        "parent_evidence_id": (
+            parent.get("evidence_id") if isinstance(parent, dict) else None
+        ),
+        "proof_file_sha256": proof_file_sha256,
+        "safe_code": document.get("safe_code"),
+        "state": state,
+        "version_executable_sha256": (
+            inventory.get("version_executable_sha256")
+            if isinstance(inventory, dict)
+            else None
+        ),
+    }
+
+
 def _emit_cli_json(payload: dict[str, object]) -> None:
     print(
         json.dumps(
@@ -1814,27 +2915,147 @@ def main(
             document = _read_evidence(proof.proof_dir)
             _emit_cli_json(_cli_summary(document))
             return proof.exit_code
-        _validate_existing_proof_paths(
-            active.repo_root,
-            active.per_user_root,
-            arguments.proof_dir,
-        )
-        proof = verify_runtime_proof(arguments.proof_dir)
-        document = _read_evidence(proof.proof_dir)
-        _emit_cli_json(_cli_summary(document))
-        return proof.exit_code
+        if arguments.command == "prepare-runtime-recovery":
+            runtime_dir = (
+                active.per_user_root / "runtime" / "sherpa-onnx" / "1.13.6"
+            )
+            validate_runtime_recovery_paths(
+                active.repo_root,
+                active.per_user_root,
+                arguments.parent_proof_dir,
+                arguments.recovery_proof_dir,
+                runtime_dir,
+                recovery_must_exist=False,
+            )
+            proof = prepare_runtime_recovery(
+                arguments.parent_proof_dir,
+                arguments.recovery_proof_dir,
+                spec=active.recovery_spec,
+                ack_parent_evidence_id=arguments.ack_parent_evidence_id,
+                ack_parent_manifest_sha256=arguments.ack_parent_manifest_sha256,
+                ack_parent_proof_file_sha256=(
+                    arguments.ack_parent_proof_file_sha256
+                ),
+                ack_outer_sha256=arguments.ack_outer_sha256,
+                ack_load_inventory_sha256=arguments.ack_load_inventory_sha256,
+                ack_executable_sha256=arguments.ack_executable_sha256,
+            )
+            document = _read_recovery_evidence(proof.proof_dir)
+            _emit_cli_json(
+                _recovery_cli_summary(
+                    document, proof_file_sha256=proof.proof_file_sha256
+                )
+            )
+            return proof.exit_code
+        if arguments.command == "verify-runtime-recovery":
+            parent_proof_dir = (
+                active.per_user_root
+                / "proofs"
+                / active.recovery_spec.parent_directory_name
+            )
+            runtime_dir = (
+                active.per_user_root / "runtime" / "sherpa-onnx" / "1.13.6"
+            )
+            validate_runtime_recovery_paths(
+                active.repo_root,
+                active.per_user_root,
+                parent_proof_dir,
+                arguments.recovery_proof_dir,
+                runtime_dir,
+                recovery_must_exist=True,
+            )
+            proof = verify_runtime_recovery(
+                arguments.recovery_proof_dir, spec=active.recovery_spec
+            )
+            document = _read_recovery_evidence(proof.proof_dir)
+            _emit_cli_json(
+                _recovery_cli_summary(
+                    document, proof_file_sha256=proof.proof_file_sha256
+                )
+            )
+            return proof.exit_code
+        if arguments.command == "resume-runtime-proof":
+            validate_runtime_recovery_paths(
+                active.repo_root,
+                active.per_user_root,
+                arguments.parent_proof_dir,
+                arguments.recovery_proof_dir,
+                arguments.runtime_dir,
+                recovery_must_exist=True,
+            )
+            proof = resume_runtime_proof(
+                arguments.parent_proof_dir,
+                arguments.recovery_proof_dir,
+                arguments.runtime_dir,
+                spec=active.recovery_spec,
+                runner=active.runner,
+                process_probe=active.process_probe,
+                listener_probe=active.listener_probe,
+                event_probe=active.event_probe,
+                ack_runtime_recovery_once=(
+                    arguments.ack_runtime_recovery_once
+                ),
+                ack_parent_evidence_id=arguments.ack_parent_evidence_id,
+                ack_parent_manifest_sha256=arguments.ack_parent_manifest_sha256,
+                ack_parent_proof_file_sha256=(
+                    arguments.ack_parent_proof_file_sha256
+                ),
+                ack_recovery_evidence_id=arguments.ack_recovery_evidence_id,
+                ack_recovery_manifest_sha256=(
+                    arguments.ack_recovery_manifest_sha256
+                ),
+                ack_recovery_proof_file_sha256=(
+                    arguments.ack_recovery_proof_file_sha256
+                ),
+                ack_outer_sha256=arguments.ack_outer_sha256,
+                ack_load_inventory_sha256=arguments.ack_load_inventory_sha256,
+                ack_version_executable_sha256=(
+                    arguments.ack_version_executable_sha256
+                ),
+                ack_executable_sha256=arguments.ack_executable_sha256,
+            )
+            document = _read_recovery_evidence(proof.proof_dir)
+            _emit_cli_json(
+                _recovery_cli_summary(
+                    document, proof_file_sha256=proof.proof_file_sha256
+                )
+            )
+            return proof.exit_code
+        if arguments.command == "verify-runtime-proof":
+            _validate_existing_proof_paths(
+                active.repo_root,
+                active.per_user_root,
+                arguments.proof_dir,
+            )
+            proof = verify_runtime_proof(arguments.proof_dir)
+            document = _read_evidence(proof.proof_dir)
+            _emit_cli_json(_cli_summary(document))
+            return proof.exit_code
+        raise RuntimeProofError("RUNTIME_EVIDENCE_TAMPERED")
     except RuntimeProofError as error:
-        _emit_cli_json(
-            {
-                "evidence_id": None,
-                "executable_sha256": None,
-                "load_inventory_sha256": None,
-                "next_step": "stop",
-                "outer_sha256": None,
-                "safe_code": error.code,
-                "state": "FAILED",
-            }
-        )
+        failure = {
+            "evidence_id": None,
+            "executable_sha256": None,
+            "load_inventory_sha256": None,
+            "next_step": "stop",
+            "outer_sha256": None,
+            "safe_code": error.code,
+            "state": "FAILED",
+        }
+        if arguments.command in {
+            "prepare-runtime-recovery",
+            "verify-runtime-recovery",
+            "resume-runtime-proof",
+        }:
+            failure.update(
+                {
+                    "manifest_sha256": None,
+                    "parent_evidence_id": None,
+                    "proof_file_sha256": None,
+                    "version_executable_sha256": None,
+                }
+            )
+        _emit_cli_json(failure)
         return 30
 
 
