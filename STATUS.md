@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-20 SmartSub installer compatibility research completed; direct runtime remains gated
+
+- Current state: official-source research confirms that SmartSub 3.7.0 issue #432 has the same seven-field APPCRASH signature as this machine, so the same installer should not be retried. A direct official sherpa-onnx Windows CPU runtime is technically plausible, but it has not been downloaded or run locally and the exact Emilia-linked ZipVoice model does not have clearly established commercial-use rights.
+- Work completed: pulled the current branch (`Already up to date.`), inspected the pinned SmartSub v3.7.0 release/build/NSIS configuration and issue state, compared Windows 11 25H2 builds and the seven stable crash fields, fixed the current sherpa-onnx v1.13.6 TTS-enabled Windows x64 archive at `24,497,928` bytes and SHA-256 `4a296ee44c0997ab9fd4d30d7196446ab77e0ef34f0ce66b5e01b3339fce4613`, confirmed that no sherpa runtime is currently available in the project environment, and recorded the evidence in `docs/research/2026-08-20-smartsub-installer-compatibility.md`. This was documentation-only research; no code tests were required or run.
+- Next step: if the user wants a private non-commercial capability check, first write and approve a separate Gate D2 plan for the exact v1.13.6 runtime-only download, archive inspection, isolated extraction, signature/hash inventory, and `--help`/version proof. Model extraction/loading, reference media, and synthesis must remain a later explicit gate. For customer-facing use, select or establish a model with commercially clear rights before any production trial.
+- Blockers: SmartSub issue #432 remains open without an official fix or workaround; Windows 11 25H2 is a strong inference rather than a confirmed root cause; the direct runtime has not been locally verified; ZipVoice memory/static-output risks still require bounded QA; and the exact model's commercial rights remain unresolved. No installer was run, no new asset was downloaded, no archive/model/video was read or extracted, and no Yating, synthesis, login, upload, or push occurred.
+
 ## 2026-08-19 free-first voice pilot Gate D blocked by SmartSub installer APPCRASH
 
 - 一句話現況：使用者已另行精確核准執行 exact-hash 的 `NotSigned` SmartSub 3.7.0 installer；installer 只啟動一次便在任何 SmartScreen／NSIS UI 或安裝檔案出現前，於自身解出的 `System.dll` 發生 `0xc0000005` APPCRASH，因此依 no-automatic-retry 與 fixed per-user UI 契約停止，Gate D 未完成。
