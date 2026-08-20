@@ -786,6 +786,46 @@ Gate D2-UR-I did not complete:
 Stop here. A fresh written gate is required for any replacement real-probe invocation. It may not be
 treated as a continuation or retry under D2-UR-I, and Task 8 remains unauthorized.
 
+## Actual evidence：2026-08-20 Gate D2-UR-R1 completion
+
+The separately approved replacement-probe gate completed successfully:
+
+- Gate D2-UR-R1 execution baseline and preflight HEAD:
+  `88294979e994b3ac18d51627bb7be520082191cb`.
+- Implementation code commit: `5dff9e28cef1016c634d8c4c445117d636df2fcc`; both approved code
+  files had 0 diff from this commit before and after R1.
+- Preflight working tree was clean. Parent/archive/runtime existed, the reserved child did not exist,
+  all checked roots were non-reparse, and SmartSub/version/offline-tts/WINWORD were `0 / 0 / 0 / 0`.
+- Parent evidence ID, manifest and proof-file SHA-256 revalidated as
+  `a3ba6b11-5b57-46db-b5e7-113c36e9d964`,
+  `e841a4f6ee1aa24bb7bd78c8b57ac88336f84512b175bbd44066f099829d2123`, and
+  `3e4e1fdec33d11e60096a58e8b35f12766ffeeab620582961634af27c49f06e9`.
+- The archive remained `24,497,928` bytes with outer SHA-256
+  `4a296ee44c0997ab9fd4d30d7196446ab77e0ef34f0ce66b5e01b3339fce4613`.
+- The one replacement stdin probe set returned exit `0` with process `array / 0`, listener
+  `array / 43`, and Event `array / 0`. No process/listener/Event details were emitted.
+- The actual child preparation command was invoked exactly once at
+  `C:\Users\cance\AppData\Local\EasyTravelVoicePilot\proofs\runtime-recovery-v1.13.6-20260820T033027Z-4ab5cbb2`
+  and returned exit `0`, state `RECOVERY_READY`, safe code null.
+- Child evidence ID: `86436eee-e0cd-47c1-b5be-a0f1ebf947bf`.
+- Child manifest SHA-256: `77c86d7b5ea60ac3aaf142dac26a2d547b80edfb328ea08a4c122a829e186338`.
+- Child pre-consume proof-file SHA-256:
+  `126caf95b1158e1eb439c0ba51291f39b0a1522adc4010eb81c9617a8b0a9efd`.
+- The one read-only recovery verifier returned the same identities, exit `0` and
+  `RECOVERY_READY`. Child `execution` is null and `runtime-recovery-consumption.json` does not exist.
+- Postflight rehashed all eight runtime rows and the complete load set. Inventory, version and mandatory
+  SHA-256 remained `d3d440c0345eee6e6dae680c07036c830896b5bbfc98f4774f83b243cc05786f`,
+  `7cb2de6405de878417635845278b1be01413650b36e64c30df5314128f109869`, and
+  `a62495554c6953d523626cfba0944be353857c9840b0e513170d45ba0e76a9f0`.
+- Parent proof-file hash and archive identity were unchanged. Postflight SmartSub/version/offline-tts/
+  WINWORD remained `0 / 0 / 0 / 0`; the child contains only `runtime-recovery-proof.json`.
+- No probe retry, child-command retry, alternate child, cleanup, consumption, sherpa/SmartSub/Yating
+  binary, download, extraction, model, personal media, reference, synthesis, login, upload or push occurred.
+
+Gate D2-UR-R1 stops here. Task 8 / Gate D2-UR-X remains unauthorized. The operator handoff must report
+the docs commit created from this evidence; only a later literal approval binding that final commit and
+all parent/child/runtime identities may authorize the single-use resume command.
+
 ## Task 8：未授權 Gate D2-UR-X single-use version/help runbook
 
 本Task不屬於D2-UR-I。只有Task 7 handoff完成、使用者逐值核准parent、child、runtime與Git
