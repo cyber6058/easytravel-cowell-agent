@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-20 sherpa runtime-only Gate D2 implementation plan awaiting review
+
+- Current state: the user approved the written Gate D2 design and authorized only creation of its implementation plan. `docs/plans/2026-08-20-sherpa-runtime-only-capability-proof-implementation-plan.md` now defines seven tasks and is awaiting review; no task has been executed.
+- Work completed: `git pull --ff-only` returned `Already up to date.` and the clean design baseline is `2c1592180fc932ef2bc055c1b4459a039f33e292`. The plan fixes three CLI seams (`prepare-runtime`, `prove-runtime`, `verify-runtime-proof`), stable safe codes, four synthetic TDD slices, archive no-`extractall` and path contracts, canonical load-candidate signature inventory, bounded help/version execution, evidence/tamper verification, complete-suite and scope proofs, two local implementation commits, and separately gated D2-X／D2-U runbooks. Tasks 1–5 are D2-I; Tasks 6–7 remain unauthorized. Self-review measured 606 lines, seven tasks, 42 headings, 44 paired Markdown fences, 16 completion checks, zero unresolved placeholders/trailing whitespace, all required hashes/gates present, and `git diff --check` clean.
+- Next step: the user reviews and explicitly approves the implementation plan's exact Gate D2-I sentence. Only that future approval authorizes Tasks 1–5 synthetic-only code/tests/local commits; it still will not authorize a true runtime download, extraction, third-party binary execution, model access, personal media, or synthesis.
+- Blockers: no runtime package has been downloaded or executed, so signature status and Windows capability remain unknown; model loading, audible quality, and commercial rights are outside D2-I. This turn made documentation-only changes; no code tests were required or run, and no runtime/model file, video/audio, Yating/SmartSub process, synthesis, login, upload, or push occurred.
+
 ## 2026-08-20 sherpa runtime-only Gate D2 written design awaiting review
 
 - Current state: the complete Gate D2 oral design is approved and has been written as `docs/specs/2026-08-20-sherpa-runtime-only-capability-proof-design.md`; it is awaiting the user's written-spec review. The design can quickly decide whether the exact official sherpa-onnx v1.13.6 Windows CPU runtime starts on this Windows 11 25H2 machine, but explicitly cannot claim model loading, acceptable speed, natural voice, or commercial readiness.
