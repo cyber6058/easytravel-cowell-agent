@@ -451,6 +451,35 @@ proof evidence、model或私人素材進 Git。
 test count／duration、suite count／duration、compile、scope proof、process counts、commit SHA、
 未驗證項目與下一個 exact gate。完成後停止；不得因 tests green進入 Task 6。
 
+### Gate D2-I actual evidence（2026-08-20）
+
+- 使用者只核准 Tasks 1–5 的 synthetic-only 離線安全骨架。開工
+  `git pull --ff-only` 為 `Already up to date.`，D2-I baseline 為
+  `fef433dfcac57100a4c7947486a70b4e8fad817a`；SmartSub、
+  `sherpa-onnx-offline-tts`、WINWORD 前檢均為 `0`。
+- 依 TDD 完成 pinned asset／fixed path、archive plan、manual-stream extraction、canonical
+  load inventory、Authenticode policy、signed／unsigned stop、fixed version／help runner、
+  bounded evidence、tamper verification與 bounded CLI JSON。最終 focused command 使用單一
+  pytest quiet level，實測為 `62 passed in 2.50s`。
+- 完整離線 suite 實測為 `676 passed, 8 skipped in 32.46s`，exit `0`；
+  `compileall -q scripts\voice_pilot tests\unit\voice_pilot` 無輸出且 exit `0`。
+- 相對 baseline 的 `src/`、`tests/unit/travel_briefing/`、既有 voice-pilot scripts及
+  `pyproject.toml` 均為 0 diff。新 production module 的 network-client imports為 0，
+  `.extractall(`／`.extract(` 呼叫為 0；唯一 URL 是 pinned official GitHub asset。
+  `git diff --cached --check` 無輸出且 exit `0`。
+- 測試後 SmartSub、`sherpa-onnx-offline-tts`、WINWORD 仍為 `0 / 0 / 0`。Git只納入
+  `scripts/voice_pilot/runtime_proof.py` 與
+  `tests/unit/voice_pilot/test_runtime_proof.py`；implementation commit為
+  `eefdf90776428e6eb32ab90c96ef027671f03ce9`。本 handoff 另以 docs-only local commit
+  保存，兩個 commits均不 push。
+- D2-I 只證明 synthetic safety contract與離線 harness通過；未下載、解壓或讀取真實
+  runtime／model，未執行第三方 binary，未讀取本人素材，未啟動 Yating／SmartSub，未合成、
+  登入、上傳或 push。因此尚未證明 sherpa runtime存在、可啟動、可載入 ZipVoice model、
+  速度合格、聲音自然或可商用。
+- 下一步仍是未授權的 Task 6／Gate D2-X。若要繼續，必須另行精確核准 fixed official
+  v1.13.6 asset 的單次下載、identity verification、safe prepare及 all-valid help proof；
+  D2-I 完成不授權 Task 6或未來 D2-U。
+
 ## Task 6：未來 Gate D2-X exact download、prepare 與 all-valid proof
 
 **本計畫目前不授權執行本 Task。** 只有新的 exact D2-X approval後才能進行。
