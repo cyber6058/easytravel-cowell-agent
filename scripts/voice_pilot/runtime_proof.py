@@ -1594,25 +1594,25 @@ def _default_signature_probe(path: Path) -> SignatureRecord:
 
 _PROCESS_PROBE_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
-@(Get-Process | Where-Object { $_.ProcessName -match '^(SmartSub|sherpa)' } |
-    Select-Object @{n='pid';e={$_.Id}}, @{n='name';e={$_.ProcessName}}) |
-    ConvertTo-Json -Compress
+$rows = @(Get-Process | Where-Object { $_.ProcessName -match '^(SmartSub|sherpa)' } |
+    Select-Object @{n='pid';e={$_.Id}}, @{n='name';e={$_.ProcessName}})
+ConvertTo-Json -InputObject $rows -Compress
 """.strip()
 
 _LISTENER_PROBE_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
-@(Get-NetTCPConnection -State Listen |
-    Select-Object LocalAddress, LocalPort, OwningProcess) |
-    ConvertTo-Json -Compress
+$rows = @(Get-NetTCPConnection -State Listen |
+    Select-Object LocalAddress, LocalPort, OwningProcess)
+ConvertTo-Json -InputObject $rows -Compress
 """.strip()
 
 _EVENT_PROBE_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
 $start = [DateTimeOffset]::Parse($env:EASYTRAVEL_EVENT_START).UtcDateTime
 $end = [DateTimeOffset]::Parse($env:EASYTRAVEL_EVENT_END).UtcDateTime
-@(Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=$start; EndTime=$end} -ErrorAction SilentlyContinue |
-    Select-Object Id, RecordId, ProviderName, TimeCreated) |
-    ConvertTo-Json -Compress
+$rows = @(Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=$start; EndTime=$end} -ErrorAction SilentlyContinue |
+    Select-Object Id, RecordId, ProviderName, TimeCreated)
+ConvertTo-Json -InputObject $rows -Compress
 """.strip()
 
 
@@ -1642,8 +1642,6 @@ def _powershell_json_probe(
         if result.returncode != 0 or len(stdout) > 1024 * 1024:
             raise RuntimeProofError("RUNTIME_POSTFLIGHT_DIRTY")
         value = json.loads(stdout.decode("utf-8"))
-        if value is None:
-            return []
         if isinstance(value, list):
             return value
         if isinstance(value, dict):

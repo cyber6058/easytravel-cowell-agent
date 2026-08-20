@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import scripts.voice_pilot.runtime_proof as runtime_proof_module
 from scripts.voice_pilot.runtime_proof import (
     PINNED_RUNTIME,
     RuntimeAssetSpec,
@@ -33,6 +34,101 @@ from scripts.voice_pilot.runtime_proof import (
     verify_archive_identity,
     verify_runtime_proof,
 )
+
+
+@pytest.mark.parametrize(
+    "script_name",
+    [
+        "_PROCESS_PROBE_SCRIPT",
+        "_LISTENER_PROBE_SCRIPT",
+        "_EVENT_PROBE_SCRIPT",
+    ],
+)
+def test_probe_scripts_use_inputobject_array_contract(script_name):
+    script = getattr(runtime_proof_module, script_name)
+
+    assert "$rows = @(" in script
+    assert "ConvertTo-Json -InputObject $rows -Compress" in script
+
+
+@pytest.mark.parametrize(
+    ("stdout", "expected"),
+    [
+        (b"[]", []),
+        (b'[{"pid":1}]', [{"pid": 1}]),
+        (b'[{"pid":1},{"pid":2}]', [{"pid": 1}, {"pid": 2}]),
+        (b'{"pid":1}', [{"pid": 1}]),
+    ],
+)
+def test_probe_decoder_accepts_zero_one_many_arrays_and_legacy_object(
+    monkeypatch, stdout, expected
+):
+    monkeypatch.setattr(
+        runtime_proof_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=stdout),
+    )
+
+    assert runtime_proof_module._powershell_json_probe("synthetic") == expected
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        b"",
+        b"null",
+        b"0",
+        b'"scalar"',
+        b"true",
+        b"{",
+    ],
+)
+def test_probe_decoder_rejects_empty_null_scalar_or_invalid_stdout(monkeypatch, stdout):
+    monkeypatch.setattr(
+        runtime_proof_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=stdout),
+    )
+
+    with pytest.raises(RuntimeProofError) as failure:
+        runtime_proof_module._powershell_json_probe("synthetic")
+
+    assert failure.value.code == "RUNTIME_POSTFLIGHT_DIRTY"
+
+
+def test_probe_decoder_rejects_oversized_stdout(monkeypatch):
+    stdout = b"x" * (1024 * 1024 + 1)
+    monkeypatch.setattr(
+        runtime_proof_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=stdout),
+    )
+
+    with pytest.raises(RuntimeProofError) as failure:
+        runtime_proof_module._powershell_json_probe("synthetic")
+
+    assert failure.value.code == "RUNTIME_POSTFLIGHT_DIRTY"
+
+
+@pytest.mark.parametrize("failure_kind", ["nonzero", "timeout", "encoding", "launch"])
+def test_probe_decoder_rejects_nonzero_timeout_encoding_and_launch_failures(
+    monkeypatch, failure_kind
+):
+    def run(*args, **kwargs):
+        if failure_kind == "timeout":
+            raise subprocess.TimeoutExpired(args[0], 30)
+        if failure_kind == "launch":
+            raise OSError("synthetic launch failure")
+        if failure_kind == "encoding":
+            return SimpleNamespace(returncode=0, stdout=b"\xff")
+        return SimpleNamespace(returncode=1, stdout=b"[]")
+
+    monkeypatch.setattr(runtime_proof_module.subprocess, "run", run)
+
+    with pytest.raises(RuntimeProofError) as failure:
+        runtime_proof_module._powershell_json_probe("synthetic")
+
+    assert failure.value.code == "RUNTIME_POSTFLIGHT_DIRTY"
 
 
 def _write_synthetic_archive(path, members):
