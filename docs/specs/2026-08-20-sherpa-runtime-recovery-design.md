@@ -150,15 +150,15 @@ Gate D2-UR-I 的 real-probe validation 只執行這三個唯讀 PowerShell queri
 
 ### 7.1 建立命令
 
-現有 CLI 新增 `prepare-runtime-recovery`。它接受 parent proof directory、全新 child proof
-directory，以及下列 literal acknowledgements：
+現有 CLI 新增 `prepare-runtime-recovery`。Path arguments 固定為
+`--parent-proof-dir` 與 `--recovery-proof-dir`；literal acknowledgement arguments 固定為：
 
-- parent evidence ID；
-- parent canonical manifest SHA-256；
-- parent proof-file SHA-256；
-- outer archive SHA-256；
-- load inventory SHA-256；
-- mandatory executable SHA-256。
+- `--ack-parent-evidence-id`；
+- `--ack-parent-manifest-sha256`；
+- `--ack-parent-proof-file-sha256`；
+- `--ack-outer-sha256`；
+- `--ack-load-inventory-sha256`；
+- `--ack-executable-sha256`，只指 mandatory executable。
 
 命令不接受 runtime binary arguments、model、text、reference 或 output。
 
@@ -200,10 +200,17 @@ Canonical manifest 的計算沿用 parent proof：以 UTF-8 canonical JSON 對�
 `manifest_sha256` 後的文件計算 SHA-256。Child proof-file SHA-256 在檔案完成後另行計算並交付，
 不把自己的 file hash 寫回檔內，避免自我遞迴。
 
+Child directory 另保留 `runtime-recovery-consumption.json`。D2-UR-I 不建立此檔；它只會在
+D2-UR-X consume point 以 exclusive-create 建立一次，之後永不覆寫或刪除。即使主 proof 的
+state write 中途失敗，只要 consumption file 存在，child 就已使用且不可重播。Consumption
+schema 固定為 `easytravel.sherpa-runtime-recovery-consumption.v1`，使用相同 canonical manifest
+規則；主 proof 成功進入 `RECOVERY_EXECUTING` 時另記錄 consumption proof-file SHA-256。
+
 ### 7.4 Read-only verifier
 
 新增 `verify-runtime-recovery`。它重新驗證 child manifest、parent identity、parent file、archive
-binding、runtime inventory、狀態與 command evidence，但不修正、promote、執行或改寫任何檔案。
+binding、runtime inventory、consumption record、狀態與 command evidence，但不修正、promote、
+執行或改寫任何檔案。
 
 ## 8. Recovery state machine
 
@@ -219,15 +226,19 @@ RECOVERY_READY
 - `RECOVERY_READY`：D2-UR-I 已完成，沒有 binary execution。
 - `RECOVERY_EXECUTING`：D2-UR-X 的 exact child identity 已驗證，child 已被原子消耗。
 - `PASSED`／`FAILED`：terminal；永遠不得再次 resume。
-- 程序若在 terminal write 前 crash，child 保留 `RECOVERY_EXECUTING`，視為 unknown result；不得
-  自動重試、重設成 ready 或另行直接執行。
+- `RECOVERY_READY` 只有在 consumption file 不存在時才是可用狀態；state 與 consumption file
+  不一致一律視為 consumed unknown result。
+- 程序若在 consume write window crash，主 proof 可能仍是 `RECOVERY_READY`，但 consumption file
+  已使它成為 consumed unknown result；若在稍後 crash，主 proof 通常保留
+  `RECOVERY_EXECUTING`。兩種情況都不得自動重試、重設成 ready 或另行直接執行。
 
 Parent 在所有狀態轉換中都保持 byte-for-byte 不變。
 
 ## 9. Gate D2-UR-X 執行資料流
 
-`resume-runtime-proof` 是未來 D2-UR-X 專用命令。它只能處理前述 parent 與一份尚未使用的
-child。
+`resume-runtime-proof` 是未來 D2-UR-X 專用命令。Path arguments 固定為
+`--parent-proof-dir`、`--recovery-proof-dir` 與 `--runtime-dir`；它只能處理前述 parent、固定
+runtime 與一份尚未使用的 child。
 
 ### 9.1 Exact gate 與 pre-consumption validation
 
@@ -241,16 +252,42 @@ D2-UR-I handoff 必須先提供完整實際值，讓使用者另行逐值核准�
 - version executable SHA-256；
 - mandatory executable SHA-256。
 
-Operator invocation 必須帶 literal `--ack-runtime-recovery-once` 和上述 identity arguments。
-Child identity／file hash 尚未驗證前的錯誤不准改寫任一 proof。Child identity 確認後，任何
-parent、ack、state、path、runtime inventory 或 probe mismatch 都將 child 原子完成為
-`FAILED`、`commands=[]`，並停止。
+Implementation commit 是 operator preflight identity，不是 runtime CLI argument。執行前必須
+以 Git 證明 `HEAD` 等於使用者核准的 commit、受保護程式相對該 commit 為 0 diff，且工作樹
+沒有不明變更；不符合就停止且不呼叫 recovery CLI。
+
+Operator invocation 必須帶 literal `--ack-runtime-recovery-once`，以及：
+
+- `--ack-parent-evidence-id`；
+- `--ack-parent-manifest-sha256`；
+- `--ack-parent-proof-file-sha256`；
+- `--ack-recovery-evidence-id`；
+- `--ack-recovery-manifest-sha256`；
+- `--ack-recovery-proof-file-sha256`；
+- `--ack-outer-sha256`；
+- `--ack-load-inventory-sha256`；
+- `--ack-version-executable-sha256`；
+- `--ack-executable-sha256`，只指 mandatory executable。
+
+Child evidence ID、manifest 與 proof-file hash 尚未全部驗證前，不准改寫任一 proof。只有這
+三個 child identity 全部符合使用者核准值，CLI 才能把該 child 視為正確 single-use target。
 
 ### 9.2 Consume point
 
-全部 identity、ack、runtime inventory，以及 process／listener preflight probes 通過後，先將
-child 原子寫成 `RECOVERY_EXECUTING`，再允許第一個 binary。這個 transition 是 single-use
-consume point；之後無論成功、失敗或 crash 都不得重用 child。
+正確 child identity 確認後，先驗證 child state 是 `RECOVERY_READY` 且 consumption file 不存在。
+接著依序：
+
+1. exclusive-create `runtime-recovery-consumption.json`，記錄 consumption ID、UTC、核准的 child
+   evidence ID／manifest／proof-file SHA-256及自己的 canonical manifest；
+2. 將 child 原子寫成 `RECOVERY_EXECUTING`，並在 `execution.authorization` 保存全部 literal
+   acknowledgements、pre-consume child manifest／proof-file SHA-256，以及 consumption
+   proof-file SHA-256；
+3. read-back 驗證 consumption file、child manifest 與 `RECOVERY_EXECUTING` state。
+
+這三步合稱 single-use consume point；只有 read-back 全部成功才可繼續。接著才重驗 parent
+identity、其餘 acknowledgements、paths、runtime inventory，以及 process／listener preflight；
+任一不符都將 child 原子完成為 `FAILED`、`commands=[]`，而且不執行 binary。全部通過後才
+允許第一個 command。Consume 後無論成功、失敗或 crash 都不得重用 child。
 
 ### 9.3 唯一允許的 commands
 
@@ -282,7 +319,7 @@ Version command 完成後，必須先原子寫入該 command evidence，才可�
 - invocation window 內的 Application Error Event 1000；
 - runtime inventory re-verification。
 
-下列任一情況都令 child `FAILED`，不重試：
+下列任一情況都必須 exit `30`、嘗試將 child 原子完成為 `FAILED`，並且不重試：
 
 - command launch exception、timeout 或非零 exit；
 - required help tokens 不完整；
@@ -290,6 +327,10 @@ Version command 完成後，必須先原子寫入該 command evidence，才可�
 - 任一 postflight probe unknown／invalid；
 - runtime inventory 改變；
 - child evidence 寫入或驗證失敗。
+
+若 filesystem error 使主 proof 的 `RECOVERY_EXECUTING` 或 terminal `FAILED` 無法持久化，
+exclusive consumption file 仍是 authoritative single-use record。Read-only verifier 將 state／
+consumption mismatch 判定為 consumed unknown result並回傳 exit `30`；不得重設或重試。
 
 只有兩個 commands 都符合 contract、postflight clean、inventory unchanged，child 才能是
 `PASSED`。完成後執行一次 read-only verifier，更新 `STATUS.md`、建立本機 docs commit並停止。
@@ -305,7 +346,7 @@ Version command 完成後，必須先原子寫入該 command evidence，才可�
 | parent 不符合唯一 eligibility | `RUNTIME_RECOVERY_PARENT_INELIGIBLE` |
 | exact ack 不符 | `RUNTIME_ACK_MISMATCH` |
 | parent、child 或 runtime identity／inventory 被改變 | `RUNTIME_EVIDENCE_TAMPERED` |
-| child 不是 `RECOVERY_READY` | `RUNTIME_RECOVERY_ALREADY_USED` |
+| child 不是 `RECOVERY_READY` 或已有 consumption file | `RUNTIME_RECOVERY_ALREADY_USED` |
 | probe 失敗或 postflight dirty | `RUNTIME_POSTFLIGHT_DIRTY` |
 | timeout | `RUNTIME_HELP_TIMEOUT` |
 | launch exception 或非零 exit | `RUNTIME_HELP_NONZERO` |
@@ -332,19 +373,23 @@ path、exception text 或超過 80 characters 的內容；詳細診斷只留在 
   row 不符，都在 child creation 前拒絕。
 - child exclusive-create、防覆寫、absolute per-user path、no-reparse 與 repository exclusion。
 - child canonical manifest、proof-file tamper、parent-after-child tamper 與 runtime-after-child tamper。
+- consumption file exclusive-create、manifest/file tamper、不可覆寫，以及 state／consumption
+  mismatch fail closed。
 - verifier 全程 read-only。
 
 ### 11.3 Resume tests
 
-- 缺少 child、錯誤 child、已用 child、錯誤 ack 或 implementation handoff identity 都拒絕。
+- 缺少 child、錯誤 child、已用 child或錯誤 ack 都拒絕；operator runbook 另以 source
+  assertions 驗證 approved implementation commit 與 clean worktree。
 - runtime 不可再次 promote、move、copy 或 extract。
 - fixed argv、order、cwd、`shell=False`、closed stdin、child PATH 與 30 秒 timeout。
 - parser／CLI 不存在 model、text、reference、output、server、port 或任意 command seam。
 - consume 前無 binary；consume 後 command 最多各一次。
+- consume evidence 保存全部 pre-consume child identity 與 exact acknowledgements。
 - version evidence 必須在 help 前持久化；crash 留在 `RECOVERY_EXECUTING` 且不可重播。
 - timeout、nonzero、help mismatch、process、listener、Event、unknown probe、inventory change 都
   terminal fail。
-- `PASSED` 與每一種 `FAILED` child 都能被 read-only verifier驗證；任何 evidence tamper 被拒絕。
+- `PASSED` 與每一種 `FAILED` child 都能被 read-only verifier 驗證；任何 evidence tamper 被拒絕。
 
 ### 11.4 Implementation verification
 
