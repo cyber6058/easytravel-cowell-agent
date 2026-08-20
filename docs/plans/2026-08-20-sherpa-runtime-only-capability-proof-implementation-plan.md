@@ -480,9 +480,9 @@ test count／duration、suite count／duration、compile、scope proof、process
   v1.13.6 asset 的單次下載、identity verification、safe prepare及 all-valid help proof；
   D2-I 完成不授權 Task 6或未來 D2-U。
 
-## Task 6：未來 Gate D2-X exact download、prepare 與 all-valid proof
+## Task 6：Gate D2-X exact download、prepare 與 all-valid proof
 
-**本計畫目前不授權執行本 Task。** 只有新的 exact D2-X approval後才能進行。
+**本 Task 原先不授權執行；使用者已於 2026-08-20 另行精確核准 Gate D2-X。**
 
 ### D2-X preflight
 
@@ -579,6 +579,65 @@ result先唯讀檢查同次evidence，不重送。
 更新 `STATUS.md` 與本計畫 actual evidence，local docs commit後停止。不得讀model、建立
 reference、合成、啟動Yating／SmartSub或提出runtime可商用。Archive、runtime、proof保留
 在per-user root，不自動刪除或加入Git。
+
+### Gate D2-X actual evidence（2026-08-20）
+
+- Preflight從乾淨 baseline `d0b219e892ce007964d6b2f182376e66fa749723`開始；
+  `git pull --ff-only`輸出 `Already up to date.`，D2-I implementation commit
+  `eefdf90776428e6eb32ab90c96ef027671f03ce9`是HEAD ancestor，且 implementation-to-handoff
+  protected code diff為0。SmartSub／sherpa／WINWORD process為0；所有 exact output paths不存在；
+  所有核准 paths解析於 `C:\Users\cance\AppData\Local\EasyTravelVoicePilot`下且既有 containers
+  無reparse point；C槽可用 `39,493,451,776` bytes（36.781 GiB）。未讀取或列出任何既有
+  model／video／audio directory。
+- Run ID固定為 `20260820T014555Z-b6b2c9b9`。只從計畫中的 official GitHub URL下載一次，
+  無mirror／resume／retry；`.partial`實際為 `24,497,928` bytes且SHA-256為
+  `4a296ee44c0997ab9fd4d30d7196446ab77e0ef34f0ce66b5e01b3339fce4613`，完全相符後才以
+  `Move-Item -LiteralPath`改為
+  `C:\Users\cance\AppData\Local\EasyTravelVoicePilot\downloads\sherpa-onnx-v1.13.6-win-x64-shared-MT-Release.tar.bz2`；
+  postflight `.partial`不存在，正式 archive bytes/hash再次相符。
+- Production `prepare-runtime`只執行一次。Outer identity再次通過；安全 archive plan為
+  38 entries、`66,783,620` total uncompressed bytes、plan SHA-256
+  `7c404ed49bcb4a8c4e669d1f9ebc95d53059c93636804106f25176ef49f2411c`。
+  完整 load-candidate inventory的8列全部為 `NotSigned`，因此CLI按契約回傳 exit `20`、
+  state `BLOCKED_UNSIGNED`、safe code `RUNTIME_SIGNATURE_NOT_SIGNED`，沒有promotion或runtime
+  binary execution。
+- Outer archive filename／bytes／SHA-256：
+  `sherpa-onnx-v1.13.6-win-x64-shared-MT-Release.tar.bz2`／`24,497,928`／
+  `4a296ee44c0997ab9fd4d30d7196446ab77e0ef34f0ce66b5e01b3339fce4613`。
+- Load-candidate inventory SHA-256：
+  `d3d440c0345eee6e6dae680c07036c830896b5bbfc98f4774f83b243cc05786f`。
+- Mandatory executable：`bin/sherpa-onnx-offline-tts.exe`／`2,763,776` bytes／SHA-256
+  `a62495554c6953d523626cfba0944be353857c9840b0e513170d45ba0e76a9f0`。
+
+| Authenticode | Relative path | Bytes | SHA-256 |
+|---|---|---:|---|
+| `NotSigned` | `bin/onnxruntime.dll` | 17,378,304 | `b9f6713c3602a4742680a7e6a77e3f9ac4a676ad9447bce609e53efcda795d7e` |
+| `NotSigned` | `bin/onnxruntime_providers_shared.dll` | 104,960 | `1f8b8ebfb07aad2c692669ba77c45b5a24e72b9c708bc3f2be4103ff29370c60` |
+| `NotSigned` | `bin/sherpa-onnx-offline-tts.exe` | 2,763,776 | `a62495554c6953d523626cfba0944be353857c9840b0e513170d45ba0e76a9f0` |
+| `NotSigned` | `bin/sherpa-onnx-version.exe` | 141,312 | `7cb2de6405de878417635845278b1be01413650b36e64c30df5314128f109869` |
+| `NotSigned` | `lib/onnxruntime.dll` | 17,378,304 | `b9f6713c3602a4742680a7e6a77e3f9ac4a676ad9447bce609e53efcda795d7e` |
+| `NotSigned` | `lib/onnxruntime_providers_shared.dll` | 104,960 | `1f8b8ebfb07aad2c692669ba77c45b5a24e72b9c708bc3f2be4103ff29370c60` |
+| `NotSigned` | `lib/sherpa-onnx-c-api.dll` | 4,590,592 | `78a408b33bafb9e7a44f681d0e396fc1ca4b5c9439089dbe6ff12abb229b7f22` |
+| `NotSigned` | `lib/sherpa-onnx-cxx-api.dll` | 258,560 | `1496ee0a5ca23bce5d156f55765bb02af44ebb44a9da802ebcecc241da421d61` |
+
+- 非-`NotSigned` signature status共0列（`Valid` 0、其他0）。Read-only
+  `verify-runtime-proof`重算 archive、manifest及全部8列實檔 bytes/hashes後，重現 exit `20`／
+  `BLOCKED_UNSIGNED`；8列全部匹配。
+- Evidence ID為 `a3ba6b11-5b57-46db-b5e7-113c36e9d964`，canonical manifest SHA-256為
+  `ffa42d3703087394ce400fba6e8a562db77c877c776f9c0afbb5913f75d5a512`，proof file SHA-256為
+  `89eb0dbe7748deff886c625d88e3568c8ba61b3c18f4a08c7e0b0db889b2de47`。
+- Resolved staging root為
+  `C:\Users\cance\AppData\Local\EasyTravelVoicePilot\runtime-staging\20260820T014555Z-b6b2c9b9\sherpa-onnx-v1.13.6-win-x64-shared-MT-Release`；
+  proof dir為
+  `C:\Users\cance\AppData\Local\EasyTravelVoicePilot\proofs\runtime-v1.13.6-20260820T014555Z-b6b2c9b9`。
+  Evidence的 `runtime_root`及`execution`均為null、`promoted`為false，final runtime target
+  `C:\Users\cance\AppData\Local\EasyTravelVoicePilot\runtime\sherpa-onnx\1.13.6`不存在。
+- Process pre/post均為0。從 `2026-08-20T01:45:55Z`到
+  `2026-08-20T01:56:17Z`的Application Error Event 1000查詢成功，相關 sherpa／SmartSub
+  event為0。Version utility與`offline-tts --help`均未執行。
+- Gate D2-X依安全關卡完成並停止。Archive、staging及proof均保留且未加入Git；沒有下載或
+  讀取model、本人影片／音訊，沒有reference、合成、Yating／SmartSub、登入、上傳、清理、
+  push或重試。Task 7／Gate D2-U仍未授權。
 
 ## Task 7：未來 Gate D2-U exact-hash unsigned execution
 

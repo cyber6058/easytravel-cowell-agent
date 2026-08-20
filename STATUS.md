@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-20 sherpa runtime-only Gate D2-X safe-stopped at unsigned runtime
+
+- Current state: Gate D2-X Task 6 is complete and safely stopped at `BLOCKED_UNSIGNED` / exit `20`. The fixed official sherpa-onnx v1.13.6 archive passed exact identity and safe archive inspection, but all `8 / 8` load candidates are `NotSigned`; no sherpa EXE was executed and the final runtime was not created.
+- Work completed: `git pull --ff-only` returned `Already up to date.` from clean baseline `d0b219e892ce007964d6b2f182376e66fa749723`; run ID `20260820T014555Z-b6b2c9b9` used one download with no retry. The archive is `24,497,928` bytes with SHA-256 `4a296ee44c0997ab9fd4d30d7196446ab77e0ef34f0ce66b5e01b3339fce4613`; safe inspection found 38 entries and 66,783,620 uncompressed bytes. Inventory SHA-256 is `d3d440c0345eee6e6dae680c07036c830896b5bbfc98f4774f83b243cc05786f`; mandatory `bin/sherpa-onnx-offline-tts.exe` is `2,763,776` bytes with SHA-256 `a62495554c6953d523626cfba0944be353857c9840b0e513170d45ba0e76a9f0`. The read-only verifier reproduced exit `20`; all 8 row bytes/hashes matched. Full actual values are recorded in `docs/plans/2026-08-20-sherpa-runtime-only-capability-proof-implementation-plan.md`.
+- Next step: stop. Task 7 / Gate D2-U remains unauthorized. Any unsigned one-time version/help proof requires a new approval that literally binds the actual outer, inventory, and mandatory-executable SHA-256 values above; it still cannot add a model, reference, text, output, compatibility mode, or synthesis.
+- Blockers: Authenticode policy prevented the runtime capability proof, so Windows startup, ZipVoice model loading, speed, naturalness, and commercial suitability remain unverified. Postflight retained the archive, staging, and proof; `execution` is null, final runtime is absent, relevant SmartSub/sherpa/WINWORD process counts stayed `0 / 0`, and relevant Application Error Event 1000 count was `0` from `2026-08-20T01:45:55Z` through `2026-08-20T01:56:17Z`. No model or personal media was read, no Yating/SmartSub, synthesis, login, upload, cleanup, or push occurred.
+
 ## 2026-08-20 sherpa runtime-only Gate D2-I offline harness completed
 
 - Current state: Gate D2-I Tasks 1–5 are complete and stopped at the approved boundary. The repository now has a synthetic-only sherpa runtime safety harness and tests; this proves the offline contracts, not that the real runtime exists or works.
