@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-20 sherpa runtime-only Gate D2-U stopped before binary execution
+
+- Current state: the single approved Gate D2-U invocation safely failed with exit `30`, state `FAILED`, and safe code `RUNTIME_POSTFLIGHT_DIRTY` before the runtime command loop. The unsigned runtime was atomically promoted to the fixed final path, but evidence records `commands: []`; neither `sherpa-onnx-version.exe` nor `sherpa-onnx-offline-tts.exe --help` was executed.
+- Work completed: clean baseline `a79eeda2310e97853c7da0824b0299cf3215bc41`; `git pull --ff-only` returned `Already up to date.`; protected D2-I code diff was 0. Preflight revalidated the approved outer/inventory/mandatory hashes, all 8 inventory files, 8 `NotSigned` statuses, no final runtime, and 0 related processes. The exact-hash prove command ran once with no retry. Read-only verification reproduced exit `30` and preserved the archive/runtime binding. Final evidence manifest SHA-256 is `e841a4f6ee1aa24bb7bd78c8b57ac88336f84512b175bbd44066f099829d2123`; proof-file SHA-256 is `3e4e1fdec33d11e60096a58e8b35f12766ffeeab620582961634af27c49f06e9`.
+- Next step: stop. A new recovery design and approval are required; do not rerun the consumed prove command. The recovery must fix zero-result process-probe serialization and safely resume the already-promoted, hash-bound runtime without repeating promotion or silently treating the failed evidence as fresh. Only after a new bounded proof succeeds may model/reference/synthesis gates be proposed.
+- Blockers: the confirmed harness bug is that the real PowerShell process probe emits no JSON when there are zero SmartSub/sherpa processes; its parser therefore fails before any runtime command. Direct diagnosis produced null/0 characters for that probe, while the listener probe succeeded with 43 rows and no error. Current related process count is 0 and relevant Event 1000 count for the invocation window is 0. Runtime startup and help contract remain unverified; no model, personal video/audio, reference, synthesis, Yating/SmartSub, login, upload, cleanup, retry, or push occurred.
+
 ## 2026-08-20 sherpa runtime-only Gate D2-X safe-stopped at unsigned runtime
 
 - Current state: Gate D2-X Task 6 is complete and safely stopped at `BLOCKED_UNSIGNED` / exit `20`. The fixed official sherpa-onnx v1.13.6 archive passed exact identity and safe archive inspection, but all `8 / 8` load candidates are `NotSigned`; no sherpa EXE was executed and the final runtime was not created.

@@ -639,9 +639,9 @@ reference、合成、啟動Yating／SmartSub或提出runtime可商用。Archive�
   讀取model、本人影片／音訊，沒有reference、合成、Yating／SmartSub、登入、上傳、清理、
   push或重試。Task 7／Gate D2-U仍未授權。
 
-## Task 7：未來 Gate D2-U exact-hash unsigned execution
+## Task 7：Gate D2-U exact-hash unsigned execution
 
-**只有 Task 6 實際產生 `BLOCKED_UNSIGNED` 才能提出本 Task，且本計畫目前不授權執行。**
+**本 Task 原先不授權執行；使用者已於 2026-08-20 逐值核准 Gate D2-U。**
 
 Handoff必須先輸出完整、實際值，不可用泛稱或未填欄位：
 
@@ -660,6 +660,50 @@ mandatory executable SHA-256。任一ack不符，exit `30`且不promote／execut
 Ack全部相符才允許atomic promote並執行與Task 6完全相同的一次version/help proof；不得
 增加model、text、reference、output、admin、compatibility mode或其他參數。完成後同樣
 verify、postflight、STATUS、local docs commit並停止。
+
+### Gate D2-U actual evidence（2026-08-20）
+
+- 從乾淨 baseline `a79eeda2310e97853c7da0824b0299cf3215bc41`開始；
+  `git pull --ff-only`輸出 `Already up to date.`，D2-I implementation-to-HEAD protected code
+  diff為0。Preflight proof仍為 `BLOCKED_UNSIGNED`，initial proof-file SHA-256為
+  `89eb0dbe7748deff886c625d88e3568c8ba61b3c18f4a08c7e0b0db889b2de47`，canonical manifest
+  SHA-256為 `ffa42d3703087394ce400fba6e8a562db77c877c776f9c0afbb5913f75d5a512`。
+- Preflight逐值重驗使用者核准的 outer SHA-256
+  `4a296ee44c0997ab9fd4d30d7196446ab77e0ef34f0ce66b5e01b3339fce4613`、inventory SHA-256
+  `d3d440c0345eee6e6dae680c07036c830896b5bbfc98f4774f83b243cc05786f`及 mandatory executable
+  SHA-256 `a62495554c6953d523626cfba0944be353857c9840b0e513170d45ba0e76a9f0`；8列實檔 bytes/hash
+  全部匹配、`NotSigned` 8列、其他status 0列、final runtime不存在、相關process為0。
+- Production `prove-runtime`只呼叫一次，帶 literal `--ack-not-signed-runtime-once`及上述三個
+  actual hashes，沒有model、text、reference、output或其他參數。Ack全部相符後，staging
+  root被atomic promote到
+  `C:\Users\cance\AppData\Local\EasyTravelVoicePilot\runtime\sherpa-onnx\1.13.6`；舊
+  staging root因此不存在，final runtime存在且inventory仍由read-only verifier完整驗證。
+- 同一次 invocation在執行任何runtime command前回傳 exit `30`、state `FAILED`、safe code
+  `RUNTIME_POSTFLIGHT_DIRTY`。Evidence authorization為 `unsigned-exact-hash`，但
+  `execution.commands`是空陣列；version utility與`offline-tts --help`均未執行。
+- 根因已由source與read-only real probe共同確認：`_PROCESS_PROBE_SCRIPT`使用
+  `@(Get-Process ... ) | ConvertTo-Json -Compress`。當相關process為0時，實際輸出是null／
+  0 characters，而不是JSON `[]`；`_powershell_json_probe()`對空字串做`json.loads()`後拋出
+  `ValueError`，並在command loop前映射成 `RUNTIME_POSTFLIGHT_DIRTY`。同次唯讀診斷的
+  listener probe成功，為43 rows、JSON 2,767 characters、error null，因此失敗點是零結果
+  process-probe serialization，不是listener或sherpa binary crash。
+- `verify-runtime-proof`只執行一次並重現 exit `30`／`FAILED`／
+  `RUNTIME_POSTFLIGHT_DIRTY`，同時驗證archive、manifest及promoted runtime inventory綁定。
+  Final canonical manifest SHA-256為
+  `e841a4f6ee1aa24bb7bd78c8b57ac88336f84512b175bbd44066f099829d2123`；proof-file SHA-256為
+  `3e4e1fdec33d11e60096a58e8b35f12766ffeeab620582961634af27c49f06e9`。
+- Postflight final runtime存在；`bin/sherpa-onnx-version.exe`仍為 SHA-256
+  `7cb2de6405de878417635845278b1be01413650b36e64c30df5314128f109869`，
+  `bin/sherpa-onnx-offline-tts.exe`仍為 SHA-256
+  `a62495554c6953d523626cfba0944be353857c9840b0e513170d45ba0e76a9f0`。相關process為0；
+  `2026-08-20T02:11:11.6928007Z`至`2026-08-20T02:11:41.165813Z`的相關Application Error
+  Event 1000為0，event query error為null。
+- 依no-retry契約停止，不重送prove、不直接手動執行EXE、不回移runtime、不清理或修改proof。
+  沒有讀取model或本人影片／音訊，沒有reference、合成、Yating／SmartSub、登入、上傳、
+  push或額外download。
+- 下一步不是直接重跑：必須另立新的recovery design／approval，修正零結果probe的JSON契約，
+  並定義如何在 `FAILED`、`promoted=true`、`commands=[]`的同一 hash-bound evidence上安全續跑，
+  不重複promotion、不弱化existing assertions，也不把舊ack當成新授權。
 
 ## 4. Gate D2-I 完成條件
 
