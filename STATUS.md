@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-20 Gate D2-UR-I safe-stopped at one-time real-probe invocation
+
+- Current state: Gate D2-UR-I is **not complete**. Tasks 1–6 passed and are committed locally, but the single authorized real-probe invocation in Task 7 failed during Python parsing with exit `1` and `SyntaxError: separators=(,, :)`. Python rejected the whole `-c` program before imports or function calls, so the production process/listener/Event probe execution counts are `0 / 0 / 0`. The no-retry boundary is now consumed; no recovery child was created and Task 8 remains unauthorized.
+- Work completed: clean approved baseline `cee7bb901552cba81469766f954df466b5ce4bc1`; `git pull --ff-only` returned `Already up to date.`; probe-contract commit `d5a6260f` and recovery implementation commit `5dff9e28cef1016c634d8c4c445117d636df2fcc` exist locally. Final focused runtime tests passed; the complete offline suite reported `784 passed, 8 skipped in 41.03s`; compileall and `git diff --check` exited `0`; only the two approved code files differed from baseline; protected files had 0 diff; network/unsafe-extraction scan had 0 matches. Task 7 preflight found clean HEAD `5dff9e28cef1016c634d8c4c445117d636df2fcc`, related process counts `0 / 0 / 0 / 0`, fixed parent/archive/runtime present, all checked roots non-reparse, and parent proof-file SHA-256 `3e4e1fdec33d11e60096a58e8b35f12766ffeeab620582961634af27c49f06e9`.
+- Next step: stop. A fresh written authorization is required before any new real-probe invocation; the consumed probe set cannot be retried under D2-UR-I. The reserved child path `C:\Users\cance\AppData\Local\EasyTravelVoicePilot\proofs\runtime-recovery-v1.13.6-20260820T033027Z-4ab5cbb2` remains nonexistent. Do not prepare a child and do not enter Gate D2-UR-X / Task 8.
+- Blockers: the three real probes were not executed, so there is no real JSON-array capability result and no `RECOVERY_READY` child identity from which to generate a D2-UR-X approval sentence. No sherpa/SmartSub/Yating binary, consumption, download, extraction, model, personal media, reference, synthesis, login, upload, cleanup, retry, or push occurred.
+
 ## 2026-08-20 sherpa runtime recovery implementation plan awaiting review
 
 - Current state: the written D2-UR recovery design is approved and `docs/plans/2026-08-20-sherpa-runtime-recovery-implementation-plan.md` now defines the implementation and recovery runbooks; the plan is awaiting user review and does not itself authorize execution.

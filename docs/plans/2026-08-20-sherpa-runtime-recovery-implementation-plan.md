@@ -752,6 +752,40 @@ code與現存paths。
 
 建立第三個docs commit後停止，不push、不進Task 8。
 
+## Actual evidence：2026-08-20 Gate D2-UR-I safe stop
+
+Gate D2-UR-I did not complete:
+
+- Approved baseline: `cee7bb901552cba81469766f954df466b5ce4bc1`.
+- Probe-contract commit: `d5a6260f` (`fix(voice-pilot): serialize empty probes as arrays`).
+- Recovery implementation commit and Task 7 preflight HEAD:
+  `5dff9e28cef1016c634d8c4c445117d636df2fcc`.
+- Baseline full suite: `676 passed, 8 skipped in 27.72s`.
+- Final focused runtime suite: exit `0`.
+- Final complete offline suite: `784 passed, 8 skipped in 41.03s`.
+- `compileall` and `git diff --check`: exit `0`.
+- Scope proof: only `scripts/voice_pilot/runtime_proof.py` and
+  `tests/unit/voice_pilot/test_runtime_proof.py` differed from baseline; protected diff exit `0`;
+  network/unsafe-extraction scan had zero matches.
+- Task 7 preflight: clean HEAD/worktree; parent, archive, runtime and proofs root present; fixed parent
+  proof-file SHA-256 was
+  `3e4e1fdec33d11e60096a58e8b35f12766ffeeab620582961634af27c49f06e9`; all checked
+  per-user roots were non-reparse; SmartSub/version/offline-tts/WINWORD counts were `0 / 0 / 0 / 0`.
+- Reserved child path:
+  `C:\Users\cance\AppData\Local\EasyTravelVoicePilot\proofs\runtime-recovery-v1.13.6-20260820T033027Z-4ab5cbb2`;
+  it was absent before the probe invocation and remains uncreated.
+- The one authorized real-probe command returned exit `1` during Python parsing with
+  `SyntaxError: invalid syntax` at the rendered expression `separators=(,, :)`. The complete `-c`
+  program was rejected before imports or function calls; therefore actual production process/listener/Event
+  probe call counts were `0 / 0 / 0`, and there are no JSON types or row counts to report.
+- The no-retry real-probe boundary is consumed. The command was not retried, the actual child command was
+  not invoked, no consumption exists, and no D2-UR-X approval sentence can be generated.
+- No sherpa/SmartSub/Yating binary, download, extraction, model, personal media, reference, synthesis,
+  login, upload, cleanup, retry or push occurred.
+
+Stop here. A fresh written gate is required for any replacement real-probe invocation. It may not be
+treated as a continuation or retry under D2-UR-I, and Task 8 remains unauthorized.
+
 ## Task 8：未授權 Gate D2-UR-X single-use version/help runbook
 
 本Task不屬於D2-UR-I。只有Task 7 handoff完成、使用者逐值核准parent、child、runtime與Git
