@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-20 sherpa runtime recovery implementation plan awaiting review
+
+- Current state: the written D2-UR recovery design is approved and `docs/plans/2026-08-20-sherpa-runtime-recovery-implementation-plan.md` now defines the implementation and recovery runbooks; the plan is awaiting user review and does not itself authorize execution.
+- Work completed: `git pull --ff-only` returned `Already up to date.` from clean design baseline `bf44301630d6706e65c5cd9f98363941b157fc20`. The plan separates Tasks 1–7 / Gate D2-UR-I from unauthorized Task 8 / Gate D2-UR-X, fixes the three probe JSON contracts, specifies 49 planned test names, a pinned unique parent spec, child and immutable consumption schemas, progressive command journaling, full offline/scope verification, one real read-only probe set, one actual child preparation, exact handoff values, and no-retry boundaries. Self-review measured 842 lines, 48 headings, 54 paired Markdown fences, eight tasks, zero placeholders, and clean whitespace. This turn made documentation-only changes; no code tests were required or run.
+- Next step: the user reviews this implementation plan and, only if satisfied, explicitly approves the full literal Gate D2-UR-I sentence in section 10. That approval authorizes Tasks 1–7 only; Task 8 and all sherpa binary execution remain separately unauthorized.
+- Blockers: version/help capability remains unverified and no recovery child exists. No code, test, real probe, parent/archive/runtime read, per-user proof write, binary, model, personal media, synthesis, Yating/SmartSub, login, upload, cleanup, retry, or push occurred.
+
 ## 2026-08-20 sherpa runtime recovery written design awaiting review
 
 - Current state: the three-part oral recovery design is approved and has been written as `docs/specs/2026-08-20-sherpa-runtime-recovery-design.md`; it is awaiting the user's written-spec review. The selected design preserves the failed D2-U parent proof byte-for-byte, fixes the zero-result PowerShell JSON contract, and uses a hash-bound single-use recovery child proof.
