@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-20 sherpa runtime-only Gate D2 written design awaiting review
+
+- Current state: the complete Gate D2 oral design is approved and has been written as `docs/specs/2026-08-20-sherpa-runtime-only-capability-proof-design.md`; it is awaiting the user's written-spec review. The design can quickly decide whether the exact official sherpa-onnx v1.13.6 Windows CPU runtime starts on this Windows 11 25H2 machine, but explicitly cannot claim model loading, acceptable speed, natural voice, or commercial readiness.
+- Work completed: `git pull --ff-only` returned `Already up to date.`; project status, the SmartSub compatibility research, the prior voice-pilot design/plan, and the isolated harness were rechecked. The approved design selects a separate `runtime_proof.py`, synthetic archive tests, fixed per-user paths, a no-`extractall` archive contract, exact asset bytes/SHA-256, a mandatory `sherpa-onnx-offline-tts.exe --help` proof, complete load-candidate Authenticode inventory, D2-I／D2-X／D2-U stop points, no-retry rules, evidence schema, and an explicit package-decision ladder. Self-review measured 366 lines, 26 headings, 10 paired Markdown fences, zero placeholders/trailing whitespace, all required gate/hash markers present, and `git diff --check` clean. This was documentation-only work, so no code tests were required or run.
+- Next step: the user reviews and explicitly approves the written design. Only then create a detailed implementation plan; that plan still will not authorize code, downloads, extraction, binary execution, model access, personal media, or synthesis. A later separate approval will be required for synthetic-only D2-I implementation.
+- Blockers: sherpa-onnx has not been downloaded or locally executed; ZipVoice model loading and audible quality are outside D2; the Emilia-linked model's commercial rights remain unresolved. No implementation code, test behavior, dependency, runtime/model file, video/audio, Yating/SmartSub process, synthesis, login, upload, or push was performed.
+
 ## 2026-08-20 SmartSub installer compatibility research completed; direct runtime remains gated
 
 - Current state: official-source research confirms that SmartSub 3.7.0 issue #432 has the same seven-field APPCRASH signature as this machine, so the same installer should not be retried. A direct official sherpa-onnx Windows CPU runtime is technically plausible, but it has not been downloaded or run locally and the exact Emilia-linked ZipVoice model does not have clearly established commercial-use rights.
