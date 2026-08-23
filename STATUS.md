@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-08-23 cross-machine public-main handoff authorized
+
+- Current state: after being warned that `cyber6058/easytravel-cowell-agent` is still public, the user explicitly authorized one bounded direct push of the current local `main` so development can continue on another computer. This is a one-session exception and does not authorize later public pushes.
+- Work completed: pre-push local HEAD was `c75670cfa9a09a9a987949c8e9e6b1f216f262b7`; live remote `main` was `e6c07ed65677ba52c2606af529548f006e5f1853`; the clean branch was `0 behind / 111 ahead`. `git pull --ff-only` returned `Already up to date.`; the complete offline suite returned `784 passed, 8 skipped in 43.18s`; `git diff --check` passed; the 76-file publication set contained no passport, rooming, Office/PDF, `.env`, credential, session, or live-response artifact.
+- Next step: push this handoff commit together with the 111 already committed changes, verify the live remote SHA and a clean `0 behind / 0 ahead` checkout, then start the other computer with `git pull --ff-only` and read this top entry before continuing.
+- Blockers: repository visibility remains public. This explicit handoff exception must not be treated as standing authorization for another public push, deploy, upload, Cowell access, runtime execution, or any later gate.
+
 ## 2026-08-20 Gate D2-UR-R1 completed; RECOVERY_READY child verified
 
 - Current state: Gate D2-UR-R1 completed successfully and stopped at the approved boundary. The replacement stdin probe set returned process `array / 0`, listener `array / 43`, and Event `array / 0`. Exactly one fixed child was created and the one read-only verifier returned exit `0`, state `RECOVERY_READY`, safe code null. Task 8 / Gate D2-UR-X remains unauthorized; no runtime binary has executed.
